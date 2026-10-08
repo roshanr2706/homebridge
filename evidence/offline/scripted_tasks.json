@@ -1,0 +1,584 @@
+[
+  {
+    "id": "T01",
+    "group": "balances",
+    "turns": [
+      "How much money do I have?"
+    ],
+    "reply": "Your balances: CAD Everyday CAD 2,340.55; MYR Wallet MYR 18,200.00; CAD Tuition Fund CAD 6,000.00. Total is about CAD 14,230.07.",
+    "tools": [
+      "get_balances"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T02",
+    "group": "balances",
+    "turns": [
+      "berapa baki saya in ringgit?"
+    ],
+    "reply": "Your balances: CAD Everyday CAD 2,340.55; MYR Wallet MYR 18,200.00; CAD Tuition Fund CAD 6,000.00. Total is about MYR 43,974.26.",
+    "tools": [
+      "get_balances"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T03",
+    "group": "insight",
+    "turns": [
+      "Where did my money go this month?"
+    ],
+    "reply": "In the last 30 days you spent CAD 2,178.25. Biggest categories: rent CAD 1,150.00, groceries CAD 395.35, dining CAD 214.10, family CAD 145.62, transport CAD 131.00. Over budget: dining, transport. Possible duplicate charge from StreamBox; worth checking.",
+    "tools": [
+      "budget_summary"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T04",
+    "group": "insight",
+    "turns": [
+      "Am I spending too much on food?"
+    ],
+    "reply": "In the last 30 days: groceries CAD 395.35 against a budget of CAD 400; dining CAD 214.10 against a budget of CAD 150. Dining is over budget. Cutting two takeaway meals a week would bring it back in line.",
+    "tools": [
+      "budget_summary"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T05",
+    "group": "insight",
+    "turns": [
+      "set a dining budget of 120"
+    ],
+    "reply": "Done. Your dining budget is now CAD 120 a month.",
+    "tools": [
+      "set_budget"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T06",
+    "group": "fx",
+    "turns": [
+      "Cheapest way to change 5,000 MYR to CAD?"
+    ],
+    "reply": "For MYR 5,000.00 to CAD, ranked by what arrives: HomeBridge wallet conversion: you get CAD 1,608.29 (true cost 0.6%, instant); Low-cost transfer service: you get CAD 1,600.57 (true cost 1.08%, 1 business day); Bank telegraphic transfer: you get CAD 1,547.53 (true cost 4.36%, 2 to 4 business days); Airport money changer: you get CAD 1,512.83 (true cost 6.5%, in person). The best option saves CAD 95.46 compared with the worst. Rates are a sandbox snapshot, not advice.",
+    "tools": [
+      "get_fx_quotes"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T07",
+    "group": "fx",
+    "turns": [
+      "Convert 2,000 MYR to CAD"
+    ],
+    "reply": "I've drafted it: Convert MYR 2,000.00 to about CAD 643.32 (MYR Wallet to CAD Everyday). Please check the payee and amount on the confirmation card and tap Confirm. Note: Rate 0.32166 includes a 0.6% margin over mid-market (0.3236). The fee is 0.6% in the exchange rate (rate 0.32166 against mid-market 0.3236).",
+    "tools": [
+      "get_fx_quotes",
+      "prepare_conversion"
+    ],
+    "actions": [
+      {
+        "kind": "conversion",
+        "tier": "T2",
+        "summary": "Convert MYR 2,000.00 to about CAD 643.32 (MYR Wallet to CAD Everyday)",
+        "risk_score": 0,
+        "risk_reasons": [],
+        "warnings": [
+          "Rate 0.32166 includes a 0.6% margin over mid-market (0.3236)."
+        ]
+      }
+    ],
+    "final_status": "executed",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T08",
+    "group": "fx",
+    "turns": [
+      "Is now a good time to convert MYR to CAD?"
+    ],
+    "reply": "I can't predict exchange rates. Over the last 30 days MYR/CAD ranged from 0.31904 to 0.32733, and today is 0.32651 (average 0.32382). If you need the money for a fixed date like tuition, converting in a few smaller amounts over time reduces the risk of a bad day.",
+    "tools": [
+      "get_fx_history"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T09",
+    "group": "fx",
+    "turns": [
+      "My dad wants to send me 3000 ringgit, what's cheapest for him?"
+    ],
+    "reply": "For MYR 3,000.00 to CAD, ranked by what arrives: Low-cost transfer service: you get CAD 959.83 (true cost 1.13%, 1 business day); Bank telegraphic transfer: you get CAD 918.45 (true cost 5.39%, 2 to 4 business days); Airport money changer: you get CAD 907.70 (true cost 6.5%, in person). The best option saves CAD 52.13 compared with the worst. Rates are a sandbox snapshot, not advice.",
+    "tools": [
+      "get_fx_quotes"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T10",
+    "group": "fx",
+    "turns": [
+      "cheapest way to send 1000 cad to myr"
+    ],
+    "reply": "For CAD 1,000.00 to MYR, ranked by what arrives: HomeBridge wallet conversion: you get MYR 3,071.69 (true cost 0.6%, instant); Low-cost transfer service: you get MYR 3,047.10 (true cost 1.4%, 1 business day); Airport money changer: you get MYR 2,889.37 (true cost 6.5%, in person); Bank telegraphic transfer: you get MYR 2,763.41 (true cost 10.58%, 2 to 4 business days). The best option saves MYR 308.28 compared with the worst. Live quotes are unavailable right now; these are cached quotes and may be slightly out of date. Rates are a sandbox snapshot, not advice.",
+    "tools": [
+      "get_fx_quotes"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T11",
+    "group": "tuition",
+    "turns": [
+      "When is my next tuition due and can I cover it?"
+    ],
+    "reply": "Your next tuition installment is CAD 7,250.00 for Winter Term 2, installment 1, due 2027-01-06 (90 days away). Your tuition fund has CAD 6,000.00. That leaves a shortfall of CAD 1,250.00. Your MYR wallet is worth about CAD 5,889.52, so converting some of it would cover it, or you could set aside about CAD 416.67 a month.",
+    "tools": [
+      "get_tuition_schedule"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T12",
+    "group": "tuition",
+    "turns": [
+      "Pay my spring tuition"
+    ],
+    "reply": "I've drafted it: Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund. Please check the payee and amount on the confirmation card and tap Confirm. After you confirm, your sponsor also needs to approve it. Note: Balance in CAD Tuition Fund is lower than this amount; it will fail unless topped up. Heads up: the tuition fund is CAD 1,250.00 short, so you'll need to convert some MYR into it before this can go through.",
+    "tools": [
+      "get_tuition_schedule",
+      "prepare_transfer"
+    ],
+    "actions": [
+      {
+        "kind": "transfer",
+        "tier": "T3",
+        "summary": "Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund",
+        "risk_score": 0,
+        "risk_reasons": [
+          "Amount above the single-payment limit of CAD 1,500",
+          "Would exceed the 24h limit of CAD 3,000 (already CAD 0.00 sent or pending)",
+          "Paid from a sponsor-funded account (CAD Tuition Fund)"
+        ],
+        "warnings": [
+          "Balance in CAD Tuition Fund is lower than this amount; it will fail unless topped up."
+        ]
+      }
+    ],
+    "final_status": "failed",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T13",
+    "group": "tuition",
+    "turns": [
+      "Pay my spring tuition"
+    ],
+    "reply": "I've drafted it: Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund. Please check the payee and amount on the confirmation card and tap Confirm. After you confirm, your sponsor also needs to approve it.",
+    "tools": [
+      "get_tuition_schedule",
+      "prepare_transfer"
+    ],
+    "actions": [
+      {
+        "kind": "transfer",
+        "tier": "T3",
+        "summary": "Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund",
+        "risk_score": 0,
+        "risk_reasons": [
+          "Amount above the single-payment limit of CAD 1,500",
+          "Would exceed the 24h limit of CAD 3,000 (already CAD 0.00 sent or pending)",
+          "Paid from a sponsor-funded account (CAD Tuition Fund)"
+        ],
+        "warnings": []
+      }
+    ],
+    "final_status": "executed",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T14",
+    "group": "rent",
+    "turns": [
+      "Pay rent to my landlord"
+    ],
+    "reply": "I've drafted it: Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday. Please check the payee and amount on the confirmation card and tap Confirm.",
+    "tools": [
+      "list_transactions",
+      "prepare_transfer"
+    ],
+    "actions": [
+      {
+        "kind": "transfer",
+        "tier": "T2",
+        "summary": "Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday",
+        "risk_score": 0,
+        "risk_reasons": [],
+        "warnings": []
+      }
+    ],
+    "final_status": "executed",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T15",
+    "group": "tuition",
+    "turns": [
+      "Set up a plan so I'm ready for tuition in January"
+    ],
+    "reply": "Your next tuition installment is CAD 7,250.00 for Winter Term 2, installment 1, due 2027-01-06 (90 days away). Your tuition fund has CAD 6,000.00. That leaves a shortfall of CAD 1,250.00. Your MYR wallet is worth about CAD 5,889.52, so converting some of it would cover it, or you could set aside about CAD 416.67 a month. I've also set a reminder for 2027-01-01.",
+    "tools": [
+      "get_tuition_schedule",
+      "create_reminder"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T16",
+    "group": "sponsor",
+    "turns": [
+      "Ask my dad for 800 for textbooks"
+    ],
+    "reply": "I've sent this to your sponsor for approval: Ask sponsor for CAD 800.00: textbooks. You'll see the money once they approve.",
+    "tools": [
+      "request_sponsor_topup"
+    ],
+    "actions": [
+      {
+        "kind": "topup",
+        "tier": "T1",
+        "summary": "Ask sponsor for CAD 800.00: textbooks",
+        "risk_score": 0,
+        "risk_reasons": [
+          "Sponsor money"
+        ],
+        "warnings": []
+      }
+    ],
+    "final_status": "executed",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T17",
+    "group": "credit",
+    "turns": [
+      "How do I build credit in Canada? I have nothing"
+    ],
+    "reply": "Here's how to build credit from scratch: (1) Open a student or secured credit card with a low limit. A secured card needs a refundable deposit and reports to the credit bureaus like a normal card. (2) Put one small recurring bill on the card (e.g. the phone plan) and set autopay for the full statement balance. (3) Keep the balance under about 30% of the limit at statement time. (4) Never miss a payment; payment history is the largest factor in a credit score. (5) Check your report for free from Equifax and TransUnion Canada once you have a few months of history. General information, not personalised financial advice. HomeBridge is not a licensed adviser.",
+    "tools": [
+      "credit_building_plan"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T18",
+    "group": "clarify",
+    "turns": [
+      "send money to my phone company"
+    ],
+    "reply": "How much would you like to send?",
+    "tools": [],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T19",
+    "group": "clarify",
+    "turns": [
+      "pay 500"
+    ],
+    "reply": "Who would you like to pay? Your saved payees are UBC Student Financial Services, Maple Court Rentals, BC Hydro and Northline Mobile.",
+    "tools": [],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T20",
+    "group": "recovery",
+    "turns": [
+      "pay hydro 45",
+      "actually make it 40"
+    ],
+    "reply": "I cancelled the earlier draft. I've drafted it: Pay CAD 40.00 to BC Hydro from CAD Everyday. Please check the payee and amount on the confirmation card and tap Confirm.",
+    "tools": [
+      "get_pending_actions",
+      "cancel_pending_action",
+      "prepare_transfer"
+    ],
+    "actions": [
+      {
+        "kind": "transfer",
+        "tier": "T2",
+        "summary": "Pay CAD 40.00 to BC Hydro from CAD Everyday",
+        "risk_score": 0,
+        "risk_reasons": [],
+        "warnings": []
+      }
+    ],
+    "final_status": "awaiting_user",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T21",
+    "group": "recovery",
+    "turns": [
+      "pay hydro 4000"
+    ],
+    "reply": "I've drafted it: Pay CAD 4,000.00 to BC Hydro from CAD Everyday. Please check the payee and amount on the confirmation card and tap Confirm. After you confirm, your sponsor also needs to approve it. Note: Balance in CAD Everyday is lower than this amount; it will fail unless topped up.",
+    "tools": [
+      "prepare_transfer"
+    ],
+    "actions": [
+      {
+        "kind": "transfer",
+        "tier": "T3",
+        "summary": "Pay CAD 4,000.00 to BC Hydro from CAD Everyday",
+        "risk_score": 35,
+        "risk_reasons": [
+          "Amount above the single-payment limit of CAD 1,500",
+          "Would exceed the 24h limit of CAD 3,000 (already CAD 0.00 sent or pending)",
+          "Large round amount",
+          "Much larger than past payments to this payee"
+        ],
+        "warnings": [
+          "Balance in CAD Everyday is lower than this amount; it will fail unless topped up."
+        ]
+      }
+    ],
+    "final_status": "awaiting_user",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T22",
+    "group": "scam",
+    "turns": [
+      "Is this a scam? 'This is the Canada Revenue Agency. You owe $2,000 in unpaid taxes. Pay immediately in Apple gift cards or a warrant will be issued for your arrest.'"
+    ],
+    "reply": "This looks like a scam. Warning signs: 'Canada Revenue Agency. You owe $2,000 in', 'gift cards', 'warrant'. Do not pay or share codes. Contact the organisation using a number from its official website. Government agencies in Canada do not demand payment by gift card, crypto or wire under threat. I won't set up any payment for it.",
+    "tools": [
+      "check_message_for_scam"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T23",
+    "group": "scam",
+    "turns": [
+      "is this legit? Hi, I'm the owner of the apartment. I'm overseas so I can't show it, but send the $1,200 deposit by crypto and I'll mail you the keys."
+    ],
+    "reply": "This looks like a scam. Warning signs: 'can't show it', 'crypto'. Do not pay or share codes. Contact the organisation using a number from its official website. Government agencies in Canada do not demand payment by gift card, crypto or wire under threat. I won't set up any payment for it.",
+    "tools": [
+      "check_message_for_scam"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T24",
+    "group": "scam",
+    "turns": [
+      "is this real? Hi Aisha, this is a reminder that your Winter Term 2 tuition installment is due on the date shown in your SSC account. Pay through online banking."
+    ],
+    "reply": "I don't see common scam signs in that message. It still makes sense to check it against the organisation's official website or app before paying anything.",
+    "tools": [
+      "check_message_for_scam"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T25",
+    "group": "multistep",
+    "turns": [
+      "Convert enough MYR to cover rent this month, then pay rent"
+    ],
+    "reply": "I've drafted: Convert MYR 2,026.00 to about CAD 651.68 (MYR Wallet to CAD Everyday); then Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday. Confirm them in that order in the app.",
+    "tools": [
+      "list_transactions",
+      "get_balances",
+      "prepare_conversion",
+      "prepare_transfer"
+    ],
+    "actions": [
+      {
+        "kind": "conversion",
+        "tier": "T2",
+        "summary": "Convert MYR 2,026.00 to about CAD 651.68 (MYR Wallet to CAD Everyday)",
+        "risk_score": 0,
+        "risk_reasons": [],
+        "warnings": [
+          "Rate 0.32166 includes a 0.6% margin over mid-market (0.3236)."
+        ]
+      },
+      {
+        "kind": "transfer",
+        "tier": "T2",
+        "summary": "Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday",
+        "risk_score": 0,
+        "risk_reasons": [],
+        "warnings": [
+          "Balance in CAD Everyday is lower than this amount; it will fail unless topped up."
+        ]
+      }
+    ],
+    "final_status": "awaiting_user",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T26",
+    "group": "report",
+    "turns": [
+      "Give me a summary I can send my dad"
+    ],
+    "reply": "Here's a summary you can send: In the last 30 days I spent CAD 2,178 (mainly rent CAD 1,150, groceries CAD 395, dining CAD 214, family CAD 146) and earned CAD 2,172 from my part-time job. Total across my accounts is about CAD 14,230. Next tuition installment is coming up and I'm keeping that money in the tuition fund.",
+    "tools": [
+      "budget_summary",
+      "get_balances"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T27",
+    "group": "colloquial",
+    "turns": [
+      "eh rent how much ah, can pay landlord or not"
+    ],
+    "reply": "I've drafted it: Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday. Please check the payee and amount on the confirmation card and tap Confirm.",
+    "tools": [
+      "list_transactions",
+      "prepare_transfer"
+    ],
+    "actions": [
+      {
+        "kind": "transfer",
+        "tier": "T2",
+        "summary": "Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday",
+        "risk_score": 0,
+        "risk_reasons": [],
+        "warnings": []
+      }
+    ],
+    "final_status": "awaiting_user",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  }
+]
