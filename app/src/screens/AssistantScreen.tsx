@@ -35,7 +35,7 @@ const SUGGESTIONS: { label: string; text: string; fill?: boolean }[] = [
 
 const FLAG_LABEL: Record<string, string> = {
   scam: 'scam pattern',
-  injection: 'hidden instructions',
+  injection: 'instruction override',
   extraction: 'data extraction attempt',
   escalation: 'permission claim',
 };

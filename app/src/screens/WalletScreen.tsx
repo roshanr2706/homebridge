@@ -29,7 +29,7 @@ export function WalletScreen({ active }: { active: boolean }) {
   useEffect(() => {
     if (!active) return;
     refresh();
-    const id = setInterval(refresh, 5000);
+    const id = setInterval(refresh, 2000);
     return () => clearInterval(id);
   }, [active, refresh]);
 
@@ -117,7 +117,8 @@ export function WalletScreen({ active }: { active: boolean }) {
       <Surface>
         <Eyebrow>Saved payees</Eyebrow>
         {o.payees.map((p) => {
-          const cooling = p.usable_from && p.usable_from * 1000 > Date.now();
+          const left = p.usable_from ? Math.ceil(p.usable_from - Date.now() / 1000) : 0;
+          const cooling = left > 0;
           return (
             <Row key={p.id} style={{ justifyContent: 'space-between', marginTop: 10, gap: 8 }}>
               <View style={{ flex: 1 }}>
@@ -129,7 +130,10 @@ export function WalletScreen({ active }: { active: boolean }) {
               {p.status !== 'active' ? (
                 <Pill label={p.status.replace('_', ' ').toUpperCase()} tone={p.status === 'rejected' ? 'danger' : 'warn'} />
               ) : cooling ? (
-                <Pill label="COOLING PERIOD" tone="warn" />
+                <Pill
+                  label={`COOLING · ${left >= 3600 ? `${Math.ceil(left / 3600)}H` : left >= 60 ? `${Math.ceil(left / 60)}M` : `${left}S`}`}
+                  tone="warn"
+                />
               ) : null}
             </Row>
           );

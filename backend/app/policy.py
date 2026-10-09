@@ -317,7 +317,7 @@ class PolicyEngine:
         self._rate_limit(owner)
         kind = (kind or "unknown").lower()
         risk = 20
-        reasons = ["New payees always need sponsor approval and a cooling period"]
+        reasons = ["New payee with no payment history yet"]
         if kind in RISKY_PAYEE_KINDS:
             risk += 25
             reasons.append(f"Payee type '{kind}' is commonly used in scams")
