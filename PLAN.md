@@ -5,6 +5,28 @@ Submission and registration deadline: **Tue Oct 20, 09:00 PDT** (23:59 Beijing).
 
 ---
 
+## Status (updated 2026-10-09, early morning)
+
+Ahead of the day-by-day schedule in section 10. Done:
+
+- Backend core, agent loop, offline engine, policy engine, classifier, audit log (Oct 8)
+- 36 scripted tasks (incl. Malay and Mandarin) and 45 attacks, all passing offline; 125 automated tests; CI workflow
+- Live-LLM path tested against a mocked OpenAI-compatible transport (tool round trip, fallback). **Not yet run against real DeepSeek.**
+- App redesign: Assistant / Wallet / Ledger for the student, Approvals / Rules / Ledger for the sponsor, tool-sourced result cards, two-phone side-by-side view on wide screens
+- Docs written: `docs/technical.md`, `docs/security_self_assessment.md`, `docs/demo_script.md`; screenshots in `docs/img/`
+- Single-image Docker build (web app + API on one URL); not yet built locally (no Docker on this machine)
+- Draft 10-minute deck (Claude artifact, private; link in the session summary)
+
+Still needs you:
+
+1. **Teammate** (section 0) and the **registration email** (by Oct 13)
+2. A DeepSeek key, then `LLM_PROVIDER=deepseek LLM_API_KEY=… python scripts/run_evidence.py` → `evidence/deepseek/`; fix any task the live model fails
+3. Push to GitHub; deploy the Docker image to a Hong Kong or Singapore host; test from a China VPN exit if possible
+4. Android APK via EAS (`npx eas-cli@latest build -p android --profile preview`)
+5. Record the demo video (script in `docs/demo_script.md`), finish the deck (team names, GitHub link), export the docs to PDF
+
+---
+
 ## 0. Blocking issue: you need a teammate
 
 Teams must have 2 to 5 members. A solo entry is not valid. The registration form needs each member's passport number, student ID and enrollment proof, so the teammate has to be confirmed before you send the email.
