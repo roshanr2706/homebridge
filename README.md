@@ -53,8 +53,10 @@ run `npm run build:web` in `app/`, then start the backend; it serves `app/dist` 
 
 ## Using the app
 
-The **Aisha / Dad** switch at the top exists for the demo. In production each person signs in on
-their own phone and the server decides the role from their credentials.
+On a wide screen (a laptop at the presentation) the web app shows **both phones side by side**: Aisha's
+in Vancouver and her dad's in Kuala Lumpur, on one sandbox, so a request confirmed on one appears on the
+other within seconds. On a phone-sized screen the **Aisha / Dad** switch at the top changes view. In
+production each person signs in on their own phone and the server decides the role from their credentials.
 
 | Student (Aisha) | Sponsor (Dad) |
 |---|---|
