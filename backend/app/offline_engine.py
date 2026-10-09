@@ -102,9 +102,11 @@ class OfflineEngine:
             if r["verdict"] == "no_known_pattern":
                 return _say("I don't see common scam signs in that message. It still makes sense to check it "
                             "against the organisation's official website or app before paying anything.")
-            signs = sorted({s for v in r["signals"].values() for s in v})[:4]
-            return _say("This looks like a scam. Warning signs: " + ", ".join(f"'{s}'" for s in signs) +
-                        ". " + " ".join(r["advice"][:2]) + " I won't set up any payment for it.")
+            signs = sorted({s for v in r["signals"].values() for s in v}, key=len)[:3]
+            lead = "This looks like a scam" if r["verdict"] == "likely_scam" else "This looks suspicious"
+            why = (": it mentions " + ", ".join(f"'{s}'" for s in signs)) if signs else ""
+            return _say(f"{lead}{why}. Don't pay or share any codes, and contact the organisation through its "
+                        "official website instead. I won't set up any payment for it.")
 
         # 2. Anything the guard flagged as manipulation gets a refusal, no tools
         lowered_note = note.lower()
@@ -227,10 +229,11 @@ class OfflineEngine:
             if "get_fx_quotes" not in done:
                 return _call("get_fx_quotes", from_currency=src, to_currency=dst, amount=amount, own_wallet=not parent)
             r = last
-            lines = [f"{q['provider']}: you get {_money(q['you_receive'], q['receive_currency'])} "
-                     f"(true cost {q['true_cost_pct']}%, {q['speed']})" for q in r["quotes"]]
-            return _say(f"For {_money(amount, src)} to {dst}, ranked by what arrives: " + "; ".join(lines) +
-                        f". The best option saves {_money(r['saving_vs_worst'], dst)} compared with the worst. "
+            best, worst = r["quotes"][0], r["quotes"][-1]
+            return _say(f"Cheapest for {_money(amount, src)} is the {best['provider']}: "
+                        f"{_money(best['you_receive'], best['receive_currency'])} arrives (true cost "
+                        f"{best['true_cost_pct']}%, {best['speed']}). That saves {_money(r['saving_vs_worst'], dst)} "
+                        f"compared with the {worst['provider'].lower()}. "
                         + (r["note"] + " " if r.get("note") else "") + "Rates are a sandbox snapshot, not advice.")
 
         if re.search(r"good time|right time|should i (convert|change)|rate (going|trend)|wait", low):

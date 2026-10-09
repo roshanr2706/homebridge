@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import FeatureUnion, Pipeline
 
@@ -66,7 +66,15 @@ class TextRiskClassifier:
         contrib = x * self.model.coef_[ci][:n_word]
         names = word_vec.get_feature_names_out()
         order = np.argsort(-contrib)
-        return [names[i] for i in order[:top] if contrib[i] > 0]
+        out: List[str] = []
+        for i in order:
+            if contrib[i] <= 0 or len(out) >= top:
+                break
+            # Stopwords carry weight in the model but explain nothing to a person.
+            if all(w in ENGLISH_STOP_WORDS for w in names[i].split()):
+                continue
+            out.append(str(names[i]))
+        return out
 
 
 _shared: Optional[TextRiskClassifier] = None

@@ -178,7 +178,9 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
 
     @app.get("/sponsor/overview")
     def overview(sponsor_id: str = Depends(sponsor)):
-        return {"student": st.bank.user(STUDENT), "accounts": st.bank.accounts(STUDENT),
+        accs = st.bank.accounts(STUDENT)
+        return {"student": st.bank.user(STUDENT), "accounts": accs,
+                "total_cad": round(sum(a["balance"] * st.fx.mid(a["currency"], "CAD") for a in accs), 2),
                 "limits": st.settings.limits.__dict__,
                 "recent": [a.for_app() for a in st.policy.list_for(STUDENT)][-10:]}
 

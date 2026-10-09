@@ -56,6 +56,7 @@ class PendingAction:
     risk_score: int
     risk_reasons: List[str]
     warnings: List[str]
+    sponsor_reasons: List[str]
     needs_sponsor: bool
     params_hash: str
     token_hash: str
@@ -91,6 +92,8 @@ class PendingAction:
         d.update({
             "params": self.params,
             "risk_reasons": self.risk_reasons,
+            "sponsor_reasons": self.sponsor_reasons,
+            "risk_signals": [r for r in self.risk_reasons if r not in self.sponsor_reasons],
             "created_at": self.created_at,
             "expires_at": self.expires_at,
             "user_confirmed": self.user_confirmed,
@@ -145,6 +148,7 @@ class PolicyEngine:
             id="act_" + uuid.uuid4().hex[:10], kind=kind, owner=owner, session_id=session_id,
             params=params, summary=summary, tier="T3" if needs_sponsor else "T2",
             risk_score=min(risk, 100), risk_reasons=reasons_t3 + risk_reasons, warnings=warnings,
+            sponsor_reasons=list(reasons_t3) + (["Risk score above sponsor threshold"] if risk >= self.limits.sponsor_risk_threshold and not reasons_t3 else []),
             needs_sponsor=needs_sponsor, params_hash=_hash_params(params), token_hash=_hash_token(token),
             created_at=now, expires_at=now + self.limits.pending_ttl_seconds, provenance=provenance,
             _token=token,
