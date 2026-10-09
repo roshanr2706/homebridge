@@ -76,7 +76,11 @@ def build_state(settings: Optional[Settings] = None, today: Optional[date] = Non
     audit = AuditLog(settings.audit_path if audit_path == "default" else audit_path)
     policy = PolicyEngine(bank, fx, audit, settings.limits)
     agent = Agent(settings, bank, fx, policy, audit, provider=provider, today=today)
-    bank.reset(agent.today)
+    # A file database (HB_DB) from an earlier run keeps its balances and pending drafts; only a new
+    # or empty one is seeded.
+    if not bank.is_seeded():
+        bank.reset(agent.today)
+        policy.reset()
     return AppState(settings, bank, fx, audit, policy, agent)
 
 

@@ -218,7 +218,7 @@ The full threat model, tier table and known-risk list are in `docs/security_self
 
 ## 7. Evaluation
 
-Run with `pytest -q` (125 tests) and `python scripts/run_evidence.py`. Results for the offline engine are in `evidence/offline/`:
+Run with `pytest -q` (133 tests) and `python scripts/run_evidence.py`. Results for the offline engine are in `evidence/offline/`:
 
 | Suite | Result |
 |---|---|
@@ -250,7 +250,7 @@ To produce live-model evidence: `LLM_PROVIDER=deepseek LLM_API_KEY=… python sc
 - Android: an APK built with EAS for sideloading (Google Play is unavailable in China). The web build runs in any browser.
 - The offline engine is the venue backup if the network fails during the defence.
 
-**Configuration.** `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_THINKING`, `HB_DEMO_MODE` (60-second cooling period, reset endpoint), `HB_STUDENT_TOKEN`, `HB_SPONSOR_TOKEN`, `HB_CHATS_PER_MINUTE`, `HB_AUDIT`, `HB_WEB_DIR`.
+**Configuration.** `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_THINKING`, `HB_DEMO_MODE` (60-second cooling period, reset endpoint), `HB_STUDENT_TOKEN`, `HB_SPONSOR_TOKEN`, `HB_CHATS_PER_MINUTE`, `HB_DB` (SQLite path; default `:memory:`), `HB_AUDIT`, `HB_WEB_DIR`.
 
 ---
 
@@ -258,7 +258,7 @@ To produce live-model evidence: `LLM_PROVIDER=deepseek LLM_API_KEY=… python sc
 
 - **Sandbox only.** A real deployment needs a licensed partner bank or money-services business (FINTRAC registration in Canada; Bank Negara Malaysia rules on outward remittance), KYC, and real payment rails.
 - **Authentication** is static bearer tokens for the demo. Production would use per-device keys, biometric step-up on Confirm and Approve, and push notifications to the sponsor.
-- **State** (pending actions, sessions) is in memory, and the bank is SQLite. Production would use a transactional database with the same invariants.
+- **State.** The bank, pending actions and the draft rate-limit window share one SQLite database (`HB_DB`, in memory by default). With a file path, a restart keeps balances and drafts together: drafts awaiting the student or the sponsor, their expiry, sponsor decisions and the hourly draft count all reload. Only the hash of each confirmation token is stored, so after a restart a draft can be confirmed only by the app that still holds its token. Execution writes an "executing" marker first; a draft interrupted mid-execution reloads as failed, never as executable again. Chat history and the per-minute chat limit are still in memory. Production would use a transactional database shared by all instances, with the same invariants.
 - **FX rates** are a snapshot with modelled spreads. Production would use live quotes and lock the quoted rate on the draft.
 - **Classifier** is small and trained on our own data. It is a second opinion by design, never a gate. A larger multilingual dataset and periodic retraining from reported scams would improve recall.
 - **Sponsor rules** are two limits plus fixed triggers. Category rules ("rent and tuition only"), monthly allowances and multi-sponsor households are natural extensions.

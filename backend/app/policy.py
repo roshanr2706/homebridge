@@ -19,7 +19,7 @@ import secrets
 import threading
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -113,6 +113,39 @@ class PolicyEngine:
         self.actions: Dict[str, PendingAction] = {}
         self._drafts: Dict[str, List[float]] = {}
         self._lock = threading.RLock()
+        self.bank.ensure_policy_tables()
+        self._load()
+
+    # ------------------------------------------------------------ storage
+    # `actions` and `_drafts` are the working copy; every change is written through to the bank's
+    # SQLite database (pending_actions, draft_log), and _load() rebuilds them after a restart.
+    # The plaintext token is never written, so a reloaded draft has _token=None: only an app that
+    # still holds the token it was given can confirm it.
+    def _save(self, a: PendingAction, executing: bool = False) -> None:
+        data = asdict(a)
+        data.pop("_token", None)
+        # Write-ahead marker: if the process dies while the bank call runs, the reloaded action
+        # becomes "failed" instead of being executable a second time.
+        status = "executing" if executing else a.status
+        data["status"] = status
+        self.bank.save_action(a.id, a.owner, status, a.created_at, json.dumps(data, sort_keys=True))
+
+    def _load(self) -> None:
+        known = {f.name for f in fields(PendingAction)} - {"_token"}
+        with self._lock:
+            self.actions.clear()
+            self._drafts.clear()
+            for row in self.bank.load_actions():
+                data = json.loads(row["data"])
+                a = PendingAction(**{k: v for k, v in data.items() if k in known})
+                self.actions[a.id] = a
+                if a.status == "executing":
+                    a.status = "failed"
+                    a.result = {"error": "Interrupted by a server restart during execution; check the ledger."}
+                    self.audit.record("action_failed", "system", action_id=a.id, error="interrupted by restart")
+                    self._save(a)
+            for row in self.bank.load_drafts(time.time() - 3600):
+                self._drafts.setdefault(row["owner"], []).append(row["ts"])
 
     # ------------------------------------------------------------ helpers
     def cad(self, amount: float, currency: str) -> float:
@@ -120,12 +153,14 @@ class PolicyEngine:
 
     def _rate_limit(self, owner: str) -> None:
         # Keyed by the account owner, not the chat session, which the client chooses.
-        now = time.time()
-        recent = [t for t in self._drafts.get(owner, []) if now - t < 3600]
-        if len(recent) >= self.limits.drafts_per_hour:
-            raise PolicyError("Too many payment drafts in the last hour. Please wait before trying again.")
-        recent.append(now)
-        self._drafts[owner] = recent
+        with self._lock:
+            now = time.time()
+            recent = [t for t in self._drafts.get(owner, []) if now - t < 3600]
+            if len(recent) >= self.limits.drafts_per_hour:
+                raise PolicyError("Too many payment drafts in the last hour. Please wait before trying again.")
+            recent.append(now)
+            self._drafts[owner] = recent
+            self.bank.log_draft(owner, now, now - 3600)
 
     def _daily_outflow_cad(self, owner: str) -> float:
         since = (datetime.now() - timedelta(hours=24)).isoformat(timespec="seconds")
@@ -167,6 +202,7 @@ class PolicyEngine:
         )
         with self._lock:
             self.actions[action.id] = action
+            self._save(action)
         self.audit.record("action_drafted", owner, action_id=action.id, kind=kind, params=params,
                           tier=action.tier, risk=action.risk_score, reasons=action.risk_reasons,
                           provenance=provenance)
@@ -355,6 +391,7 @@ class PolicyEngine:
         a.status = "awaiting_sponsor"
         a.tier = "T1"
         a.expires_at = time.time() + 7 * 24 * 3600
+        self._save(a)
         self.audit.record("sponsor_approval_requested", "system", action_id=a.id)
         return a
 
@@ -365,6 +402,7 @@ class PolicyEngine:
             raise PolicyError("Unknown action.")
         if a.status in ("awaiting_user", "awaiting_sponsor") and time.time() > a.expires_at:
             a.status = "expired"
+            self._save(a)
             self.audit.record("action_expired", "system", action_id=a.id)
         return a
 
@@ -382,6 +420,7 @@ class PolicyEngine:
                 raise PolicyError("Invalid confirmation token.")
             if _hash_params(a.params) != a.params_hash:
                 a.status = "failed"
+                self._save(a)
                 raise PolicyError("Action parameters changed after drafting.")
             a.user_confirmed = True
             a._token = None
@@ -389,6 +428,7 @@ class PolicyEngine:
             if a.needs_sponsor:
                 a.status = "awaiting_sponsor"
                 a.expires_at = time.time() + 24 * 3600
+                self._save(a)
                 self.audit.record("sponsor_approval_requested", "system", action_id=a.id)
                 return a
             return self._execute(a)
@@ -409,6 +449,7 @@ class PolicyEngine:
                 a.status = "rejected"
                 if a.kind == "add_payee":
                     self.bank.reject_payee(a.params["payee_id"])
+                self._save(a)
                 return a
             return self._execute(a)
 
@@ -423,10 +464,12 @@ class PolicyEngine:
             a._token = None
             if a.kind == "add_payee":
                 self.bank.reject_payee(a.params["payee_id"])
+            self._save(a)
             self.audit.record("action_cancelled", user_id, action_id=a.id)
             return a
 
     def _execute(self, a: PendingAction) -> PendingAction:
+        self._save(a, executing=True)
         try:
             if a.kind == "transfer":
                 cat = (self.bank.payee(a.params["payee_id"]) or {}).get("kind", "transfer")
@@ -450,6 +493,7 @@ class PolicyEngine:
             a.status = "failed"
             a.result = {"error": str(e)}
             self.audit.record("action_failed", "system", action_id=a.id, error=str(e))
+        self._save(a)
         return a
 
     # ------------------------------------------------------------ queries
@@ -487,3 +531,4 @@ class PolicyEngine:
         with self._lock:
             self.actions.clear()
             self._drafts.clear()
+            self.bank.clear_policy_state()
