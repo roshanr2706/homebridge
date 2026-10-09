@@ -12,12 +12,17 @@ Design rules (quoted in the security self-assessment):
 """
 from __future__ import annotations
 
+import difflib
+import functools
 import hashlib
 import hmac
 import json
+import math
+import re
 import secrets
 import threading
 import time
+import unicodedata
 import uuid
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timedelta
@@ -27,12 +32,44 @@ from .audit import AuditLog
 from .bank import Bank, BankError, to_minor
 from .config import Limits
 from .fx import FxMarket
+from .guard import normalize
 
 RISKY_PAYEE_KINDS = {"crypto", "gift_card", "individual", "unknown"}
+# The kind becomes the transaction category, and the 24h limit skips 'conversion' rows, so it is an allow-list.
+PAYEE_KINDS = {"rent", "tuition", "utilities", "phone", "business"} | RISKY_PAYEE_KINDS
 
 
 class PolicyError(Exception):
     """Raised for requests the policy refuses. Message is safe to show the model."""
+
+
+def _amount(amount: Any) -> float:
+    """A finite amount that is still positive after rounding to cents."""
+    if (isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount)
+            or round(amount, 2) <= 0):
+        raise PolicyError("Amount must be a positive number.")
+    return round(float(amount), 2)
+
+
+def _fold_name(name: str) -> str:
+    return re.sub(r"[\W_]+", "", normalize(name).casefold())
+
+
+def _lookalike(a: str, b: str) -> bool:
+    """Same payee name once case, spacing, punctuation, invisible and lookalike characters are ignored, or one
+    or two letters off."""
+    a, b = _fold_name(a), _fold_name(b)
+    return a == b or difflib.SequenceMatcher(None, a, b).ratio() >= 0.85
+
+
+def _locked(fn):
+    """Drafts check limits and then record themselves; doing both under the lock stops parallel requests
+    from each passing the same check."""
+    @functools.wraps(fn)
+    def wrapper(self: "PolicyEngine", *args: Any, **kwargs: Any) -> Any:
+        with self._lock:
+            return fn(self, *args, **kwargs)
+    return wrapper
 
 
 def _hash_params(params: Dict[str, Any]) -> str:
@@ -113,8 +150,14 @@ class PolicyEngine:
         self.actions: Dict[str, PendingAction] = {}
         self._drafts: Dict[str, List[float]] = {}
         self._lock = threading.RLock()
+        self.limits_changed_at = 0.0
         self.bank.ensure_policy_tables()
         self._load()
+
+    def limits_changed(self) -> None:
+        """Called after the sponsor edits the limits. Student-only drafts made earlier then go to the sponsor."""
+        with self._lock:
+            self.limits_changed_at = time.time()
 
     # ------------------------------------------------------------ storage
     # `actions` and `_drafts` are the working copy; every change is written through to the bank's
@@ -209,16 +252,14 @@ class PolicyEngine:
         return action
 
     # ------------------------------------------------------------- drafts
+    @_locked
     def draft_transfer(
         self, owner: str, session_id: str, payee_id: str, amount: float, memo: str = "",
         from_account_id: str = "", guard_flags: Optional[List[str]] = None,
         provenance: Optional[Dict[str, str]] = None,
     ) -> PendingAction:
         provenance = provenance or {}
-        if not isinstance(amount, (int, float)) or amount <= 0 or amount != amount:
-            raise PolicyError("Amount must be a positive number.")
-        if round(amount, 2) != amount:
-            amount = round(amount, 2)
+        amount = _amount(amount)
         payee = self.bank.payee(payee_id)
         if not payee or payee["owner"] != owner:
             raise PolicyError("Unknown payee. Use list_payees to see saved payees, or add_payee to request a new one.")
@@ -293,12 +334,12 @@ class PolicyEngine:
         summary = f"Pay {currency} {amount:,.2f} to {payee['name']} from {acc['label']}"
         return self._new("transfer", owner, session_id, params, summary, t3, risk, reasons, warnings, provenance)
 
+    @_locked
     def draft_conversion(
         self, owner: str, session_id: str, from_currency: str, to_currency: str, amount: float,
         guard_flags: Optional[List[str]] = None, destination: str = "everyday",
     ) -> PendingAction:
-        if not isinstance(amount, (int, float)) or amount <= 0 or amount != amount:
-            raise PolicyError("Amount must be a positive number.")
+        amount = _amount(amount)
         if destination not in ("everyday", "tuition"):
             raise PolicyError("Destination must be 'everyday' or 'tuition'.")
         src = self.bank.find_account(owner, from_currency, "Wallet" if from_currency.upper() == "MYR" else "Everyday")
@@ -341,18 +382,23 @@ class PolicyEngine:
                    f"{q['you_receive']:,.2f} ({src['label']} to {dst['label']})")
         return self._new("conversion", owner, session_id, params, summary, t3, risk, reasons, warnings, {})
 
+    @_locked
     def draft_add_payee(
         self, owner: str, session_id: str, name: str, kind: str, currency: str, number: str,
         provenance: Optional[Dict[str, str]] = None,
     ) -> PendingAction:
         provenance = provenance or {}
-        name = (name or "").strip()[:60]
+        # Drop invisible and direction-control characters, so the name on the sponsor's card is what is stored.
+        name = "".join(c for c in unicodedata.normalize("NFKC", name or "")
+                       if unicodedata.category(c)[0] != "C").strip()[:60]
         if not name or not number:
             raise PolicyError("A payee needs a name and an account number.")
         if currency.upper() not in ("CAD", "MYR", "USD"):
             raise PolicyError("Payee currency must be CAD, MYR or USD.")
         self._rate_limit(owner)
         kind = (kind or "unknown").lower()
+        if kind not in PAYEE_KINDS:
+            kind = "unknown"
         risk = 20
         reasons = ["New payee with no payment history yet"]
         if kind in RISKY_PAYEE_KINDS:
@@ -361,12 +407,16 @@ class PolicyEngine:
         if any(v == "untrusted" for v in provenance.values()):
             risk += 30
             reasons.append("Payee details came from content the user did not type")
-        existing = [p for p in self.bank.payees(owner) if p["name"].lower() == name.lower()]
+        existing = [p for p in self.bank.payees(owner) if _lookalike(p["name"], name)]
         warnings = []
         if existing:
             risk += 30
-            warnings.append(f"A payee called '{name}' already exists with a different account. "
-                            "Changed bank details are a common fraud tactic.")
+            if existing[0]["name"].lower() == name.lower():
+                warnings.append(f"A payee called '{name}' already exists with a different account. "
+                                "Changed bank details are a common fraud tactic.")
+            else:
+                warnings.append(f"'{name}' looks almost the same as your saved payee '{existing[0]['name']}'. "
+                                "Lookalike names are a common fraud tactic.")
         pid = self.bank.create_payee(owner, name, kind, currency, number, provenance.get("number", "user"))
         params = {"payee_id": pid, "name": name, "kind": kind, "currency": currency.upper(),
                   "number_masked": "••••" + "".join(c for c in number if c.isdigit())[-4:]}
@@ -374,10 +424,12 @@ class PolicyEngine:
         return self._new("add_payee", owner, session_id, params, summary,
                          ["New payee"], risk, reasons, warnings, provenance)
 
+    @_locked
     def draft_topup_request(self, owner: str, session_id: str, amount: float, currency: str,
                             reason: str) -> PendingAction:
         """Student asks the sponsor for money. Goes straight to the sponsor; no student token needed."""
-        if not isinstance(amount, (int, float)) or amount <= 0 or amount > 100000:
+        amount = _amount(amount)
+        if amount > 100000:
             raise PolicyError("Amount must be a positive number.")
         currency = currency.upper()
         if not self.bank.find_account(owner, currency):
@@ -425,6 +477,11 @@ class PolicyEngine:
             a.user_confirmed = True
             a._token = None
             self.audit.record("action_confirmed", user_id, action_id=a.id)
+            if not a.needs_sponsor and a.created_at <= self.limits_changed_at:
+                # Its tier was set under limits the sponsor has since changed.
+                a.needs_sponsor, a.tier = True, "T3"
+                a.sponsor_reasons.append("The sponsor changed the limits after this was drafted")
+                a.risk_reasons.insert(0, a.sponsor_reasons[-1])
             if a.needs_sponsor:
                 a.status = "awaiting_sponsor"
                 a.expires_at = time.time() + 24 * 3600
@@ -469,6 +526,14 @@ class PolicyEngine:
             return a
 
     def _execute(self, a: PendingAction) -> PendingAction:
+        # Re-check at execution too: since drafts are reloaded from the database, an edited row must not
+        # change what is paid after the student confirmed or the sponsor approved.
+        if _hash_params(a.params) != a.params_hash:
+            a.status = "failed"
+            a.result = {"error": "Action parameters changed after drafting."}
+            self.audit.record("action_failed", "system", action_id=a.id, error="params hash mismatch")
+            self._save(a)
+            return a
         self._save(a, executing=True)
         try:
             if a.kind == "transfer":

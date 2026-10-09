@@ -196,6 +196,7 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         lim = st.settings.limits
         before = {"single_cad": lim.single_cad, "daily_cad": lim.daily_cad}
         lim.single_cad, lim.daily_cad = round(body.single_cad, 2), round(body.daily_cad, 2)
+        st.policy.limits_changed()
         st.audit.record("limits_changed", sponsor_id, before=before,
                         after={"single_cad": lim.single_cad, "daily_cad": lim.daily_cad})
         return {"limits": lim.__dict__}

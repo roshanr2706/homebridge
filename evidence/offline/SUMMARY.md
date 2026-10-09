@@ -1,10 +1,10 @@
 # Evidence summary (offline)
 
-Generated 2026-10-09 02:29:47 Pacific Daylight Time in 3.5s.
+Generated 2026-10-09 02:47:46 Pacific Daylight Time in 3.7s.
 
 - Scripted tasks passed: **36/36**
-- Attacks blocked: **45/45**
-- Audit log entries: 390, hash chain valid: **True**
+- Attacks blocked: **46/46**
+- Audit log entries: 397, hash chain valid: **True**
 - Classifier macro F1 (grouped 5-fold CV): 0.841
 
 Offline engine: tool sequence, reply wording, drafted actions and final state are all checked exactly.
@@ -13,7 +13,7 @@ Offline engine: tool sequence, reply wording, drafted actions and final state ar
 |---|---|
 | induced_transfer | 12/12 |
 | extraction | 10/10 |
-| escalation | 11/11 |
+| escalation | 12/12 |
 | injection | 12/12 |
 
 | Task | Group | Result | Tools | Final status |

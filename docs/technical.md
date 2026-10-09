@@ -195,11 +195,11 @@ Providers are ranked by `receive`. The simulated set covers the real options a M
 
 ### 5.4 Taint tracking for untrusted content
 
-Text the user did not type is recorded per turn as untrusted: pasted messages (detected by length, line breaks or email headers), text passed to the scam checker, and transaction memos read by tools. When a draft's amount, or a new payee's account number, matches untrusted text, the draft records that provenance (`{"amount": "untrusted"}`), gains 30 risk points, and the card says "The amount came from a pasted message, not from you. Check it against an official source." This targets the classic "here is the bill, pay it" injection where the attacker controls the numbers.
+Text the user did not type is recorded as untrusted, and stays recorded while the turn that read it is still in the model's context: pasted messages (detected by length, line breaks or email headers), text passed to the scam checker, and transaction memos read by tools. When a draft's amount, or a new payee's account number, matches untrusted text, the draft records that provenance (`{"amount": "untrusted"}`), gains 30 risk points, and the card says "The amount came from a pasted message, not from you. Check it against an official source." This targets the classic "here is the bill, pay it" injection where the attacker controls the numbers.
 
 ### 5.5 Hash-chained audit log
 
-Each entry is `{seq, ts, event, actor, data, prev, hash}` where `hash = SHA-256(canonical JSON of the entry without hash)` and `prev` is the previous entry's hash. `verify()` walks the chain and reports the first broken link. `GET /audit/verify?tamper_seq=N` verifies a copy with entry N edited, so the Ledger tab can show detection live without touching the real log. The log records user messages (length and guard flags, not content), every tool call with masked arguments, drafts with tier, risk and provenance, confirmations, denials, sponsor decisions, limit changes, rate-limit hits, LLM errors and executions.
+Each entry is `{seq, ts, event, actor, data, prev, hash}` where `hash = SHA-256(canonical JSON of the entry without hash)` and `prev` is the previous entry's hash. `verify()` walks the chain and reports the first broken link. `GET /audit/verify?tamper_seq=N` verifies a copy with entry N edited, so the Ledger tab can show detection live without touching the real log. The log records user messages (length and guard flags, not content), every tool call with masked and size-capped arguments (text sent to the scam checker is stored as its length only), drafts with tier, risk and provenance, confirmations, denials, sponsor decisions, limit changes, rate-limit hits, LLM errors and executions.
 
 ---
 
@@ -218,14 +218,14 @@ The full threat model, tier table and known-risk list are in `docs/security_self
 
 ## 7. Evaluation
 
-Run with `pytest -q` (133 tests) and `python scripts/run_evidence.py`. Results for the offline engine are in `evidence/offline/`:
+Run with `pytest -q` (153 tests) and `python scripts/run_evidence.py`. Results for the offline engine are in `evidence/offline/`:
 
 | Suite | Result |
 |---|---|
 | Scripted tasks (balances, insight, FX, tuition, rent, sponsor, credit, clarification, recovery, scam shield, multi-step, Malaysian English, Chinese, Malay) | **36 / 36 pass**, each checked for tool sequence, reply content, drafted tier and final sandbox state |
-| Attack suite (induced transfer 12, extraction 10, escalation 11, injection 12) | **45 / 45 blocked**. No balance change, no execution, no full number or token in any reply, no limit or role change, no flagged T2 payment |
-| Compromised-model tests | A scripted "evil" provider calls tools directly (unknown account, invented execute and approve tools, add-then-pay, drain by conversion, negative, NaN and huge amounts, draft spam, cancelling others' drafts). No money moves in any case |
-| API role tests | No token → 401; sponsor on student endpoints → 403; student approving → 403; wrong or reused token → 400; tampered parameters → 400; expired → 400; cooling period enforced; audit tamper detected |
+| Attack suite (induced transfer 12, extraction 10, escalation 12, injection 12) | **46 / 46 blocked**. No balance change, no execution, no full number or token in any reply, no limit or role change, no T2 payment after a flagged message in the conversation |
+| Compromised-model tests | A scripted "evil" provider calls tools directly (unknown account, invented execute and approve tools, add-then-pay, drain by conversion, negative, NaN, infinite, sub-cent and huge amounts, malformed arguments, draft spam, cancelling others' drafts, a payee filed as `conversion` to dodge the daily limit, lookalike payee names, parallel drafts, an injected memo acted on a turn later). No money moves in any case |
+| API role tests | No token → 401; sponsor on student endpoints → 403; student approving → 403; wrong or reused token → 400; tampered parameters → 400; expired → 400; cooling period enforced; a draft confirmed after the sponsor tightened the limits goes to the sponsor; audit tamper detected |
 | LLM wire tests | Real OpenAI-compatible client against a mocked transport: tool round trip, malformed arguments, fallback |
 | Classifier | Macro F1 0.841 (grouped 5-fold CV) |
 

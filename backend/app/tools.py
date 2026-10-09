@@ -6,6 +6,8 @@ numbers. Payment tools only create drafts in the policy engine.
 """
 from __future__ import annotations
 
+import json
+import math
 import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
@@ -30,8 +32,12 @@ class ToolContext:
     audit: AuditLog
     today: date
     guard_flags: List[str] = field(default_factory=list)
+    earlier_flags: List[str] = field(default_factory=list)   # from earlier turns still in the model's context
     untrusted_texts: List[str] = field(default_factory=list)
     created_actions: List[PendingAction] = field(default_factory=list)
+
+    def flags(self) -> List[str]:
+        return list(dict.fromkeys(self.guard_flags + self.earlier_flags))
 
 
 ToolFn = Callable[[ToolContext, Dict[str, Any]], Dict[str, Any]]
@@ -69,26 +75,35 @@ def run_tool(ctx: ToolContext, name: str, args: Dict[str, Any]) -> Dict[str, Any
     if name not in REGISTRY or (allowed is not None and name not in allowed):
         ctx.audit.record("tool_denied", ctx.user_id, tool=name)
         return {"error": f"Tool '{name}' is not available."}
-    try:
-        out = REGISTRY[name]["fn"](ctx, args or {})
-    except PolicyError as e:
-        out = {"error": str(e), "refused_by_policy": True}
-    except (ValueError, TypeError, KeyError) as e:
-        out = {"error": f"Invalid arguments: {e}"}
+    if not isinstance(args or {}, dict):
+        args = {"_not_an_object": args}
+        out = {"error": "Invalid arguments: expected an object"}
+    else:
+        try:
+            out = REGISTRY[name]["fn"](ctx, args or {})
+        except PolicyError as e:
+            out = {"error": str(e), "refused_by_policy": True}
+        except (ValueError, TypeError, KeyError, AttributeError, OverflowError) as e:
+            out = {"error": f"Invalid arguments: {e}"}
     ctx.audit.record("tool_call", ctx.user_id, tool=name, tier=REGISTRY[name]["tier"], args=_safe_args(args),
                      ok="error" not in out)
     return out
 
 
 def _safe_args(args: Dict[str, Any]) -> Dict[str, Any]:
+    """What the audit log keeps of tool arguments: no pasted text, no full account numbers, bounded size."""
     out = {}
-    for k, v in (args or {}).items():
+    for k, v in list((args or {}).items())[:12]:
+        k = str(k)[:40]
         if isinstance(v, str) and k in ("account_number", "number"):
             out[k] = "••••" + re.sub(r"\D", "", v)[-4:]
-        elif isinstance(v, str) and len(v) > 200:
-            out[k] = v[:200] + "…"
-        else:
+        elif isinstance(v, str) and k == "text":  # a pasted message: keep its size, like user_message does
+            out[k] = f"<{len(v)} chars>"
+        elif v is None or isinstance(v, (bool, int)) or (isinstance(v, float) and math.isfinite(v)):
             out[k] = v
+        else:
+            s = re.sub(r"\b\d{4}-\d{4}-(\d{4})\b", r"••••\1", v if isinstance(v, str) else json.dumps(v, default=str))
+            out[k] = s[:200] + "…" if len(s) > 200 else s
     return out
 
 
@@ -313,9 +328,11 @@ def resolve_payee(ctx: ToolContext, ref: str) -> Optional[Dict[str, Any]]:
     for p in payees:
         if ref in (p["id"].lower(), p["name"].lower()):
             return p
-    for p in payees:
-        if len(ref) >= 3 and (ref in p["name"].lower() or p["name"].lower() in ref):
-            return p
+    partial = [p for p in payees if len(ref) >= 3 and (ref in p["name"].lower() or p["name"].lower() in ref)]
+    if len(partial) > 1:  # e.g. "ubc" with a lookalike payee saved: ask instead of guessing
+        return None
+    if partial:
+        return partial[0]
     for kind, words in PAYEE_HINTS.items():
         if any(w in ref for w in words):
             match = [p for p in payees if p["kind"] == kind]
@@ -340,7 +357,7 @@ def prepare_transfer(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     amount = _num(a["amount"])
     prov = {"amount": "untrusted" if _amount_from_untrusted(ctx, amount) else "user"}
     act = ctx.policy.draft_transfer(ctx.user_id, ctx.session_id, p["id"], amount, str(a.get("memo") or ""),
-                                    str(a.get("from_account_id") or ""), list(ctx.guard_flags), prov)
+                                    str(a.get("from_account_id") or ""), ctx.flags(), prov)
     ctx.created_actions.append(act)
     return {"action": act.for_model()}
 
@@ -356,7 +373,7 @@ def prepare_transfer(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
       ["from_currency", "to_currency", "amount"], tier="T2/T3")
 def prepare_conversion(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     act = ctx.policy.draft_conversion(ctx.user_id, ctx.session_id, a["from_currency"], a["to_currency"],
-                                      _num(a["amount"]), list(ctx.guard_flags),
+                                      _num(a["amount"]), ctx.flags(),
                                       str(a.get("destination") or "everyday").lower())
     ctx.created_actions.append(act)
     return {"action": act.for_model()}

@@ -10,7 +10,7 @@ Submission and registration deadline: **Tue Oct 20, 09:00 PDT** (23:59 Beijing).
 Ahead of the day-by-day schedule in section 10. Done:
 
 - Backend core, agent loop, offline engine, policy engine, classifier, audit log (Oct 8)
-- 36 scripted tasks (incl. Malay and Mandarin) and 45 attacks, all passing offline; 125 automated tests; CI workflow
+- 36 scripted tasks (incl. Malay and Mandarin) and 46 attacks, all passing offline; 153 automated tests; CI workflow
 - Live-LLM path tested against a mocked OpenAI-compatible transport (tool round trip, fallback). **Not yet run against real DeepSeek.**
 - App redesign: Assistant / Wallet / Ledger for the student, Approvals / Rules / Ledger for the sponsor, tool-sourced result cards, two-phone side-by-side view on wide screens
 - Docs written: `docs/technical.md`, `docs/security_self_assessment.md`, `docs/demo_script.md`; screenshots in `docs/img/`

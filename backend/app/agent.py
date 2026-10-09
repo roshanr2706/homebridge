@@ -13,7 +13,7 @@ from .audit import AuditLog
 from .bank import Bank
 from .config import Settings
 from .fx import FxMarket
-from .guard import check as guard_check, COMPILED
+from .guard import check as guard_check, COMPILED, normalize
 from .llm import LLMError, Provider, make_provider
 from .policy import PolicyEngine
 from .tools import ToolContext, run_tool, specs_for
@@ -52,7 +52,7 @@ def _redact(text: str) -> str:
 
 
 def _scan_tool_output(result: Dict[str, Any]) -> Optional[str]:
-    blob = json.dumps(result, ensure_ascii=False)
+    blob = normalize(json.dumps(result, ensure_ascii=False))
     for cat in ("injection", "escalation"):
         for p in COMPILED[cat]:
             m = p.search(blob)
@@ -102,13 +102,18 @@ class Agent:
         text = (text or "").strip()[:4000]
         g = guard_check(text)
         self.audit.record("user_message", user_id, session=session_id, chars=len(text), guard=g.flags)
+        history = self.sessions.setdefault(session_id, [])
+        # Flags and untrusted text from earlier turns hold while those turns are still in the model's context.
+        earlier = [m["_taint"] for m in history if m.get("_taint")]
         ctx = ToolContext(user_id=user_id, role=role, session_id=session_id, bank=self.bank, fx=self.fx,
                           policy=self.policy, audit=self.audit, today=self.today,
-                          guard_flags=[f for f in g.flags if f in ("scam", "injection", "extraction", "escalation")])
+                          guard_flags=[f for f in g.flags if f in ("scam", "injection", "extraction", "escalation")],
+                          earlier_flags=sorted({f for t in earlier for f in t["flags"]}),
+                          untrusted_texts=[u for t in earlier for u in t["untrusted"]])
+        carried = len(ctx.untrusted_texts)
         if g.looks_pasted:
             ctx.untrusted_texts.append(text)
 
-        history = self.sessions.setdefault(session_id, [])
         turn: List[Dict[str, Any]] = [{"role": "user", "content": text}]
         note = g.as_note()
         if note:
@@ -154,6 +159,9 @@ class Agent:
         reply = _redact(reply)
         if turn and turn[-1].get("role") == "assistant":
             turn[-1]["content"] = reply
+        flags = [f for f in ctx.guard_flags if f in ("scam", "injection", "escalation")]
+        if flags or ctx.untrusted_texts[carried:]:
+            turn[0]["_taint"] = {"flags": flags, "untrusted": ctx.untrusted_texts[carried:]}  # not sent to the model
         history.extend(turn)
         if len(history) > 40:  # trim at a user boundary so tool call pairs stay intact
             cut = next((i for i in range(len(history) - 30, len(history)) if history[i]["role"] == "user"), 0)
