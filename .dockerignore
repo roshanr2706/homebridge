@@ -1,0 +1,9 @@
+**/node_modules
+**/.venv
+**/__pycache__
+**/.pytest_cache
+app/dist
+app/.expo
+backend/var
+**/.env
+evidence

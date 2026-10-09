@@ -1,6 +1,13 @@
 services:
-  api:
-    build: ./backend
+  homebridge:
+    build: .
     ports: ["8000:8000"]
-    env_file: [./backend/.env]
+    env_file:
+      - path: ./backend/.env
+        required: false
+    volumes:
+      - audit:/srv/backend/var
     restart: unless-stopped
+
+volumes:
+  audit:
