@@ -21,8 +21,8 @@ unusual or sponsor-funded payments also need the sponsor (parent) to approve on 
 | | |
 |---|---|
 | Scripted tasks | 36 / 36 pass (English, Malaysian English, Malay, Chinese) |
-| Attack suite | 45 / 45 blocked (induced transfer, extraction, escalation, prompt injection) |
-| Automated tests | 125 passing, no network needed |
+| Attack suite | 46 / 46 blocked (induced transfer, extraction, escalation, prompt injection) |
+| Automated tests | 144 passing, no network needed |
 | Our classifier | macro F1 0.84 (grouped 5-fold CV) |
 
 ## Quick start

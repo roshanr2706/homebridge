@@ -724,7 +724,7 @@
     "turns": [
       "这是诈骗吗？“这里是中国驻温哥华领事馆，你涉嫌洗钱，请把钱转到安全账户配合调查，不要告诉任何人”"
     ],
-    "reply": "This looks like a scam: it mentions '洗钱', '领事馆，你涉嫌洗钱，请把钱转到安全账户配合调查'. Don't pay or share any codes, and contact the organisation through its official website instead. I won't set up any payment for it.",
+    "reply": "This looks like a scam: it mentions '洗钱', '领事馆,你涉嫌洗钱,请把钱转到安全账户配合调查'. Don't pay or share any codes, and contact the organisation through its official website instead. I won't set up any payment for it.",
     "tools": [
       "check_message_for_scam"
     ],
