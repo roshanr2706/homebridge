@@ -22,7 +22,7 @@ Still needs you:
 1. **Teammate** (section 0) and the **registration email** (by Oct 13)
 2. A DeepSeek key, then `LLM_PROVIDER=deepseek LLM_API_KEY=… python scripts/run_evidence.py` → `evidence/deepseek/`; fix any task the live model fails
 3. Push to GitHub; deploy the Docker image to a Hong Kong or Singapore host; test from a China VPN exit if possible
-4. Android APK via EAS (`npx eas-cli@latest build -p android --profile preview`)
+4. Android APK via EAS: set the demo server URL in `app/eas.json` (`EXPO_PUBLIC_API_URL`), then `npx eas-cli@latest build -p android --profile preview` (needs a free Expo account)
 5. Record the demo video (script in `docs/demo_script.md`), finish the deck (team names, GitHub link), export the docs to PDF
 
 ---
