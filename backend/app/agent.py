@@ -153,6 +153,6 @@ class Agent:
             del history[:cut]
         self.audit.record("assistant_reply", "agent", session=session_id, tools=[t["tool"] for t in trace],
                           actions=[a.id for a in ctx.created_actions], fallback=fallback)
-        return TurnResult(reply=reply, actions=[a.for_app(include_token=True) for a in ctx.created_actions],
+        return TurnResult(reply=reply, actions=[self.policy.present(a, include_token=True) for a in ctx.created_actions],
                           guard=g.to_dict(), trace=trace, provider=getattr(provider, "name", "?"), fallback=fallback,
                           cards=card_builder.build(results, bool(ctx.created_actions)))

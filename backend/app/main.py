@@ -147,7 +147,7 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
                           policy=st.policy, audit=st.audit, today=st.agent.today)
         accs = st.bank.accounts(user_id)
         total = sum(a["balance"] * st.fx.mid(a["currency"], "CAD") for a in accs)
-        pending = [a.for_app() for a in st.policy.list_for(user_id, ["awaiting_user", "awaiting_sponsor"])]
+        pending = [st.policy.present(a) for a in st.policy.list_for(user_id, ["awaiting_user", "awaiting_sponsor"])]
         return {"accounts": accs, "total_cad": round(total, 2), "tuition": get_tuition_schedule(ctx, {}),
                 "budget": budget_summary(ctx, {}), "reminders": st.bank.reminders(user_id),
                 "payees": st.bank.payees(user_id), "pending": pending,
@@ -156,25 +156,25 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
 
     @app.get("/actions")
     def actions(user_id: str = Depends(student)):
-        return {"actions": [a.for_app(include_token=True) for a in st.policy.list_for(user_id)]}
+        return {"actions": [st.policy.present(a, include_token=True) for a in st.policy.list_for(user_id)]}
 
     @app.post("/actions/{action_id}/confirm")
     def confirm(action_id: str, body: ConfirmIn, user_id: str = Depends(student)):
         try:
-            return st.policy.confirm(action_id, user_id, body.token).for_app()
+            return st.policy.present(st.policy.confirm(action_id, user_id, body.token))
         except PolicyError as e:
             _err(e)
 
     @app.post("/actions/{action_id}/cancel")
     def cancel(action_id: str, user_id: str = Depends(student)):
         try:
-            return st.policy.cancel(action_id, user_id).for_app()
+            return st.policy.present(st.policy.cancel(action_id, user_id))
         except PolicyError as e:
             _err(e)
 
     @app.get("/sponsor/queue")
     def queue(sponsor_id: str = Depends(sponsor)):
-        return {"actions": [a.for_app() for a in st.policy.sponsor_queue(sponsor_id)]}
+        return {"actions": [st.policy.present(a) for a in st.policy.sponsor_queue(sponsor_id)]}
 
     @app.get("/sponsor/overview")
     def overview(sponsor_id: str = Depends(sponsor)):
@@ -182,7 +182,7 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         return {"student": st.bank.user(STUDENT), "accounts": accs,
                 "total_cad": round(sum(a["balance"] * st.fx.mid(a["currency"], "CAD") for a in accs), 2),
                 "limits": st.settings.limits.__dict__,
-                "recent": [a.for_app() for a in st.policy.list_for(STUDENT)][-10:]}
+                "recent": [st.policy.present(a) for a in st.policy.list_for(STUDENT)][-10:]}
 
     @app.post("/sponsor/limits")
     def set_limits(body: LimitsIn, sponsor_id: str = Depends(sponsor)):
@@ -199,14 +199,14 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
     @app.post("/sponsor/actions/{action_id}/approve")
     def approve(action_id: str, body: DecisionIn, sponsor_id: str = Depends(sponsor)):
         try:
-            return st.policy.sponsor_decide(action_id, sponsor_id, True, body.note).for_app()
+            return st.policy.present(st.policy.sponsor_decide(action_id, sponsor_id, True, body.note))
         except PolicyError as e:
             _err(e)
 
     @app.post("/sponsor/actions/{action_id}/reject")
     def reject(action_id: str, body: DecisionIn, sponsor_id: str = Depends(sponsor)):
         try:
-            return st.policy.sponsor_decide(action_id, sponsor_id, False, body.note).for_app()
+            return st.policy.present(st.policy.sponsor_decide(action_id, sponsor_id, False, body.note))
         except PolicyError as e:
             _err(e)
 

@@ -102,3 +102,13 @@ def test_chat_rate_limit(api, monkeypatch):
 def test_ordinary_chinese_and_malay_questions_are_not_flagged(text):
     from app.guard import check
     assert check(text).flags == [], check(text).to_dict()
+
+
+def test_balance_warning_is_recomputed_when_shown(api):
+    client, st = api
+    a = chat(client, "Pay my spring tuition")["actions"][0]
+    assert any("lower than this amount" in w for w in a["warnings"])
+    client.post(f"/actions/{a['action_id']}/confirm", json={"token": a["confirm_token"]}, headers=S)
+    st.bank._x("UPDATE accounts SET balance=balance+125000 WHERE id='acc_tui'")
+    queued = client.get("/sponsor/queue", headers=P).json()["actions"][0]
+    assert not any("lower than this amount" in w for w in queued["warnings"])

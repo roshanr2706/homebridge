@@ -98,7 +98,8 @@ BUILDERS: Dict[str, Builder] = {
 
 # A transfer is drafted with a confirmation card already; showing the rent
 # lookup that preceded it as a separate table is noise.
-SUPPRESS_WHEN_ACTION = {"list_transactions", "get_balances", "get_tuition_schedule"}
+# A conversion draft shows its own rate and margin, so a quote table next to it is noise too.
+SUPPRESS_WHEN_ACTION = {"list_transactions", "get_balances", "get_tuition_schedule", "get_fx_quotes"}
 
 
 def build(results: List[Tuple[str, Dict[str, Any], Dict[str, Any]]], has_actions: bool) -> List[Dict[str, Any]]:

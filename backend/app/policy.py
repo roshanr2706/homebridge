@@ -452,6 +452,18 @@ class PolicyEngine:
         return a
 
     # ------------------------------------------------------------ queries
+    def present(self, a: PendingAction, include_token: bool = False) -> Dict[str, Any]:
+        """for_app() with the balance warning recomputed, so a card never shows a stale shortfall."""
+        d = a.for_app(include_token)
+        if a.kind in ("transfer", "conversion") and a.status in ("awaiting_user", "awaiting_sponsor"):
+            acc = self.bank.account(a.params["from_account_id"])
+            d["warnings"] = [w for w in a.warnings if "lower than this amount" not in w]
+            if acc and acc["balance"] < to_minor(a.params["amount"]):
+                d["warnings"].append(f"Balance in {acc['label']} is lower than this amount right now; "
+                                     "it will fail unless topped up first.")
+        return d
+
+
     def list_for(self, owner: str, statuses: Optional[List[str]] = None) -> List[PendingAction]:
         out = []
         for a in list(self.actions.values()):
