@@ -7,6 +7,7 @@ as a system note so it can warn the user.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Dict, List
 
@@ -76,6 +77,17 @@ RULES: Dict[str, List[str]] = {
 
 COMPILED = {k: [re.compile(p, re.IGNORECASE | re.MULTILINE) for p in v] for k, v in RULES.items()}
 
+# Cyrillic and Greek letters that look like Latin ones, so "ignоre" (Cyrillic o) still matches "ignore".
+CONFUSABLES = str.maketrans("аеорсхуіјѕԁһӏАВЕКМНОРСТХІЈЅοαεικνρτυχΟΑΒΕΖΗΙΚΜΝΡΤΥΧ",
+                            "aeopcxyijsdhlABEKMHOPCTXIJSoaeikvptuxOABEZHIKMNPTYX")
+
+
+def normalize(text: str) -> str:
+    """Fold text before matching: fullwidth forms (NFKC), invisible format characters, lookalike letters."""
+    text = unicodedata.normalize("NFKC", text or "")
+    text = "".join(c for c in text if unicodedata.category(c) != "Cf")
+    return text.translate(CONFUSABLES)
+
 
 @dataclass
 class GuardResult:
@@ -103,8 +115,9 @@ def looks_pasted(text: str) -> bool:
 
 def check(text: str, use_model: bool = True) -> GuardResult:
     res = GuardResult(looks_pasted=looks_pasted(text))
+    folded = normalize(text)
     for cat, patterns in COMPILED.items():
-        hits = [m.group(0)[:40].strip() for p in patterns for m in [p.search(text)] if m]
+        hits = [m.group(0)[:40].strip() for p in patterns for m in [p.search(folded)] if m]
         if hits:
             res.matches[cat] = hits
             res.flags.append(cat)
