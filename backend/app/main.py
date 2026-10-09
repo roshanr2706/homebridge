@@ -5,22 +5,31 @@ Demo tokens can be overridden with HB_STUDENT_TOKEN / HB_SPONSOR_TOKEN.
 """
 from __future__ import annotations
 
+import copy
 import os
+import time
+from collections import deque
 from dataclasses import dataclass
+from pathlib import Path
 from datetime import date
 from typing import Dict, Optional, Tuple
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .agent import Agent
 from .audit import AuditLog
 from .bank import Bank
-from .config import Settings, load_settings
+from .config import Limits, Settings, load_settings
 from .fx import FxMarket
 from .policy import PolicyEngine, PolicyError
 from .seed import SPONSOR, STUDENT
+from .tools import ToolContext, budget_summary, get_tuition_schedule
+
+WEB_DIR = Path(os.getenv("HB_WEB_DIR", Path(__file__).resolve().parents[2] / "app" / "dist"))
+CHATS_PER_MINUTE = int(os.getenv("HB_CHATS_PER_MINUTE", "30"))
 
 
 class ChatIn(BaseModel):
@@ -33,7 +42,12 @@ class ConfirmIn(BaseModel):
 
 
 class DecisionIn(BaseModel):
-    note: str = ""
+    note: str = Field("", max_length=200)
+
+
+class LimitsIn(BaseModel):
+    single_cad: float = Field(..., gt=0, le=20000)
+    daily_cad: float = Field(..., gt=0, le=50000)
 
 
 @dataclass
@@ -46,6 +60,8 @@ class AppState:
     agent: Agent
 
     def reset(self) -> None:
+        defaults = Limits()
+        self.settings.limits.single_cad, self.settings.limits.daily_cad = defaults.single_cad, defaults.daily_cad
         self.bank.reset(self.agent.today)
         self.policy.reset()
         self.agent.reset()
@@ -93,6 +109,18 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
     def _err(e: PolicyError):
         raise HTTPException(400, str(e))
 
+    chat_times: Dict[str, deque] = {}
+
+    def _chat_rate_limit(user_id: str) -> None:
+        q = chat_times.setdefault(user_id, deque())
+        now = time.time()
+        while q and now - q[0] > 60:
+            q.popleft()
+        if len(q) >= CHATS_PER_MINUTE:
+            st.audit.record("rate_limited", user_id, endpoint="/chat")
+            raise HTTPException(429, "Too many messages. Please wait a minute.")
+        q.append(now)
+
     @app.get("/health")
     def health():
         return {"ok": True, "provider": getattr(st.agent.provider, "name", "?"), "demo_mode": st.settings.demo_mode}
@@ -104,12 +132,27 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
 
     @app.post("/chat")
     def chat(body: ChatIn, user_id: str = Depends(student)):
+        _chat_rate_limit(user_id)
         return st.agent.run(user_id, "student", f"{user_id}:{body.session_id}", body.message).to_dict()
 
     @app.get("/accounts")
     def accounts(user_id: str = Depends(student)):
         return {"accounts": st.bank.accounts(user_id), "payees": st.bank.payees(user_id),
                 "tuition": st.bank.tuition(user_id)}
+
+    @app.get("/overview")
+    def overview_student(user_id: str = Depends(student)):
+        """Wallet screen: the same read-only data the agent's tools see."""
+        ctx = ToolContext(user_id=user_id, role="student", session_id="overview", bank=st.bank, fx=st.fx,
+                          policy=st.policy, audit=st.audit, today=st.agent.today)
+        accs = st.bank.accounts(user_id)
+        total = sum(a["balance"] * st.fx.mid(a["currency"], "CAD") for a in accs)
+        pending = [a.for_app() for a in st.policy.list_for(user_id, ["awaiting_user", "awaiting_sponsor"])]
+        return {"accounts": accs, "total_cad": round(total, 2), "tuition": get_tuition_schedule(ctx, {}),
+                "budget": budget_summary(ctx, {}), "reminders": st.bank.reminders(user_id),
+                "payees": st.bank.payees(user_id), "pending": pending,
+                "limits": {"single_cad": st.settings.limits.single_cad, "daily_cad": st.settings.limits.daily_cad},
+                "rates": {"MYR/CAD": st.fx.mid("MYR", "CAD"), "CAD/MYR": round(st.fx.mid("CAD", "MYR"), 4)}}
 
     @app.get("/actions")
     def actions(user_id: str = Depends(student)):
@@ -139,6 +182,18 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
                 "limits": st.settings.limits.__dict__,
                 "recent": [a.for_app() for a in st.policy.list_for(STUDENT)][-10:]}
 
+    @app.post("/sponsor/limits")
+    def set_limits(body: LimitsIn, sponsor_id: str = Depends(sponsor)):
+        """T4 for the agent: limits change only here, with the sponsor's own credentials."""
+        if body.single_cad > body.daily_cad:
+            raise HTTPException(400, "The single-payment limit cannot be higher than the 24-hour limit.")
+        lim = st.settings.limits
+        before = {"single_cad": lim.single_cad, "daily_cad": lim.daily_cad}
+        lim.single_cad, lim.daily_cad = round(body.single_cad, 2), round(body.daily_cad, 2)
+        st.audit.record("limits_changed", sponsor_id, before=before,
+                        after={"single_cad": lim.single_cad, "daily_cad": lim.daily_cad})
+        return {"limits": lim.__dict__}
+
     @app.post("/sponsor/actions/{action_id}/approve")
     def approve(action_id: str, body: DecisionIn, sponsor_id: str = Depends(sponsor)):
         try:
@@ -158,15 +213,30 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         return {"entries": st.audit.entries(since)[-200:]}
 
     @app.get("/audit/verify")
-    def audit_verify(who=Depends(auth)):
-        return st.audit.verify()
+    def audit_verify(tamper_seq: Optional[int] = None, who=Depends(auth)):
+        """With tamper_seq, verifies a copy of the log with that entry edited, to show detection live."""
+        if tamper_seq is None:
+            return st.audit.verify()
+        entries = copy.deepcopy(st.audit.entries())
+        if not 0 <= tamper_seq < len(entries):
+            raise HTTPException(400, "No such entry")
+        entries[tamper_seq]["data"]["_tampered"] = True
+        res = AuditLog.verify_entries(entries)
+        res["simulated_tamper_seq"] = tamper_seq
+        return res
 
     @app.post("/demo/reset")
     def demo_reset(who=Depends(auth)):
         if not st.settings.demo_mode:
             raise HTTPException(403, "Reset is only available in demo mode")
         st.reset()
+        chat_times.clear()
         return {"ok": True}
+
+    # Serve the exported web app from the same origin when it has been built (npm run build:web).
+    # Registered last so API routes always win.
+    if (WEB_DIR / "index.html").exists():
+        app.mount("/", StaticFiles(directory=str(WEB_DIR), html=True), name="web")
 
     return app
 

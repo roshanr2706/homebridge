@@ -64,6 +64,7 @@ class PendingAction:
     status: str = "awaiting_user"  # awaiting_user|awaiting_sponsor|executed|rejected|cancelled|expired|failed
     user_confirmed: bool = False
     sponsor_decision: Optional[str] = None
+    sponsor_note: str = ""
     result: Optional[Dict[str, Any]] = None
     provenance: Dict[str, str] = field(default_factory=dict)
     _token: Optional[str] = None   # plaintext, handed to the app once, never to the model
@@ -94,6 +95,7 @@ class PendingAction:
             "expires_at": self.expires_at,
             "user_confirmed": self.user_confirmed,
             "sponsor_decision": self.sponsor_decision,
+            "sponsor_note": self.sponsor_note,
             "result": self.result,
             "provenance": self.provenance,
         })
@@ -373,6 +375,7 @@ class PolicyEngine:
             if a.status != "awaiting_sponsor":
                 raise PolicyError(f"Action is {a.status}, not awaiting sponsor approval.")
             a.sponsor_decision = "approved" if approve else "rejected"
+            a.sponsor_note = (note or "")[:200]
             self.audit.record("sponsor_" + a.sponsor_decision, sponsor_id, action_id=a.id, note=note[:200])
             if not approve:
                 a.status = "rejected"

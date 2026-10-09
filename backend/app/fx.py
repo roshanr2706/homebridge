@@ -113,6 +113,7 @@ class FxMarket:
             "high": max(series),
             "average": round(sum(series) / len(series), 5),
             "days": days,
+            "series": series,
         }
 
     @staticmethod

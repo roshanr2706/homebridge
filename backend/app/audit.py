@@ -59,12 +59,16 @@ class AuditLog:
         return list(self._entries[since:])
 
     def verify(self) -> Dict[str, Any]:
+        return self.verify_entries(self._entries)
+
+    @staticmethod
+    def verify_entries(entries: List[Dict[str, Any]]) -> Dict[str, Any]:
         prev = GENESIS
-        for i, entry in enumerate(self._entries):
+        for i, entry in enumerate(entries):
             if entry.get("prev") != prev or _digest(entry) != entry.get("hash"):
-                return {"ok": False, "broken_at": i, "count": len(self._entries)}
+                return {"ok": False, "broken_at": i, "count": len(entries)}
             prev = entry["hash"]
-        return {"ok": True, "count": len(self._entries), "head": prev}
+        return {"ok": True, "count": len(entries), "head": prev}
 
     def reset(self) -> None:
         with self._lock:
