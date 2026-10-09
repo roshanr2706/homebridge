@@ -186,3 +186,18 @@ def test_audit_chain_detects_tampering(api):
     assert st.audit.verify()["ok"]
     st.audit._entries[1]["data"]["tool"] = "something_else"
     assert not st.audit.verify()["ok"]
+
+
+def test_draft_rate_limit_cannot_be_dodged_with_new_sessions():
+    st = fresh(provider=EvilProvider([("prepare_transfer", {"payee": "hydro", "amount": 10})] * 30))
+    st.settings.max_agent_steps = 40
+    for i in range(3):
+        st.agent.provider.calls = [("prepare_transfer", {"payee": "hydro", "amount": 10})] * 10
+        st.agent.run(STUDENT, "student", f"session-{i}", "hello")
+    assert len(st.policy.actions) == st.settings.limits.drafts_per_hour
+
+
+def test_vague_payee_reference_does_not_match():
+    st = fresh(provider=EvilProvider([("prepare_transfer", {"payee": "a", "amount": 50})]))
+    st.agent.run(STUDENT, "student", "s", "hello")
+    assert not st.policy.actions

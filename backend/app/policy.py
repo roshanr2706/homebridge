@@ -118,13 +118,14 @@ class PolicyEngine:
     def cad(self, amount: float, currency: str) -> float:
         return amount * self.fx.mid(currency, "CAD")
 
-    def _rate_limit(self, session_id: str) -> None:
+    def _rate_limit(self, owner: str) -> None:
+        # Keyed by the account owner, not the chat session, which the client chooses.
         now = time.time()
-        recent = [t for t in self._drafts.get(session_id, []) if now - t < 3600]
+        recent = [t for t in self._drafts.get(owner, []) if now - t < 3600]
         if len(recent) >= self.limits.drafts_per_hour:
             raise PolicyError("Too many payment drafts in the last hour. Please wait before trying again.")
         recent.append(now)
-        self._drafts[session_id] = recent
+        self._drafts[owner] = recent
 
     def _daily_outflow_cad(self, owner: str) -> float:
         since = (datetime.now() - timedelta(hours=24)).isoformat(timespec="seconds")
@@ -206,7 +207,7 @@ class PolicyEngine:
         if acc["currency"] != currency:
             raise PolicyError(f"{acc['label']} holds {acc['currency']} but this payee is paid in {currency}.")
 
-        self._rate_limit(session_id)
+        self._rate_limit(owner)
         amount_cad = self.cad(amount, currency)
         t3: List[str] = []
         reasons: List[str] = []
@@ -272,7 +273,7 @@ class PolicyEngine:
             raise PolicyError("You need an account in both currencies to convert.")
         if src["id"] == dst["id"]:
             raise PolicyError("Source and destination are the same account.")
-        self._rate_limit(session_id)
+        self._rate_limit(owner)
         prov = self.fx.provider("inapp")
         q = self.fx.quote(src["currency"], dst["currency"], amount, prov)
         amount_cad = self.cad(amount, src["currency"])
@@ -313,7 +314,7 @@ class PolicyEngine:
             raise PolicyError("A payee needs a name and an account number.")
         if currency.upper() not in ("CAD", "MYR", "USD"):
             raise PolicyError("Payee currency must be CAD, MYR or USD.")
-        self._rate_limit(session_id)
+        self._rate_limit(owner)
         kind = (kind or "unknown").lower()
         risk = 20
         reasons = ["New payees always need sponsor approval and a cooling period"]
@@ -344,7 +345,7 @@ class PolicyEngine:
         currency = currency.upper()
         if not self.bank.find_account(owner, currency):
             raise PolicyError(f"No {currency} account to receive money. Use MYR or CAD.")
-        self._rate_limit(session_id)
+        self._rate_limit(owner)
         params = {"amount": float(amount), "currency": currency, "reason": reason[:200]}
         a = self._new("topup", owner, session_id, params, f"Ask sponsor for {currency} {amount:,.2f}: {reason[:80]}",
                       ["Sponsor money"], 0, [], [], {})

@@ -314,7 +314,7 @@ def resolve_payee(ctx: ToolContext, ref: str) -> Optional[Dict[str, Any]]:
         if ref in (p["id"].lower(), p["name"].lower()):
             return p
     for p in payees:
-        if ref and (ref in p["name"].lower() or p["name"].lower() in ref):
+        if len(ref) >= 3 and (ref in p["name"].lower() or p["name"].lower() in ref):
             return p
     for kind, words in PAYEE_HINTS.items():
         if any(w in ref for w in words):
