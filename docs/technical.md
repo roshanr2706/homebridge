@@ -257,7 +257,7 @@ To produce live-model evidence: `LLM_PROVIDER=deepseek LLM_API_KEY=… python sc
 ## 9. Limitations and future work
 
 - **Sandbox only.** A real deployment needs a licensed partner bank or money-services business (FINTRAC registration in Canada; Bank Negara Malaysia rules on outward remittance), KYC, and real payment rails.
-- **Authentication** is static bearer tokens for the demo. Production would use per-device keys, biometric step-up on Confirm and Approve, and push notifications to the sponsor.
+- **Authentication** is static bearer tokens for the demo. On Android and iOS the app already asks for Face ID, a fingerprint or the device passcode before Confirm and Approve (`app/src/stepUp.ts`, using `expo-local-authentication`); this is a client-side check. Production would bind it to the server with per-device keys, and add push notifications to the sponsor.
 - **State** (pending actions, sessions) is in memory, and the bank is SQLite. Production would use a transactional database with the same invariants.
 - **FX rates** are a snapshot with modelled spreads. Production would use live quotes and lock the quoted rate on the draft.
 - **Classifier** is small and trained on our own data. It is a second opinion by design, never a gate. A larger multilingual dataset and periodic retraining from reported scams would improve recall.

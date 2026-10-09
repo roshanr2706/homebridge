@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import type { Action } from '../api';
+import { stepUp, useStepUpNote } from '../stepUp';
 import { amount, cityTime, fonts, klHour, money, useTheme } from '../theme';
+import { useToast } from '../toast';
 import { Bar, Body, Button, DashedRule, Eyebrow, Mono, Pill, Row } from '../ui';
 
 type Props = {
@@ -147,6 +149,8 @@ const STATUS_TEXT: Record<string, string> = {
 
 export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, onReject }: Props) {
   const t = useTheme();
+  const toast = useToast();
+  const stepUpNote = useStepUpNote();
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const now = useNow(a.status === 'awaiting_user');
@@ -167,6 +171,25 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
       setBusy(null);
     }
   };
+  // Confirm and Approve move money, so they need the device owner first (Face ID, fingerprint or
+  // passcode). A failed or cancelled check never reaches the API. Cancel, Withdraw and Reject don't ask.
+  const guarded = (name: string, prompt: string, fn?: () => Promise<void>) =>
+    run(
+      name,
+      fn &&
+        (async () => {
+          const check = await stepUp(prompt);
+          if (!check.ok) {
+            toast(mode === 'sponsor' ? 'Not approved' : 'Not confirmed', `${check.reason} Nothing was sent.`, 'danger');
+            return;
+          }
+          await fn();
+        }),
+    );
+  const what = `${h.big}${h.sub ? ` ${h.sub}` : ''}`;
+  const deviceNote = stepUpNote ? (
+    <Mono style={{ fontSize: 10.5, color: t.faint, marginTop: mode === 'student' ? 6 : 0, textAlign: 'right' }}>{stepUpNote}</Mono>
+  ) : null;
 
   return (
     <View style={[styles.card, { backgroundColor: t.surface, borderColor: risky ? t.danger : t.border, shadowColor: t.shadow }]}>
@@ -269,15 +292,18 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
         {failedMsg ? <Body style={{ fontSize: 12.5, color: t.danger, marginTop: 6 }}>{failedMsg}</Body> : null}
 
         {mode === 'student' && a.status === 'awaiting_user' && (
-          <Row style={{ gap: 10, marginTop: 14 }}>
-            <Button label="Cancel" kind="ghost" busy={busy === 'cancel'} onPress={run('cancel', onCancel && (() => onCancel(a)))} style={{ flex: 1 }} />
-            <Button
-              label={a.needs_sponsor_approval ? 'Confirm & send to sponsor' : 'Confirm'}
-              busy={busy === 'confirm'}
-              onPress={run('confirm', onConfirm && (() => onConfirm(a)))}
-              style={{ flex: 2 }}
-            />
-          </Row>
+          <>
+            <Row style={{ gap: 10, marginTop: 14 }}>
+              <Button label="Cancel" kind="ghost" busy={busy === 'cancel'} onPress={run('cancel', onCancel && (() => onCancel(a)))} style={{ flex: 1 }} />
+              <Button
+                label={a.needs_sponsor_approval ? 'Confirm & send to sponsor' : 'Confirm'}
+                busy={busy === 'confirm'}
+                onPress={guarded('confirm', `Confirm ${what}`, onConfirm && (() => onConfirm(a)))}
+                style={{ flex: 2 }}
+              />
+            </Row>
+            {deviceNote}
+          </>
         )}
         {mode === 'student' && a.status === 'awaiting_sponsor' && onCancel && (
           <Button label="Withdraw request" kind="ghost" busy={busy === 'cancel'} onPress={run('cancel', () => onCancel(a))} style={{ marginTop: 12 }} />
@@ -294,8 +320,14 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
             />
             <Row style={{ gap: 10 }}>
               <Button label="Reject" kind="danger" busy={busy === 'reject'} onPress={run('reject', onReject && (() => onReject(a, note)))} style={{ flex: 1 }} />
-              <Button label="Approve" busy={busy === 'approve'} onPress={run('approve', onApprove && (() => onApprove(a, note)))} style={{ flex: 2 }} />
+              <Button
+                label="Approve"
+                busy={busy === 'approve'}
+                onPress={guarded('approve', `Approve ${what}`, onApprove && (() => onApprove(a, note)))}
+                style={{ flex: 2 }}
+              />
             </Row>
+            {deviceNote}
           </View>
         )}
       </View>

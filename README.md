@@ -48,6 +48,24 @@ npx expo start --web            # opens http://localhost:8081; press "a" for And
 The app talks to `http://localhost:8000` by default. To point it elsewhere, copy
 `app/.env.example` to `app/.env` and set `EXPO_PUBLIC_API_URL`.
 
+### On a phone
+
+- **Development (Expo Go or a development build).** On a phone, `localhost` is the phone itself.
+  Set `EXPO_PUBLIC_API_URL` in `app/.env` to your computer's LAN address, e.g.
+  `http://192.168.1.20:8000` (the Android emulator reaches the host at `http://10.0.2.2:8000`),
+  start the backend with `--host 0.0.0.0`, then fully reload the app. The app's "Can't reach the
+  server" banner repeats this on native.
+- **Sideloaded APK (`eas build --profile preview`).** Android release builds block plain `http`
+  (cleartext) traffic, so the APK needs the demo server behind **HTTPS**. Set the real address in
+  `app/eas.json` (`build.preview.env.EXPO_PUBLIC_API_URL`) before building; it is baked in at build
+  time. We deliberately do not turn on `usesCleartextTraffic` (an app-wide switch in
+  `expo-build-properties`) for a finance app. iOS release builds have the same expectation (App
+  Transport Security).
+- **Device check.** On Android and iOS, Confirm (student) and Approve (sponsor) first ask for Face ID,
+  a fingerprint or the device passcode. Face ID needs a development build (Expo Go doesn't support it
+  on iOS). On web, or on a phone with no screen lock, the action goes ahead and
+  the card says the device check was skipped.
+
 ### One URL for everything (Docker)
 
 ```bash
