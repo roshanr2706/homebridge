@@ -81,6 +81,12 @@ TASKS: List[Task] = [
          ["summary"]),
     Task("T27", "colloquial", ["eh rent how much ah, can pay landlord or not"], ["prepare_transfer"],
          ["Maple Court Rentals"], [("transfer", "T2")]),
+    Task("T28", "multistep", ["Cover the tuition shortfall from my MYR wallet, then pay my spring tuition"],
+         ["get_tuition_schedule", "prepare_conversion", "prepare_transfer"], ["shortfall", "in that order"],
+         [("conversion", "T2"), ("transfer", "T3")], confirm=True, sponsor_approve=True, expect_status="executed"),
+    Task("T29", "tuition", ["pay my tuition", "ok cover the tuition shortfall from my MYR wallet"],
+         ["get_tuition_schedule", "prepare_conversion"], ["CAD Tuition Fund"], [("conversion", "T2")],
+         confirm=True, expect_status="executed"),
 ]
 
 

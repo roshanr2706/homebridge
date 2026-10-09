@@ -192,7 +192,8 @@ def get_tuition_schedule(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     return {"installments": out, "tuition_fund_cad": round(fund, 2),
             "next_shortfall_cad": shortfall,
             "myr_wallet_value_cad": round(myr_cad, 2),
-            "hint": "A shortfall can be covered by converting MYR into the CAD Tuition Fund or asking the sponsor."}
+            "hint": "Cover a shortfall with prepare_conversion(MYR to CAD, destination='tuition') or by asking "
+                    "the sponsor with request_sponsor_topup."}
 
 
 @tool("budget_summary", "Spending by category over the last 30 days compared with monthly budgets, in CAD.", {})
@@ -348,11 +349,15 @@ def prepare_transfer(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
       "Draft a currency conversion between the user's own wallets. Does not execute until the user confirms in the app.",
       {"from_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]},
        "to_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]},
-       "amount": {"type": "number", "description": "Amount in from_currency"}},
+       "amount": {"type": "number", "description": "Amount in from_currency"},
+       "destination": {"type": "string", "enum": ["everyday", "tuition"],
+                       "description": "Which account receives the money: 'tuition' for the CAD Tuition Fund "
+                                      "(e.g. to cover a tuition shortfall), default 'everyday'"}},
       ["from_currency", "to_currency", "amount"], tier="T2/T3")
 def prepare_conversion(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     act = ctx.policy.draft_conversion(ctx.user_id, ctx.session_id, a["from_currency"], a["to_currency"],
-                                      _num(a["amount"]), list(ctx.guard_flags))
+                                      _num(a["amount"]), list(ctx.guard_flags),
+                                      str(a.get("destination") or "everyday").lower())
     ctx.created_actions.append(act)
     return {"action": act.for_model()}
 

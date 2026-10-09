@@ -247,12 +247,16 @@ class PolicyEngine:
 
     def draft_conversion(
         self, owner: str, session_id: str, from_currency: str, to_currency: str, amount: float,
-        guard_flags: Optional[List[str]] = None,
+        guard_flags: Optional[List[str]] = None, destination: str = "everyday",
     ) -> PendingAction:
         if not isinstance(amount, (int, float)) or amount <= 0 or amount != amount:
             raise PolicyError("Amount must be a positive number.")
+        if destination not in ("everyday", "tuition"):
+            raise PolicyError("Destination must be 'everyday' or 'tuition'.")
         src = self.bank.find_account(owner, from_currency, "Wallet" if from_currency.upper() == "MYR" else "Everyday")
-        dst = self.bank.find_account(owner, to_currency, "Everyday")
+        dst = self.bank.find_account(owner, to_currency, "Tuition" if destination == "tuition" else "Everyday")
+        if destination == "tuition" and (not dst or "Tuition" not in dst["label"]):
+            raise PolicyError(f"There is no {to_currency.upper()} tuition fund to convert into.")
         if not src or not dst:
             raise PolicyError("You need an account in both currencies to convert.")
         if src["id"] == dst["id"]:

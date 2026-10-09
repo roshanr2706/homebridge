@@ -167,6 +167,11 @@ class OfflineEngine:
                         f"Total across my accounts is about CAD {s['total']:,.0f}. Next tuition installment is "
                         f"coming up and I'm keeping that money in the tuition fund.")
 
+        # 7a. Cover a tuition shortfall from the MYR wallet (and optionally pay it)
+        if re.search(r"tuition|yuran", low) and not low.rstrip().endswith("?") and re.search(
+                r"(cover|top ?up|fill)\s+(up\s+)?(the |my )?(tuition )?(shortfall|gap|fund)", low):
+            return self._cover_tuition(low, res, done)
+
         # 7. Pay tuition
         if re.search(r"\bpay\b", low) and re.search(r"tuition|school fees|yuran", low):
             if "get_tuition_schedule" not in done:
@@ -176,11 +181,15 @@ class OfflineEngine:
                 return _call("prepare_transfer", payee="UBC Student Financial Services", amount=nxt["amount"],
                              memo=nxt["term"])
             r = last
-            msg = _action_text(r["action"])
             sched = res[0][1]
+            act = dict(r["action"])
+            if sched["next_shortfall_cad"] > 0:  # the heads-up below says it better than the generic warning
+                act["warnings"] = [w for w in act.get("warnings", []) if "lower than this amount" not in w]
+            msg = _action_text(act)
             if sched["next_shortfall_cad"] > 0:
-                msg += (f" Heads up: the tuition fund is CAD {sched['next_shortfall_cad']:,.2f} short, so you'll need "
-                        "to convert some MYR into it before this can go through.")
+                msg += (f" Heads up: the tuition fund is CAD {sched['next_shortfall_cad']:,.2f} short, so it would fail "
+                        "today. Say 'cover the tuition shortfall from my MYR wallet' and I'll draft that conversion, "
+                        "or ask your dad for a top-up.")
             return _say(msg)
 
         # 8. Tuition questions / planning
@@ -351,6 +360,36 @@ class OfflineEngine:
                     "official website.")
         return ("I noticed instructions in that message that try to change how I work, so I'm ignoring them. "
                 "Payments can only be confirmed by you in the app. What would you like to do?")
+
+    def _cover_tuition(self, low, res, done):
+        if "get_tuition_schedule" not in done:
+            return _call("get_tuition_schedule")
+        sched = res[0][1]
+        short = sched["next_shortfall_cad"]
+        nxt = sched["installments"][0] if sched["installments"] else None
+        pay = bool(re.search(r"\b(then|and) pay\b|pay (it|the tuition|my tuition)", low))
+        if short <= 0 and not pay:
+            return _say("Your tuition fund already covers the next installment, so there's nothing to top up.")
+        if short > 0 and "get_fx_quotes" not in done:
+            return _call("get_fx_quotes", from_currency="MYR", to_currency="CAD", amount=1000, own_wallet=True)
+        if short > 0 and "prepare_conversion" not in done:
+            rate = next(q for q in res[1][1]["quotes"] if q["provider_key"] == "inapp")["rate"]
+            myr = float(int(short / rate) + 2)  # round up, with a ringgit of headroom
+            return _call("prepare_conversion", from_currency="MYR", to_currency="CAD", amount=myr,
+                         destination="tuition")
+        if pay and nxt and "prepare_transfer" not in done:
+            return _call("prepare_transfer", payee="UBC Student Financial Services", amount=nxt["amount"],
+                         memo=nxt["term"])
+        drafted = [r["action"]["summary"] for n, r in res if n in ("prepare_conversion", "prepare_transfer")
+                   and "action" in r]
+        msg = "I've drafted: " + "; then ".join(drafted) + "."
+        if short > 0:
+            msg += f" That covers the CAD {short:,.2f} shortfall."
+        if pay:
+            msg += " Confirm them in that order in the app. The tuition payment then goes to your dad for approval."
+        else:
+            msg += " Confirm it in the app, then ask me to pay your tuition."
+        return _say(msg)
 
     def _convert_then_rent(self, res, done):
         if "list_transactions" not in done:
