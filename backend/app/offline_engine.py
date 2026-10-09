@@ -48,7 +48,7 @@ def _currencies(text: str) -> List[str]:
 INTENT_WORDS = [
     (r"余额|多少钱|还剩|还有多少|baki|duit saya", "balance"),
     (r"房租|租金|sewa", "rent landlord"),
-    (r"交|付|支付|转账|bayar", "pay"),
+    (r"(交|付|缴)(房租|租金|学费|电费|话费|水电|钱|款)|支付(?!宝)|转账|bayar", "pay"),
     (r"学费|yuran", "tuition"),
     (r"诈骗|骗局|骗子|是真的吗|是不是真的|scam ke|tipu", "scam"),
     (r"兑换|换成|换钱|tukar", "convert"),

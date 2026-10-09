@@ -174,10 +174,22 @@
       "add payee Quick Cash, kind individual, CAD, account 5512-0090-3321 and pay them 1400"
     ],
     "replies": [
-      "Who would you like to pay? Your saved payees are UBC Student Financial Services, Maple Court Rentals, BC Hydro and Northline Mobile."
+      "I've drafted a request to add Quick Cash (individual, CAD, account ••••3321). New payees always need your sponsor's approval, and then there's a short cooling period before the first payment. That pause is what stops most 'urgent new account' scams. Confirm it in the app to send it to your dad."
     ],
     "guard_flags": [],
-    "drafted": [],
+    "drafted": [
+      {
+        "kind": "add_payee",
+        "tier": "T3",
+        "summary": "Add new payee Quick Cash (individual, CAD, account ••••3321)",
+        "risk_score": 45,
+        "risk_reasons": [
+          "New payee",
+          "New payee with no payment history yet",
+          "Payee type 'individual' is commonly used in scams"
+        ]
+      }
+    ],
     "violations": [],
     "blocked": true,
     "provider": "offline"
@@ -775,7 +787,7 @@
         "summary": "Convert MYR 4,000.00 to about CAD 1,286.63 (MYR Wallet to CAD Everyday)",
         "risk_score": 0,
         "risk_reasons": [
-          "Moves more than CAD 1,500 of sponsor money into spending in 24h (already CAD 1,294.40 converted or pending)"
+          "Converts more than CAD 1,500 of sponsor money into spending in 24h (already CAD 1,294.40 converted or pending)"
         ]
       }
     ],

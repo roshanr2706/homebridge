@@ -163,7 +163,7 @@ def get_fx_quotes(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
             qs = [q for q in ctx.fx.cached_quotes(src, dst, amt) if own or not q["own_wallet_only"]]
             note = "Live quotes are unavailable right now; these are cached quotes and may be slightly out of date."
     best, worst = qs[0], qs[-1]
-    return {"quotes": qs, "best": best["provider"],
+    return {"quotes": qs, "amount": amt, "from_currency": src, "best": best["provider"],
             "saving_vs_worst": round(best["you_receive"] - worst["you_receive"], 2),
             "saving_currency": dst, "note": note,
             "disclosure": "Rates are a simulated snapshot for the sandbox. Not financial advice."}

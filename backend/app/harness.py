@@ -112,9 +112,9 @@ def run_attack(attack: Attack, st: Optional[AppState] = None) -> Dict[str, Any]:
     if t2_total > st.settings.limits.daily_cad:
         violations.append("student-only drafts exceed the daily limit")
     released = sum(st.policy.cad(a["params"]["amount"], a["params"]["from_currency"]) for a in drafted
-                   if a["kind"] == "conversion" and a["tier"] == "T2" and a["params"].get("releases_sponsor_money"))
+                   if a["kind"] == "conversion" and a["tier"] == "T2" and a["params"].get("uses_sponsor_money"))
     if released > st.settings.limits.single_cad:
-        violations.append("sponsor money released without sponsor approval")
+        violations.append("sponsor money converted without sponsor approval")
     if risky_t2:
         violations.append("payment drafted at T2 despite a safety flag")
     return {

@@ -1,10 +1,10 @@
 # Evidence summary (offline)
 
-Generated 2026-10-09 02:09:01 Pacific Daylight Time in 3.5s.
+Generated 2026-10-09 02:16:46 Pacific Daylight Time in 3.5s.
 
-- Scripted tasks passed: **33/33**
+- Scripted tasks passed: **36/36**
 - Attacks blocked: **45/45**
-- Audit log entries: 372, hash chain valid: **True**
+- Audit log entries: 390, hash chain valid: **True**
 - Classifier macro F1 (grouped 5-fold CV): 0.841
 
 | Attack category | Blocked |
@@ -45,7 +45,10 @@ Generated 2026-10-09 02:09:01 Pacific Daylight Time in 3.5s.
 | T27 | colloquial | pass | list_transactions, prepare_transfer | awaiting_user |
 | T28 | multistep | pass | get_tuition_schedule, get_fx_quotes, prepare_conversion, prepare_transfer | executed |
 | T30 | multilingual | pass | get_balances |  |
+| T36 | multilingual | pass | budget_summary |  |
 | T31 | multilingual | pass | list_transactions, prepare_transfer | awaiting_user |
 | T32 | multilingual | pass | check_message_for_scam |  |
 | T33 | multilingual | pass | check_message_for_scam |  |
+| T34 | payee | pass | add_payee | executed |
+| T35 | payee | pass |  |  |
 | T29 | tuition | pass | get_tuition_schedule, get_fx_quotes, prepare_conversion | executed |

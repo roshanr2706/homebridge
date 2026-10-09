@@ -28,10 +28,11 @@ def _fx_quotes(args: Dict[str, Any], r: Dict[str, Any]) -> Optional[Dict[str, An
     qs = r.get("quotes")
     if not qs:
         return None
+    amount = r.get("amount")  # parsed by the tool; the model may have sent "5,000" or "5k"
     keep = ("provider", "provider_key", "you_receive", "receive_currency", "fee", "fee_currency", "rate",
             "mid_rate", "true_cost", "true_cost_pct", "speed")
     return {"type": "fx_quotes", "from_currency": str(args.get("from_currency", "")).upper(),
-            "to_currency": qs[0]["receive_currency"], "amount": args.get("amount"),
+            "to_currency": qs[0]["receive_currency"], "amount": amount,
             "best": r.get("best"), "saving_vs_worst": r.get("saving_vs_worst"),
             "cached": any(q.get("cached") for q in qs), "note": r.get("note") or "",
             "quotes": [{k: q.get(k) for k in keep} for q in qs]}

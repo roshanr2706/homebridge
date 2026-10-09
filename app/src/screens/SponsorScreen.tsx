@@ -53,9 +53,9 @@ export function SponsorScreen({ active }: { active: boolean }) {
 
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, 3000);
+    const id = setInterval(refresh, active ? 3000 : 15000);
     return () => clearInterval(id);
-  }, [refresh]);
+  }, [refresh, active]);
 
   const decide = (approve: boolean) => async (a: Action, note: string) => {
     try {

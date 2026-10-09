@@ -3,11 +3,10 @@ import { Platform } from 'react-native';
 
 export type Role = 'student' | 'sponsor';
 
-// When the web build is served by the backend itself, call the same origin.
+// An exported web build is served by the backend itself, so it calls its own origin. Dev builds
+// (Expo dev server on any port) and native builds default to the local backend.
 const sameOrigin =
-  Platform.OS === 'web' && typeof window !== 'undefined' && !/:(8081|19006)$/.test(window.location.host)
-    ? window.location.origin
-    : undefined;
+  Platform.OS === 'web' && !__DEV__ && typeof window !== 'undefined' ? window.location.origin : undefined;
 const BASE = (process.env.EXPO_PUBLIC_API_URL || sameOrigin || 'http://localhost:8000').replace(/\/$/, '');
 const TOKENS: Record<Role, string> = {
   student: process.env.EXPO_PUBLIC_STUDENT_TOKEN ?? 'demo-student',

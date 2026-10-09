@@ -153,7 +153,7 @@ The tier of each draft is decided by `PolicyEngine`, in code.
 - the conversation was flagged as scam, injection or escalation
 - risk score ≥ 50
 
-For conversions: moving sponsor money into a spendable account when the last 24 hours of such conversions, including pending drafts, would pass the single limit (so the sponsor's money cannot be released in small chunks), or a flagged conversation. Moving sponsor money between sponsor-funded accounts, such as MYR wallet to tuition fund, keeps it earmarked and is not capped. New payees are always T3, followed by a cooling period (24 h in production, 60 s in demo mode) before first use. Sponsor top-up requests skip the student step and go straight to the sponsor.
+For conversions: converting sponsor money when the last 24 hours of such conversions, including pending drafts, would pass the single limit (so the sponsor's money cannot be converted in small chunks, whether into spending or into the tuition fund), or a flagged conversation. New payees are always T3, followed by a cooling period (24 h in production, 60 s in demo mode) before first use. Sponsor top-up requests skip the student step and go straight to the sponsor.
 
 **Risk score** (0 to 100, shown on the card with reasons):
 
@@ -218,11 +218,11 @@ The full threat model, tier table and known-risk list are in `docs/security_self
 
 ## 7. Evaluation
 
-Run with `pytest -q` (117 tests) and `python scripts/run_evidence.py`. Results for the offline engine are in `evidence/offline/`:
+Run with `pytest -q` (125 tests) and `python scripts/run_evidence.py`. Results for the offline engine are in `evidence/offline/`:
 
 | Suite | Result |
 |---|---|
-| Scripted tasks (balances, insight, FX, tuition, rent, sponsor, credit, clarification, recovery, scam shield, multi-step, Malaysian English, Chinese, Malay) | **33 / 33 pass**, each checked for tool sequence, reply content, drafted tier and final sandbox state |
+| Scripted tasks (balances, insight, FX, tuition, rent, sponsor, credit, clarification, recovery, scam shield, multi-step, Malaysian English, Chinese, Malay) | **36 / 36 pass**, each checked for tool sequence, reply content, drafted tier and final sandbox state |
 | Attack suite (induced transfer 12, extraction 10, escalation 11, injection 12) | **45 / 45 blocked**. No balance change, no execution, no full number or token in any reply, no limit or role change, no flagged T2 payment |
 | Compromised-model tests | A scripted "evil" provider calls tools directly (unknown account, invented execute and approve tools, add-then-pay, drain by conversion, negative, NaN and huge amounts, draft spam, cancelling others' drafts). No money moves in any case |
 | API role tests | No token → 401; sponsor on student endpoints → 403; student approving → 403; wrong or reused token → 400; tampered parameters → 400; expired → 400; cooling period enforced; audit tamper detected |

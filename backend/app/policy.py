@@ -138,13 +138,13 @@ class PolicyEngine:
         return spent
 
     def _sponsor_released_cad(self, owner: str) -> float:
-        """CAD value of conversions from sponsor-funded into spendable accounts in the last 24h, incl. pending."""
+        """CAD value of conversions out of sponsor-funded accounts in the last 24h, including pending drafts."""
         since = time.time() - 24 * 3600
         total = 0.0
         for a in self.actions.values():
             if (a.owner == owner and a.kind == "conversion" and a.created_at >= since
                     and a.status in ("awaiting_user", "awaiting_sponsor", "executed") and a.tier == "T2"
-                    and a.params.get("releases_sponsor_money")):
+                    and a.params.get("uses_sponsor_money")):
                 total += self.cad(a.params["amount"], a.params["from_currency"])
         return total
 
@@ -281,13 +281,14 @@ class PolicyEngine:
         reasons: List[str] = []
         warnings = [f"Rate {q['rate']} includes a {prov.spread_pct}% margin over mid-market ({q['mid_rate']})."]
         risk = 0
-        # Sponsor money moving into a spendable account is capped per 24h, counting pending drafts, so it
-        # cannot be released in small chunks. Moving it between sponsor-funded accounts (e.g. MYR wallet to
-        # tuition fund) keeps it earmarked and is not capped.
-        if src["sponsor_funded"] and not dst["sponsor_funded"]:
+        # Converting sponsor money is capped per 24h, counting pending drafts, so it cannot be released in
+        # small chunks. The cap also covers conversions into the tuition fund: the money stays earmarked, but
+        # the sponsor still decides when large sums are exchanged and pays the spread.
+        if src["sponsor_funded"]:
             released = self._sponsor_released_cad(owner)
             if released + amount_cad > self.limits.single_cad:
-                t3.append(f"Moves more than CAD {self.limits.single_cad:,.0f} of sponsor money into spending in 24h "
+                where = "between your sponsor-funded accounts" if dst["sponsor_funded"] else "into spending"
+                t3.append(f"Converts more than CAD {self.limits.single_cad:,.0f} of sponsor money {where} in 24h "
                           f"(already CAD {released:,.2f} converted or pending)")
         if src["balance"] < to_minor(amount):
             warnings.append(f"Balance in {src['label']} is lower than this amount; it will fail.")
@@ -299,7 +300,7 @@ class PolicyEngine:
         params = {"from_account_id": src["id"], "to_account_id": dst["id"], "amount": float(amount),
                   "from_currency": src["currency"], "to_currency": dst["currency"],
                   "rate": q["rate"], "expected_receive": q["you_receive"],
-                  "releases_sponsor_money": bool(src["sponsor_funded"] and not dst["sponsor_funded"])}
+                  "uses_sponsor_money": bool(src["sponsor_funded"])}
         summary = (f"Convert {src['currency']} {amount:,.2f} to about {dst['currency']} "
                    f"{q['you_receive']:,.2f} ({src['label']} to {dst['label']})")
         return self._new("conversion", owner, session_id, params, summary, t3, risk, reasons, warnings, {})
@@ -348,7 +349,7 @@ class PolicyEngine:
         self._rate_limit(owner)
         params = {"amount": float(amount), "currency": currency, "reason": reason[:200]}
         a = self._new("topup", owner, session_id, params, f"Ask sponsor for {currency} {amount:,.2f}: {reason[:80]}",
-                      ["Sponsor money"], 0, [], [], {})
+                      ["A request for money: the sponsor decides whether to send it"], 0, [], [], {})
         a.user_confirmed = True
         a._token = None
         a.status = "awaiting_sponsor"

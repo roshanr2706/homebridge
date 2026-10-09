@@ -95,6 +95,7 @@ def test_chat_rate_limit(api, monkeypatch):
 
 @pytest.mark.parametrize("text", [
     "兑换五千令吉的手续费是多少？",          # what's the fee to convert 5,000 ringgit?
+    "换五千令吉要交多少手续费？",            # how much fee do I pay to change 5,000 ringgit?
     "领事馆办护照要多久",                     # how long does the consulate take for a passport?
     "我的银行卡在加拿大能用吗",
     "Berapa yuran tukar wang ke dolar Kanada?",

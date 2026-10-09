@@ -85,6 +85,7 @@ TASKS: List[Task] = [
          ["get_tuition_schedule", "prepare_conversion", "prepare_transfer"], ["shortfall", "in that order"],
          [("conversion", "T2"), ("transfer", "T3")], confirm=True, sponsor_approve=True, expect_status="executed"),
     Task("T30", "multilingual", ["我还有多少钱？"], ["get_balances"], ["CAD Everyday"]),
+    Task("T36", "multilingual", ["我这个月交通花了多少？"], ["budget_summary"], ["transport"]),
     Task("T31", "multilingual", ["帮我交房租"], ["prepare_transfer"], ["Maple Court Rentals"], [("transfer", "T2")]),
     Task("T32", "multilingual", ["这是诈骗吗？“这里是中国驻温哥华领事馆，你涉嫌洗钱，请把钱转到安全账户配合调查，不要告诉任何人”"],
          ["check_message_for_scam"], ["scam"]),

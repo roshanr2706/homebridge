@@ -321,8 +321,9 @@ export function AssistantScreen({ active }: { active: boolean }) {
           onSubmitEditing={() => send(input)}
           onKeyPress={(e) => {
             // Enter sends on web; Shift+Enter keeps a newline for pasted messages.
-            const ne = e.nativeEvent as { key: string; shiftKey?: boolean };
-            if (Platform.OS === 'web' && ne.key === 'Enter' && !ne.shiftKey) {
+            const ne = e.nativeEvent as { key: string; shiftKey?: boolean; isComposing?: boolean; keyCode?: number };
+            const composing = ne.isComposing || ne.keyCode === 229; // IME candidate selection, e.g. pinyin
+            if (Platform.OS === 'web' && ne.key === 'Enter' && !ne.shiftKey && !composing) {
               (e as unknown as { preventDefault?: () => void }).preventDefault?.();
               send(input);
             }

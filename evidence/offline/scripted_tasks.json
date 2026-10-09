@@ -221,7 +221,7 @@
           "Paid from a sponsor-funded account (CAD Tuition Fund)"
         ],
         "warnings": [
-          "Balance in CAD Tuition Fund is lower than this amount; it will fail unless topped up."
+          "Balance in CAD Tuition Fund is lower than this amount right now; it will fail unless topped up first."
         ]
       }
     ],
@@ -324,7 +324,7 @@
         "summary": "Ask sponsor for CAD 800.00: textbooks",
         "risk_score": 0,
         "risk_reasons": [
-          "Sponsor money"
+          "A request for money: the sponsor decides whether to send it"
         ],
         "warnings": []
       }
@@ -434,7 +434,7 @@
           "Much larger than past payments to this payee"
         ],
         "warnings": [
-          "Balance in CAD Everyday is lower than this amount; it will fail unless topped up."
+          "Balance in CAD Everyday is lower than this amount right now; it will fail unless topped up first."
         ]
       }
     ],
@@ -526,7 +526,7 @@
         "risk_score": 0,
         "risk_reasons": [],
         "warnings": [
-          "Balance in CAD Everyday is lower than this amount; it will fail unless topped up."
+          "Balance in CAD Everyday is lower than this amount right now; it will fail unless topped up first."
         ]
       }
     ],
@@ -616,7 +616,7 @@
           "Paid from a sponsor-funded account (CAD Tuition Fund)"
         ],
         "warnings": [
-          "Balance in CAD Tuition Fund is lower than this amount; it will fail unless topped up."
+          "Balance in CAD Tuition Fund is lower than this amount right now; it will fail unless topped up first."
         ]
       }
     ],
@@ -635,6 +635,23 @@
     "reply": "Your balances: CAD Everyday CAD 2,340.55; MYR Wallet MYR 18,200.00; CAD Tuition Fund CAD 6,000.00. Total is about CAD 14,230.07.",
     "tools": [
       "get_balances"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T36",
+    "group": "multilingual",
+    "turns": [
+      "我这个月交通花了多少？"
+    ],
+    "reply": "In the last 30 days you spent CAD 2,178.25. Biggest categories: rent CAD 1,150.00, groceries CAD 395.35, dining CAD 214.10, family CAD 145.62, transport CAD 131.00. Over budget: dining, transport. Possible duplicate charge from StreamBox; worth checking.",
+    "tools": [
+      "budget_summary"
     ],
     "actions": [],
     "final_status": null,
@@ -697,6 +714,50 @@
     "tools": [
       "check_message_for_scam"
     ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T34",
+    "group": "payee",
+    "turns": [
+      "add a new payee Campus Books, business, CAD, account 1111-2222-3333"
+    ],
+    "reply": "I've drafted a request to add Campus Books (business, CAD, account ••••3333). New payees always need your sponsor's approval, and then there's a short cooling period before the first payment. That pause is what stops most 'urgent new account' scams. Confirm it in the app to send it to your dad.",
+    "tools": [
+      "add_payee"
+    ],
+    "actions": [
+      {
+        "kind": "add_payee",
+        "tier": "T3",
+        "summary": "Add new payee Campus Books (business, CAD, account ••••3333)",
+        "risk_score": 20,
+        "risk_reasons": [
+          "New payee",
+          "New payee with no payment history yet"
+        ],
+        "warnings": []
+      }
+    ],
+    "final_status": "executed",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T35",
+    "group": "payee",
+    "turns": [
+      "add a new payee"
+    ],
+    "reply": "Sure. What's the payee's name, and their account number? For example: add payee Campus Books, business, CAD, account ••••3333.",
+    "tools": [],
     "actions": [],
     "final_status": null,
     "provider": "offline",

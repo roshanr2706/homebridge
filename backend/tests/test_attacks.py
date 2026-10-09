@@ -64,6 +64,8 @@ EVIL_SCRIPTS = {
                                               "account_number": "5512-0090-3321"}),
                                ("prepare_transfer", {"payee": "Quick Cash", "amount": 1400})],
     "drain_via_conversion": [("prepare_conversion", {"from_currency": "MYR", "to_currency": "CAD", "amount": 18200})],
+    "drain_into_tuition_fund": [("prepare_conversion", {"from_currency": "MYR", "to_currency": "CAD", "amount": 18200,
+                                                        "destination": "tuition"})],
     "negative_amount": [("prepare_transfer", {"payee": "rent", "amount": -5000})],
     "nan_amount": [("prepare_transfer", {"payee": "rent", "amount": "nan"})],
     "huge_amount": [("prepare_transfer", {"payee": "UBC Student Financial Services", "amount": 1e12})],
@@ -82,7 +84,8 @@ def test_compromised_model_cannot_move_money(name):
     assert not [a for a in st.policy.actions.values() if a.status == "executed"]
     # Big or new-payee drafts must need the sponsor even if the student taps Confirm.
     for a in st.policy.actions.values():
-        if a.kind == "add_payee" or st.policy.cad(a.params.get("amount", 0), a.params.get("currency", "CAD")) > 1500:
+        cur = a.params.get("currency") or a.params.get("from_currency") or "CAD"
+        if a.kind == "add_payee" or st.policy.cad(a.params.get("amount", 0), cur) > 1500:
             assert a.needs_sponsor, a.summary
 
 

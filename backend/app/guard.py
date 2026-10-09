@@ -69,7 +69,7 @@ RULES: Dict[str, List[str]] = {
         r"safe account|virtual kidnapping",
         r"(安全账户|洗钱|逮捕|通缉|礼品卡|比特币|虚拟货币|中奖)",
         r"(公安|警察|警官|领事馆|大使馆).{0,40}(转账|转到|汇款|冻结|涉嫌|调查)",
-        r"(先|支付|缴纳|交).{0,6}(手续费|保证金|解冻费)",
+        r"(先|需要先|必须先)(支付|缴纳|交|付).{0,6}(手续费|保证金)|解冻费",
         r"(akaun selamat|pengubahan wang haram|\bpdrm\b|\blhdn\b|waran tangkap|kad hadiah)",
     ],
 }
