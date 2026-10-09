@@ -54,6 +54,16 @@ CREATE TABLE budgets (owner TEXT, category TEXT, monthly INTEGER, currency TEXT,
 CREATE TABLE reminders (id TEXT PRIMARY KEY, owner TEXT, due TEXT, text TEXT);
 """
 
+# Policy state, kept in the same database so drafts and balances survive a restart together.
+# Drafts are stored with their token hash only; the plaintext confirmation token is never written.
+POLICY_SCHEMA = """
+CREATE TABLE IF NOT EXISTS pending_actions (
+  id TEXT PRIMARY KEY, owner TEXT, status TEXT, created_at REAL, data TEXT
+);
+CREATE TABLE IF NOT EXISTS draft_log (owner TEXT, ts REAL);
+"""
+SCHEMA += POLICY_SCHEMA
+
 
 class Bank:
     def __init__(self, db_path: str = ":memory:") -> None:
@@ -74,6 +84,13 @@ class Bank:
             cur.executescript(SCHEMA)
             seed(self, today or date.today())
             self.db.commit()
+
+    def is_seeded(self) -> bool:
+        """True when the database already holds a sandbox (a file DB from an earlier run)."""
+        with self._lock:
+            if not self.db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='users'").fetchall():
+                return False
+            return bool(self.db.execute("SELECT 1 FROM users LIMIT 1").fetchall())
 
     def _q(self, sql: str, args: tuple = ()) -> List[sqlite3.Row]:
         with self._lock:
@@ -302,6 +319,36 @@ class Bank:
         rid = "rm_" + uuid.uuid4().hex[:8]
         self._x("INSERT INTO reminders VALUES (?,?,?,?)", (rid, owner, due, text))
         return rid
+
+    # ------------------------------------------------------- policy state
+    # Storage for PolicyEngine, which keeps a working copy in memory and writes through here.
+    def ensure_policy_tables(self) -> None:
+        with self._lock:
+            self.db.executescript(POLICY_SCHEMA)
+            self.db.commit()
+
+    def save_action(self, action_id: str, owner: str, status: str, created_at: float, data: str) -> None:
+        self._x("INSERT OR REPLACE INTO pending_actions VALUES (?,?,?,?,?)",
+                (action_id, owner, status, created_at, data))
+
+    def load_actions(self) -> List[Dict[str, Any]]:
+        return [dict(r) for r in self._q("SELECT * FROM pending_actions ORDER BY created_at, id")]
+
+    def log_draft(self, owner: str, ts: float, window_start: float) -> None:
+        with self._lock:
+            self.db.execute("DELETE FROM draft_log WHERE ts < ?", (window_start,))
+            self.db.execute("INSERT INTO draft_log VALUES (?,?)", (owner, ts))
+            self.db.commit()
+
+    def load_drafts(self, since: float) -> List[Dict[str, Any]]:
+        return [dict(r) for r in self._q("SELECT owner, ts FROM draft_log WHERE ts >= ? ORDER BY ts", (since,))]
+
+    def clear_policy_state(self) -> None:
+        with self._lock:
+            self.db.executescript(POLICY_SCHEMA)
+            self.db.execute("DELETE FROM pending_actions")
+            self.db.execute("DELETE FROM draft_log")
+            self.db.commit()
 
     def credit_sponsor_topup(self, student: str, amount_minor: int, currency: str, memo: str) -> None:
         acc = self.find_account(student, currency)
