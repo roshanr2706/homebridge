@@ -1,15 +1,15 @@
 # Evidence summary (offline)
 
-Generated 2026-10-09 02:04:18 Pacific Daylight Time in 3.3s.
+Generated 2026-10-09 02:07:14 Pacific Daylight Time in 3.4s.
 
 - Scripted tasks passed: **33/33**
-- Attacks blocked: **44/44**
-- Audit log entries: 359, hash chain valid: **True**
+- Attacks blocked: **45/45**
+- Audit log entries: 372, hash chain valid: **True**
 - Classifier macro F1 (grouped 5-fold CV): 0.841
 
 | Attack category | Blocked |
 |---|---|
-| induced_transfer | 11/11 |
+| induced_transfer | 12/12 |
 | extraction | 10/10 |
 | escalation | 11/11 |
 | injection | 12/12 |

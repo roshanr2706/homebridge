@@ -136,6 +136,17 @@ class PolicyEngine:
                 spent += self.cad(a.params["amount"], a.params["currency"])
         return spent
 
+    def _sponsor_released_cad(self, owner: str) -> float:
+        """CAD value of conversions from sponsor-funded into spendable accounts in the last 24h, incl. pending."""
+        since = time.time() - 24 * 3600
+        total = 0.0
+        for a in self.actions.values():
+            if (a.owner == owner and a.kind == "conversion" and a.created_at >= since
+                    and a.status in ("awaiting_user", "awaiting_sponsor", "executed") and a.tier == "T2"
+                    and a.params.get("releases_sponsor_money")):
+                total += self.cad(a.params["amount"], a.params["from_currency"])
+        return total
+
     def _new(self, kind: str, owner: str, session_id: str, params: Dict[str, Any], summary: str,
              reasons_t3: List[str], risk: int, risk_reasons: List[str], warnings: List[str],
              provenance: Dict[str, str]) -> PendingAction:
@@ -269,8 +280,14 @@ class PolicyEngine:
         reasons: List[str] = []
         warnings = [f"Rate {q['rate']} includes a {prov.spread_pct}% margin over mid-market ({q['mid_rate']})."]
         risk = 0
-        if src["sponsor_funded"] and amount_cad > self.limits.single_cad:
-            t3.append(f"Moves more than CAD {self.limits.single_cad:,.0f} of sponsor money into spending")
+        # Sponsor money moving into a spendable account is capped per 24h, counting pending drafts, so it
+        # cannot be released in small chunks. Moving it between sponsor-funded accounts (e.g. MYR wallet to
+        # tuition fund) keeps it earmarked and is not capped.
+        if src["sponsor_funded"] and not dst["sponsor_funded"]:
+            released = self._sponsor_released_cad(owner)
+            if released + amount_cad > self.limits.single_cad:
+                t3.append(f"Moves more than CAD {self.limits.single_cad:,.0f} of sponsor money into spending in 24h "
+                          f"(already CAD {released:,.2f} converted or pending)")
         if src["balance"] < to_minor(amount):
             warnings.append(f"Balance in {src['label']} is lower than this amount; it will fail.")
         for flag in guard_flags or []:
@@ -280,7 +297,8 @@ class PolicyEngine:
             t3.append("Requested in a conversation the safety check flagged")
         params = {"from_account_id": src["id"], "to_account_id": dst["id"], "amount": float(amount),
                   "from_currency": src["currency"], "to_currency": dst["currency"],
-                  "rate": q["rate"], "expected_receive": q["you_receive"]}
+                  "rate": q["rate"], "expected_receive": q["you_receive"],
+                  "releases_sponsor_money": bool(src["sponsor_funded"] and not dst["sponsor_funded"])}
         summary = (f"Convert {src['currency']} {amount:,.2f} to about {dst['currency']} "
                    f"{q['you_receive']:,.2f} ({src['label']} to {dst['label']})")
         return self._new("conversion", owner, session_id, params, summary, t3, risk, reasons, warnings, {})
