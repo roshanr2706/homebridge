@@ -116,7 +116,7 @@ function FxHistory({ c }: { c: Extract<Card, { type: 'fx_history' }> }) {
         <Mono style={{ fontSize: 12, color: t.gold }}>today {c.today}</Mono>
         <Mono style={{ fontSize: 12, color: t.muted }}>high {c.high}</Mono>
       </Row>
-      <Body style={{ fontSize: 12, color: t.muted, marginTop: 6 }}>A range, not a forecast. Nobody can reliably predict tomorrow's rate.</Body>
+      <Body style={{ fontSize: 12, color: t.muted, marginTop: 6 }}>A range, not a forecast. Nobody can reliably predict tomorrow’s rate.</Body>
       <Provenance />
     </Surface>
   );

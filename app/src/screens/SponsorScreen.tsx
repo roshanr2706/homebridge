@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { api, type Account, type Action } from '../api';
+import { usePoll } from '../hooks';
 import { ActionCard } from '../components/ActionCard';
 import { cityTime, fonts, money, useTheme } from '../theme';
 import { useToast } from '../toast';
@@ -26,7 +27,9 @@ export function SponsorScreen({ active }: { active: boolean }) {
   const [error, setError] = useState('');
   const seen = useRef<Set<string> | null>(null);
   const activeRef = useRef(active);
-  activeRef.current = active;
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
   const [total, setTotal] = useState(0);
 
   const refresh = useCallback(async () => {
@@ -51,11 +54,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
     }
   }, [toast]);
 
-  useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, active ? 3000 : 15000);
-    return () => clearInterval(id);
-  }, [refresh, active]);
+  usePoll(refresh, active ? 3000 : 15000);
 
   const decide = (approve: boolean) => async (a: Action, note: string) => {
     try {
@@ -77,7 +76,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
         <Eyebrow>Kuala Lumpur · {cityTime('Asia/Kuala_Lumpur')}</Eyebrow>
         <Display style={{ fontSize: 26, marginTop: 2 }}>Selamat datang, Encik Rahman</Display>
         <Body style={{ color: t.muted, fontSize: 13, marginTop: 2 }}>
-          Aisha is in Vancouver, where it's {cityTime('America/Vancouver')}. You approve her large payments, new payees and spending
+          Aisha is in Vancouver, where it’s {cityTime('America/Vancouver')}. You approve her large payments, new payees and spending
           from the money you send.
         </Body>
       </View>
@@ -95,7 +94,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
         queue.map((a) => <ActionCard key={a.action_id} action={a} mode="sponsor" onApprove={decide(true)} onReject={decide(false)} />)
       )}
 
-      <Display style={{ fontSize: 18, marginTop: 10 }}>Aisha's accounts</Display>
+      <Display style={{ fontSize: 18, marginTop: 10 }}>Aisha’s accounts</Display>
       <Surface>
         <Row style={{ justifyContent: 'space-between', marginBottom: 6 }}>
           <Eyebrow>Total, about</Eyebrow>

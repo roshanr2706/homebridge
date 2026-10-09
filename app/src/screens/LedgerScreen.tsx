@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { FlatList, Pressable, View } from 'react-native';
 
 import { api, type AuditEntry, type Role, type Verify } from '../api';
+import { usePoll } from '../hooks';
 import { useTheme } from '../theme';
 import { Body, Button, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
@@ -49,12 +50,7 @@ export function LedgerScreen({ active, role }: { active: boolean; role: Role }) 
     }
   }, [role]);
 
-  useEffect(() => {
-    if (!active) return;
-    refresh();
-    const id = setInterval(refresh, 4000);
-    return () => clearInterval(id);
-  }, [active, refresh]);
+  usePoll(refresh, 4000, active);
 
   const simulate = async (seq: number) => {
     try {

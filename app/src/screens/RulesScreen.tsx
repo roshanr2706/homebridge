@@ -69,7 +69,9 @@ export function RulesScreen({ active }: { active: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (active) load();
+    if (!active) return;
+    const id = setTimeout(load, 0);
+    return () => clearTimeout(id);
   }, [active, load]);
 
   const dirty = saved && (saved.single !== single || saved.daily !== daily);

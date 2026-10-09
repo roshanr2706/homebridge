@@ -28,7 +28,7 @@ const TIER: Record<string, string> = {
 };
 
 function useNow(active: boolean) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -249,7 +249,7 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
         )}
         {a.status === 'awaiting_sponsor' && mode === 'student' && (
           <Body style={{ fontSize: 12, color: t.muted, marginTop: 10 }}>
-            Sent to your sponsor. It's {cityTime('Asia/Kuala_Lumpur')} in Kuala Lumpur
+            Sent to your sponsor. It’s {cityTime('Asia/Kuala_Lumpur')} in Kuala Lumpur
             {klHour() >= 23 || klHour() < 7 ? ', so they may be asleep.' : '.'}
           </Body>
         )}

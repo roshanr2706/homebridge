@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { api, type Action, type Card, type Overview } from '../api';
+import { usePoll } from '../hooks';
 import { ActionCard } from '../components/ActionCard';
 import { ResultCard } from '../components/ResultCards';
 import { RichText } from '../components/RichText';
@@ -62,7 +63,7 @@ const TOOL_LABEL: Record<string, string> = {
 
 function Thinking() {
   const t = useTheme();
-  const dots = [useRef(new Animated.Value(0.3)).current, useRef(new Animated.Value(0.3)).current, useRef(new Animated.Value(0.3)).current];
+  const [dots] = useState(() => [new Animated.Value(0.3), new Animated.Value(0.3), new Animated.Value(0.3)]);
   useEffect(() => {
     const loops = dots.map((d, i) =>
       Animated.loop(
@@ -76,7 +77,7 @@ function Thinking() {
     );
     loops.forEach((l) => l.start());
     return () => loops.forEach((l) => l.stop());
-  }, []);
+  }, [dots]);
   return (
     <Row style={{ gap: 8, paddingVertical: 6 }}>
       <Row style={{ gap: 4 }}>
@@ -136,7 +137,7 @@ export function AssistantScreen({ active }: { active: boolean }) {
   const loadSnap = useCallback(() => {
     api.overview().then(setSnap).catch(() => {});
   }, []);
-  useEffect(loadSnap, [loadSnap]);
+  usePoll(loadSnap, 60000);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -174,11 +175,7 @@ export function AssistantScreen({ active }: { active: boolean }) {
     }
   }, [merge]);
 
-  useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, 3000); // picks up sponsor decisions
-    return () => clearInterval(id);
-  }, [refresh]);
+  usePoll(refresh, 3000); // picks up sponsor decisions
 
   const send = async (text: string) => {
     const msg = text.trim();

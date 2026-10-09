@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { api, type Overview } from '../api';
+import { usePoll } from '../hooks';
 import { BudgetCard, TuitionCard } from '../components/ResultCards';
 import { amount, fonts, money, useTheme } from '../theme';
 import { Body, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
@@ -13,11 +14,13 @@ export function WalletScreen({ active }: { active: boolean }) {
   const [o, setO] = useState<Overview | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       setO(await api.overview());
+      setNow(Date.now());
       setError('');
     } catch {
       setError(`Can't reach the server at ${api.base}`);
@@ -26,12 +29,7 @@ export function WalletScreen({ active }: { active: boolean }) {
     }
   }, []);
 
-  useEffect(() => {
-    if (!active) return;
-    refresh();
-    const id = setInterval(refresh, 2000);
-    return () => clearInterval(id);
-  }, [active, refresh]);
+  usePoll(refresh, 2000, active);
 
   if (!o) {
     return (
@@ -117,7 +115,7 @@ export function WalletScreen({ active }: { active: boolean }) {
       <Surface>
         <Eyebrow>Saved payees</Eyebrow>
         {o.payees.map((p) => {
-          const left = p.usable_from ? Math.ceil(p.usable_from - Date.now() / 1000) : 0;
+          const left = p.usable_from ? Math.ceil(p.usable_from - now / 1000) : 0;
           const cooling = left > 0;
           return (
             <Row key={p.id} style={{ justifyContent: 'space-between', marginTop: 10, gap: 8 }}>
