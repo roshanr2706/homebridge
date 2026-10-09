@@ -7,6 +7,12 @@ The agent plans and talks. It never holds the power to move money: every payment
 that the student confirms in the app with a single-use token the model never sees, and large,
 unusual or sponsor-funded payments also need the sponsor (parent) to approve on their own device.
 
+![Aisha's phone and her dad's phone side by side: a tuition payment waiting for his approval](docs/img/two-phones.png)
+
+| True-cost FX | Scam shield | Confirmation card | Audit ledger |
+|---|---|---|---|
+| ![](docs/img/fx-card.png) | ![](docs/img/scam-shield.png) | ![](docs/img/confirm-card.png) | ![](docs/img/ledger.png) |
+
 - **Technical documentation:** [`docs/technical.md`](docs/technical.md)
 - **Security self-assessment:** [`docs/security_self_assessment.md`](docs/security_self_assessment.md)
 - **Execution evidence:** [`evidence/offline/SUMMARY.md`](evidence/offline/SUMMARY.md)
