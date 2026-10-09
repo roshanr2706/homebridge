@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
 import type { Action } from '../api';
+import { stepUp, useStepUpNote } from '../stepUp';
 import { amount, cityTime, fonts, klHour, money, useTheme } from '../theme';
-import { Bar, Body, Button, Eyebrow, Mono, Pill, Row } from '../ui';
+import { useToast } from '../toast';
+import { Bar, Body, Button, DashedRule, Eyebrow, Mono, Pill, Row } from '../ui';
 
 type Props = {
   action: Action;
@@ -147,6 +149,8 @@ const STATUS_TEXT: Record<string, string> = {
 
 export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, onReject }: Props) {
   const t = useTheme();
+  const toast = useToast();
+  const stepUpNote = useStepUpNote();
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const now = useNow(a.status === 'awaiting_user');
@@ -167,24 +171,45 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
       setBusy(null);
     }
   };
+  // Confirm and Approve move money, so they need the device owner first (Face ID, fingerprint or
+  // passcode). A failed or cancelled check never reaches the API. Cancel, Withdraw and Reject don't ask.
+  const guarded = (name: string, prompt: string, fn?: () => Promise<void>) =>
+    run(
+      name,
+      fn &&
+        (async () => {
+          const check = await stepUp(prompt);
+          if (!check.ok) {
+            toast(mode === 'sponsor' ? 'Not approved' : 'Not confirmed', `${check.reason} Nothing was sent.`, 'danger');
+            return;
+          }
+          await fn();
+        }),
+    );
+  const what = `${h.big}${h.sub ? ` ${h.sub}` : ''}`;
+  const deviceNote = stepUpNote ? (
+    <Mono style={{ fontSize: 10.5, color: t.faint, marginTop: mode === 'student' ? 6 : 0, textAlign: 'right' }}>{stepUpNote}</Mono>
+  ) : null;
 
   return (
     <View style={[styles.card, { backgroundColor: t.surface, borderColor: risky ? t.danger : t.border, shadowColor: t.shadow }]}>
       {/* perforated top edge, like a cheque stub */}
-      <View style={[styles.stub, { borderColor: risky ? t.danger : t.accent, backgroundColor: risky ? t.dangerBg : t.accentSoft }]}>
+      <View style={[styles.stub, { backgroundColor: risky ? t.dangerBg : t.accentSoft }]}>
         <Eyebrow style={{ color: risky ? t.danger : t.accent }}>{KIND[a.kind] ?? a.kind}</Eyebrow>
         <Row style={{ gap: 6 }}>
           <Mono style={{ fontSize: 11, color: risky ? t.danger : t.accent, fontFamily: fonts.monoBold }}>{a.tier}</Mono>
           <Body style={{ fontSize: 11, color: risky ? t.danger : t.accent }}>{TIER[a.tier] ?? ''}</Body>
         </Row>
       </View>
+      <DashedRule color={risky ? t.danger : t.accent} />
 
       <View style={{ padding: 14, paddingTop: 12 }}>
         <Mono style={{ fontFamily: fonts.monoBold, fontSize: a.kind === 'add_payee' ? 18 : 24, letterSpacing: -0.5 }}>{h.big}</Mono>
         {h.sub ? <Body style={{ color: t.muted, fontSize: 14, marginTop: 2 }}>{h.sub}</Body> : null}
 
         {details(a).length > 0 && (
-          <View style={[styles.details, { borderColor: t.border }]}>
+          <View style={styles.details}>
+            <DashedRule color={t.border} style={{ marginBottom: 8 }} />
             {details(a).map(([k, v]) => (
               <Row key={k} style={{ justifyContent: 'space-between', paddingVertical: 3, gap: 12 }}>
                 <Body style={{ fontSize: 12, color: t.muted }}>{k}</Body>
@@ -267,15 +292,18 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
         {failedMsg ? <Body style={{ fontSize: 12.5, color: t.danger, marginTop: 6 }}>{failedMsg}</Body> : null}
 
         {mode === 'student' && a.status === 'awaiting_user' && (
-          <Row style={{ gap: 10, marginTop: 14 }}>
-            <Button label="Cancel" kind="ghost" busy={busy === 'cancel'} onPress={run('cancel', onCancel && (() => onCancel(a)))} style={{ flex: 1 }} />
-            <Button
-              label={a.needs_sponsor_approval ? 'Confirm & send to sponsor' : 'Confirm'}
-              busy={busy === 'confirm'}
-              onPress={run('confirm', onConfirm && (() => onConfirm(a)))}
-              style={{ flex: 2 }}
-            />
-          </Row>
+          <>
+            <Row style={{ gap: 10, marginTop: 14 }}>
+              <Button label="Cancel" kind="ghost" busy={busy === 'cancel'} onPress={run('cancel', onCancel && (() => onCancel(a)))} style={{ flex: 1 }} />
+              <Button
+                label={a.needs_sponsor_approval ? 'Confirm & send to sponsor' : 'Confirm'}
+                busy={busy === 'confirm'}
+                onPress={guarded('confirm', `Confirm ${what}`, onConfirm && (() => onConfirm(a)))}
+                style={{ flex: 2 }}
+              />
+            </Row>
+            {deviceNote}
+          </>
         )}
         {mode === 'student' && a.status === 'awaiting_sponsor' && onCancel && (
           <Button label="Withdraw request" kind="ghost" busy={busy === 'cancel'} onPress={run('cancel', () => onCancel(a))} style={{ marginTop: 12 }} />
@@ -292,8 +320,14 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
             />
             <Row style={{ gap: 10 }}>
               <Button label="Reject" kind="danger" busy={busy === 'reject'} onPress={run('reject', onReject && (() => onReject(a, note)))} style={{ flex: 1 }} />
-              <Button label="Approve" busy={busy === 'approve'} onPress={run('approve', onApprove && (() => onApprove(a, note)))} style={{ flex: 2 }} />
+              <Button
+                label="Approve"
+                busy={busy === 'approve'}
+                onPress={guarded('approve', `Approve ${what}`, onApprove && (() => onApprove(a, note)))}
+                style={{ flex: 2 }}
+              />
             </Row>
+            {deviceNote}
           </View>
         )}
       </View>
@@ -318,10 +352,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderStyle: 'dashed',
   },
-  details: { marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderStyle: 'dashed' },
+  details: { marginTop: 12 },
   box: { borderRadius: 10, padding: 10, marginTop: 12 },
   note: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14 },
 });

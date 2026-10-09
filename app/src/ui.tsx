@@ -141,6 +141,16 @@ export function Row({ children, style }: { children: ReactNode; style?: StylePro
   return <View style={[{ flexDirection: 'row', alignItems: 'center' }, style]}>{children}</View>;
 }
 
+// A dashed hairline. Android can't dash a single-side border (borderStyle applies only when all four
+// widths match), so this clips the top edge of a fully bordered box, which draws the same everywhere.
+export function DashedRule({ color, style }: { color: string; style?: StyleProp<ViewStyle> }) {
+  return (
+    <View style={[{ height: 1, overflow: 'hidden' }, style]}>
+      <View style={{ height: 2, borderWidth: 1, borderColor: color, borderStyle: 'dashed' }} />
+    </View>
+  );
+}
+
 export function Divider() {
   const t = useTheme();
   return <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: t.border, marginVertical: 10 }} />;

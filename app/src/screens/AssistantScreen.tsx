@@ -143,6 +143,10 @@ export function AssistantScreen({ active }: { active: boolean }) {
   const [error, setError] = useState('');
   const listRef = useRef<FlatList<Msg>>(null);
   const inputRef = useRef<TextInput>(null);
+  // KeyboardAvoidingView compares its own frame (relative to its parent) with the keyboard's screen
+  // position, so it needs to know how far down the screen it starts (status bar + app header).
+  const rootRef = useRef<View>(null);
+  const [kbOffset, setKbOffset] = useState(0);
   const known = useRef<Record<string, string>>({});
 
   const merge = useCallback(
@@ -171,7 +175,7 @@ export function AssistantScreen({ active }: { active: boolean }) {
       merge(act.actions, true);
       setError('');
     } catch {
-      setError(`Can't reach the server at ${api.base}`);
+      setError(api.unreachable);
     }
   }, [merge]);
 
@@ -239,107 +243,120 @@ export function AssistantScreen({ active }: { active: boolean }) {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {error ? (
-        <View style={[styles.offline, { backgroundColor: t.dangerBg }]}>
-          <Body style={{ fontSize: 12, color: t.danger }}>{error}</Body>
-        </View>
-      ) : null}
-      <FlatList
-        ref={listRef}
-        style={{ flex: 1 }}
-        data={messages}
-        keyExtractor={(m) => m.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 8, maxWidth: 720, width: '100%', alignSelf: 'center' }}
-        onContentSizeChange={() => active && listRef.current?.scrollToEnd({ animated: true })}
-        ListHeaderComponent={snap ? <Snapshot o={snap} /> : null}
-        ListFooterComponent={sending ? <Thinking /> : null}
-        renderItem={({ item }) =>
-          item.from === 'user' ? (
-            <View style={{ alignItems: 'flex-end', marginVertical: 6 }}>
-              <View style={[styles.userBubble, { backgroundColor: t.user }]}>
-                <Body style={{ color: t.userText }}>{item.text}</Body>
+    // Android is edge-to-edge since SDK 54, so the window no longer resizes for the keyboard and the
+    // view has to pad itself, as on iOS. Keyboard events never fire on web, so this is inert there.
+    <View
+      ref={rootRef}
+      style={{ flex: 1 }}
+      onLayout={() => rootRef.current?.measureInWindow((_x, y) => setKbOffset(y))}
+    >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={kbOffset}>
+        {error ? (
+          <View style={[styles.offline, { backgroundColor: t.dangerBg }]}>
+            <Body style={{ fontSize: 12, color: t.danger }}>{error}</Body>
+          </View>
+        ) : null}
+        <FlatList
+          ref={listRef}
+          style={{ flex: 1 }}
+          data={messages}
+          keyExtractor={(m) => m.id}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{ padding: 16, paddingBottom: 8, maxWidth: 720, width: '100%', alignSelf: 'center' }}
+          onContentSizeChange={() => active && listRef.current?.scrollToEnd({ animated: true })}
+          ListHeaderComponent={snap ? <Snapshot o={snap} /> : null}
+          ListFooterComponent={sending ? <Thinking /> : null}
+          renderItem={({ item }) =>
+            item.from === 'user' ? (
+              <View style={{ alignItems: 'flex-end', marginVertical: 6 }}>
+                <View style={[styles.userBubble, { backgroundColor: t.user }]}>
+                  <Body style={{ color: t.userText }}>{item.text}</Body>
+                </View>
               </View>
-            </View>
-          ) : (
-            <View style={{ marginVertical: 8, gap: 8 }}>
-              {item.flags && item.flags.length > 0 && (
-                <Row style={{ gap: 6, flexWrap: 'wrap' }}>
-                  <Pill label="SAFETY CHECK" tone="danger" />
-                  {item.flags.map((f) => (
-                    <Pill key={f} label={FLAG_LABEL[f] ?? f} tone="warn" />
-                  ))}
-                </Row>
-              )}
-              <View style={[styles.botBubble, { borderColor: t.border }]}>
-                <RichText text={item.text} />
+            ) : (
+              <View style={{ marginVertical: 8, gap: 8 }}>
+                {item.flags && item.flags.length > 0 && (
+                  <Row style={{ gap: 6, flexWrap: 'wrap' }}>
+                    <Pill label="SAFETY CHECK" tone="danger" />
+                    {item.flags.map((f) => (
+                      <Pill key={f} label={FLAG_LABEL[f] ?? f} tone="warn" />
+                    ))}
+                  </Row>
+                )}
+                <View style={[styles.botBubble, { borderColor: t.border }]}>
+                  <RichText text={item.text} />
+                </View>
+                {item.cards?.map((c, i) => <ResultCard key={i} card={c} />)}
+                {item.actionIds?.map((id) =>
+                  actions[id] ? <ActionCard key={id} action={actions[id]} mode="student" onConfirm={onConfirm} onCancel={onCancel} /> : null,
+                )}
+                {item.tools !== undefined && (
+                  <Mono style={{ fontSize: 10.5, color: t.faint }}>
+                    {item.tools.length ? item.tools.map((x) => TOOL_LABEL[x] ?? x).join(' → ') : 'no tools'} · {item.provider}
+                    {item.fallback ? ' (offline fallback)' : ''}
+                  </Mono>
+                )}
               </View>
-              {item.cards?.map((c, i) => <ResultCard key={i} card={c} />)}
-              {item.actionIds?.map((id) =>
-                actions[id] ? <ActionCard key={id} action={actions[id]} mode="student" onConfirm={onConfirm} onCancel={onCancel} /> : null,
-              )}
-              {item.tools !== undefined && (
-                <Mono style={{ fontSize: 10.5, color: t.faint }}>
-                  {item.tools.length ? item.tools.map((x) => TOOL_LABEL[x] ?? x).join(' → ') : 'no tools'} · {item.provider}
-                  {item.fallback ? ' (offline fallback)' : ''}
-                </Mono>
-              )}
-            </View>
-          )
-        }
-      />
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ flexGrow: 0, flexShrink: 0 }}
-        contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 8 }}
-      >
-        {SUGGESTIONS.map((s) => (
-          <Pressable
-            key={s.label}
-            onPress={() => pick(s)}
-            disabled={sending}
-            style={({ pressed }) => [styles.chip, { borderColor: s.fill ? t.gold : t.border, backgroundColor: pressed ? t.sunken : t.surface }]}
-          >
-            <Body style={{ fontSize: 13, color: s.fill ? t.gold : t.text, fontFamily: fonts.bodyMedium }}>{s.label}</Body>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      <View style={[styles.inputRow, { borderTopColor: t.border, backgroundColor: t.surface }]}>
-        <TextInput
-          ref={inputRef}
-          value={input}
-          onChangeText={setInput}
-          placeholder="Ask anything, e.g. can pay rent or not?"
-          placeholderTextColor={t.faint}
-          style={[styles.input, { color: t.text, borderColor: t.border, backgroundColor: t.bg, fontFamily: fonts.body }]}
-          onSubmitEditing={() => send(input)}
-          onKeyPress={(e) => {
-            // Enter sends on web; Shift+Enter keeps a newline for pasted messages.
-            const ne = e.nativeEvent as { key: string; shiftKey?: boolean; isComposing?: boolean; keyCode?: number };
-            const composing = ne.isComposing || ne.keyCode === 229; // IME candidate selection, e.g. pinyin
-            if (Platform.OS === 'web' && ne.key === 'Enter' && !ne.shiftKey && !composing) {
-              (e as unknown as { preventDefault?: () => void }).preventDefault?.();
-              send(input);
-            }
-          }}
-          returnKeyType="send"
-          multiline
-          accessibilityLabel="Message"
+            )
+          }
         />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Send"
-          onPress={() => send(input)}
-          disabled={sending || !input.trim()}
-          style={[styles.send, { backgroundColor: t.accent, opacity: sending || !input.trim() ? 0.45 : 1 }]}
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          style={{ flexGrow: 0, flexShrink: 0 }}
+          contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 8 }}
         >
-          <Body style={{ color: t.accentText, fontFamily: fonts.bodyBold, fontSize: 18, lineHeight: 20 }}>↑</Body>
-        </Pressable>
-      </View>
-    </KeyboardAvoidingView>
+          {SUGGESTIONS.map((s) => (
+            <Pressable
+              key={s.label}
+              onPress={() => pick(s)}
+              disabled={sending}
+              style={({ pressed }) => [styles.chip, { borderColor: s.fill ? t.gold : t.border, backgroundColor: pressed ? t.sunken : t.surface }]}
+            >
+              <Body style={{ fontSize: 13, color: s.fill ? t.gold : t.text, fontFamily: fonts.bodyMedium }}>{s.label}</Body>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        <View style={[styles.inputRow, { borderTopColor: t.border, backgroundColor: t.surface }]}>
+          <TextInput
+            ref={inputRef}
+            value={input}
+            onChangeText={setInput}
+            placeholder="Ask anything, e.g. can pay rent or not?"
+            placeholderTextColor={t.faint}
+            style={[styles.input, { color: t.text, borderColor: t.border, backgroundColor: t.bg, fontFamily: fonts.body }]}
+            onSubmitEditing={() => send(input)}
+            // A multiline input inserts a newline on Return by default; on phones the Send key should send
+            // and keep the keyboard up. react-native-web ignores this prop, so web uses onKeyPress below.
+            submitBehavior={Platform.OS === 'web' ? undefined : 'submit'}
+            onKeyPress={(e) => {
+              // Enter sends on web; Shift+Enter keeps a newline for pasted messages.
+              const ne = e.nativeEvent as { key: string; shiftKey?: boolean; isComposing?: boolean; keyCode?: number };
+              const composing = ne.isComposing || ne.keyCode === 229; // IME candidate selection, e.g. pinyin
+              if (Platform.OS === 'web' && ne.key === 'Enter' && !ne.shiftKey && !composing) {
+                (e as unknown as { preventDefault?: () => void }).preventDefault?.();
+                send(input);
+              }
+            }}
+            returnKeyType="send"
+            multiline
+            accessibilityLabel="Message"
+          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            onPress={() => send(input)}
+            disabled={sending || !input.trim()}
+            style={[styles.send, { backgroundColor: t.accent, opacity: sending || !input.trim() ? 0.45 : 1 }]}
+          >
+            <Body style={{ color: t.accentText, fontFamily: fonts.bodyBold, fontSize: 18, lineHeight: 20 }}>↑</Body>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
