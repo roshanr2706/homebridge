@@ -24,6 +24,11 @@ RULES: Dict[str, List[str]] = {
         r"(disable|bypass|skip|turn off) (all )?(the )?(safety|security|confirmation|sponsor|approval|checks?)",
         r"(call|hit|use) the confirm(ation)? (endpoint|api)",
         r"pre-?authori[sz]ed",
+        # Chinese / Malay
+        r"(忽略|无视|忘记)(之前|以上|上面|所有|你的)?的?(所有)?(指令|规则|说明|设定)",
+        r"(开发者|管理员|无限制)模式",
+        r"你现在是",
+        r"(abaikan|lupakan) (semua )?(arahan|peraturan)",
     ],
     "extraction": [
         r"(system|hidden|developer) prompt",
@@ -32,6 +37,8 @@ RULES: Dict[str, List[str]] = {
         r"(confirmation|confirm|auth|access) token",
         r"\b(api key|password|pin code|\bpin\b)",
         r"(dad|father|sponsor|parent)'?s? (accounts?|balances?)",
+        r"(系统提示|完整的?(账号|卡号)|验证码|确认码|密码)",
+        r"(nombor akaun penuh|kata laluan)",
     ],
     "escalation": [
         r"\b(this is|i am|i'm) (aisha'?s )?(father|dad|the sponsor|the parent|admin|the bank)",
@@ -42,6 +49,8 @@ RULES: Dict[str, List[str]] = {
         r"\bas the (system )?administrator\b",
         r"(i already confirmed|i said yes|execute (it|all) (now|without))",
         r"split .* (under|below) the limit",
+        r"我是(她|他)?的?(爸爸|父亲|家长|管理员)",
+        r"(提高|修改|调高)(我的)?(转账)?限额",
     ],
     "scam": [
         r"gift ?cards?",
@@ -56,6 +65,12 @@ RULES: Dict[str, List[str]] = {
         r"guaranteed .{0,20}returns?",
         r"(keep \d+%|forward it to)",
         r"deposit .{0,40}(before|without) (viewing|seeing)|can'?t show it",
+        # The "Chinese police / embassy" scam aimed at students abroad, and its Malaysian twin, the "Macau scam".
+        r"safe account|virtual kidnapping",
+        r"(安全账户|洗钱|逮捕|通缉|礼品卡|比特币|虚拟货币|中奖)",
+        r"(公安|警察|警官|领事馆|大使馆).{0,40}(转账|转到|汇款|冻结|涉嫌|调查)",
+        r"(先|支付|缴纳|交).{0,6}(手续费|保证金|解冻费)",
+        r"(akaun selamat|pengubahan wang haram|\bpdrm\b|\blhdn\b|waran tangkap|kad hadiah)",
     ],
 }
 

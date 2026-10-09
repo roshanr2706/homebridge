@@ -91,3 +91,14 @@ def test_chat_rate_limit(api, monkeypatch):
     client = TestClient(create_app(fresh()))
     codes = [client.post("/chat", json={"message": "hi"}, headers=S).status_code for _ in range(4)]
     assert codes == [200, 200, 200, 429]
+
+
+@pytest.mark.parametrize("text", [
+    "兑换五千令吉的手续费是多少？",          # what's the fee to convert 5,000 ringgit?
+    "领事馆办护照要多久",                     # how long does the consulate take for a passport?
+    "我的银行卡在加拿大能用吗",
+    "Berapa yuran tukar wang ke dolar Kanada?",
+])
+def test_ordinary_chinese_and_malay_questions_are_not_flagged(text):
+    from app.guard import check
+    assert check(text).flags == [], check(text).to_dict()

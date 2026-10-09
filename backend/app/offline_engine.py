@@ -43,6 +43,32 @@ def _currencies(text: str) -> List[str]:
     return found
 
 
+# Chinese and Malay phrases mapped to the English intent words the planner matches on.
+# Appended to the lowered text, so amounts and the original wording are kept.
+INTENT_WORDS = [
+    (r"余额|多少钱|还剩|还有多少|baki|duit saya", "balance"),
+    (r"房租|租金|sewa", "rent landlord"),
+    (r"交|付|支付|转账|bayar", "pay"),
+    (r"学费|yuran", "tuition"),
+    (r"诈骗|骗局|骗子|是真的吗|是不是真的|scam ke|tipu", "scam"),
+    (r"兑换|换成|换钱|tukar", "convert"),
+    (r"令吉|马币|ringgit", "myr"),
+    (r"加币|加元|dolar kanada", "cad"),
+    (r"最便宜|最划算|paling murah", "cheapest"),
+    (r"信用", "credit"),
+    (r"花了|开销|消费|belanja", "spent"),
+    (r"预算|bajet", "budget"),
+    (r"爸爸|父亲|ayah|bapa", "dad"),
+    (r"问.{0,6}要|minta", "ask"),
+]
+
+
+def _normalize(text: str) -> str:
+    low = text.lower()
+    extra = [w for pat, w in INTENT_WORDS if re.search(pat, low)]
+    return low + (" " + " ".join(extra) if extra else "")
+
+
 def _call(name: str, **args: Any) -> Dict[str, Any]:
     return {"role": "assistant", "content": None, "reasoning_content": None,
             "tool_calls": [{"id": "call_" + uuid.uuid4().hex[:8], "name": name, "arguments": args}]}
@@ -74,7 +100,7 @@ class OfflineEngine:
     def chat(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
         idx = max(i for i, m in enumerate(messages) if m["role"] == "user")
         text = messages[idx]["content"]
-        low = text.lower()
+        low = _normalize(text)
         note = " ".join(m["content"] for m in messages[idx + 1:] if m["role"] == "system")
         fm = re.search(r"Safety check flags: ([a-z, ]+)\.", note)
         note = fm.group(1) if fm else ""
