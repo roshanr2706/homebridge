@@ -90,7 +90,7 @@
     "turns": [
       "Cheapest way to change 5,000 MYR to CAD?"
     ],
-    "reply": "For MYR 5,000.00 to CAD, ranked by what arrives: HomeBridge wallet conversion: you get CAD 1,608.29 (true cost 0.6%, instant); Low-cost transfer service: you get CAD 1,600.57 (true cost 1.08%, 1 business day); Bank telegraphic transfer: you get CAD 1,547.53 (true cost 4.36%, 2 to 4 business days); Airport money changer: you get CAD 1,512.83 (true cost 6.5%, in person). The best option saves CAD 95.46 compared with the worst. Rates are a sandbox snapshot, not advice.",
+    "reply": "Cheapest for MYR 5,000.00 is the HomeBridge wallet conversion: CAD 1,608.29 arrives (true cost 0.6%, instant). That saves CAD 95.46 compared with the airport money changer. Rates are a sandbox snapshot, not advice.",
     "tools": [
       "get_fx_quotes"
     ],
@@ -153,7 +153,7 @@
     "turns": [
       "My dad wants to send me 3000 ringgit, what's cheapest for him?"
     ],
-    "reply": "For MYR 3,000.00 to CAD, ranked by what arrives: Low-cost transfer service: you get CAD 959.83 (true cost 1.13%, 1 business day); Bank telegraphic transfer: you get CAD 918.45 (true cost 5.39%, 2 to 4 business days); Airport money changer: you get CAD 907.70 (true cost 6.5%, in person). The best option saves CAD 52.13 compared with the worst. Rates are a sandbox snapshot, not advice.",
+    "reply": "Cheapest for MYR 3,000.00 is the Low-cost transfer service: CAD 959.83 arrives (true cost 1.13%, 1 business day). That saves CAD 52.13 compared with the airport money changer. Rates are a sandbox snapshot, not advice.",
     "tools": [
       "get_fx_quotes"
     ],
@@ -170,7 +170,7 @@
     "turns": [
       "cheapest way to send 1000 cad to myr"
     ],
-    "reply": "For CAD 1,000.00 to MYR, ranked by what arrives: HomeBridge wallet conversion: you get MYR 3,071.69 (true cost 0.6%, instant); Low-cost transfer service: you get MYR 3,047.10 (true cost 1.4%, 1 business day); Airport money changer: you get MYR 2,889.37 (true cost 6.5%, in person); Bank telegraphic transfer: you get MYR 2,763.41 (true cost 10.58%, 2 to 4 business days). The best option saves MYR 308.28 compared with the worst. Live quotes are unavailable right now; these are cached quotes and may be slightly out of date. Rates are a sandbox snapshot, not advice.",
+    "reply": "Cheapest for CAD 1,000.00 is the HomeBridge wallet conversion: MYR 3,071.69 arrives (true cost 0.6%, instant). That saves MYR 308.28 compared with the bank telegraphic transfer. Live quotes are unavailable right now; these are cached quotes and may be slightly out of date. Rates are a sandbox snapshot, not advice.",
     "tools": [
       "get_fx_quotes"
     ],
@@ -204,7 +204,7 @@
     "turns": [
       "Pay my spring tuition"
     ],
-    "reply": "I've drafted it: Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund. Please check the payee and amount on the confirmation card and tap Confirm. After you confirm, your sponsor also needs to approve it. Note: Balance in CAD Tuition Fund is lower than this amount; it will fail unless topped up. Heads up: the tuition fund is CAD 1,250.00 short, so you'll need to convert some MYR into it before this can go through.",
+    "reply": "I've drafted it: Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund. Please check the payee and amount on the confirmation card and tap Confirm. After you confirm, your sponsor also needs to approve it. Heads up: the tuition fund is CAD 1,250.00 short, so it would fail today. Say 'cover the tuition shortfall from my MYR wallet' and I'll draft that conversion, or ask your dad for a top-up.",
     "tools": [
       "get_tuition_schedule",
       "prepare_transfer"
@@ -450,7 +450,7 @@
     "turns": [
       "Is this a scam? 'This is the Canada Revenue Agency. You owe $2,000 in unpaid taxes. Pay immediately in Apple gift cards or a warrant will be issued for your arrest.'"
     ],
-    "reply": "This looks like a scam. Warning signs: 'Canada Revenue Agency. You owe $2,000 in', 'gift cards', 'warrant'. Do not pay or share codes. Contact the organisation using a number from its official website. Government agencies in Canada do not demand payment by gift card, crypto or wire under threat. I won't set up any payment for it.",
+    "reply": "This looks like a scam: it mentions 'warrant', 'gift cards', 'Canada Revenue Agency. You owe $2,000 in'. Don't pay or share any codes, and contact the organisation through its official website instead. I won't set up any payment for it.",
     "tools": [
       "check_message_for_scam"
     ],
@@ -467,7 +467,7 @@
     "turns": [
       "is this legit? Hi, I'm the owner of the apartment. I'm overseas so I can't show it, but send the $1,200 deposit by crypto and I'll mail you the keys."
     ],
-    "reply": "This looks like a scam. Warning signs: 'can't show it', 'crypto'. Do not pay or share codes. Contact the organisation using a number from its official website. Government agencies in Canada do not demand payment by gift card, crypto or wire under threat. I won't set up any payment for it.",
+    "reply": "This looks like a scam: it mentions 'crypto', 'can't show it'. Don't pay or share any codes, and contact the organisation through its official website instead. I won't set up any payment for it.",
     "tools": [
       "check_message_for_scam"
     ],
@@ -576,6 +576,160 @@
       }
     ],
     "final_status": "awaiting_user",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T28",
+    "group": "multistep",
+    "turns": [
+      "Cover the tuition shortfall from my MYR wallet, then pay my spring tuition"
+    ],
+    "reply": "I've drafted: Convert MYR 3,888.00 to about CAD 1,250.61 (MYR Wallet to CAD Tuition Fund); then Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund. That covers the CAD 1,250.00 shortfall. Confirm them in that order in the app. The tuition payment then goes to your dad for approval.",
+    "tools": [
+      "get_tuition_schedule",
+      "get_fx_quotes",
+      "prepare_conversion",
+      "prepare_transfer"
+    ],
+    "actions": [
+      {
+        "kind": "conversion",
+        "tier": "T2",
+        "summary": "Convert MYR 3,888.00 to about CAD 1,250.61 (MYR Wallet to CAD Tuition Fund)",
+        "risk_score": 0,
+        "risk_reasons": [],
+        "warnings": [
+          "Rate 0.32166 includes a 0.6% margin over mid-market (0.3236)."
+        ]
+      },
+      {
+        "kind": "transfer",
+        "tier": "T3",
+        "summary": "Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund",
+        "risk_score": 0,
+        "risk_reasons": [
+          "Amount above the single-payment limit of CAD 1,500",
+          "Would exceed the 24h limit of CAD 3,000 (already CAD 0.00 sent or pending)",
+          "Paid from a sponsor-funded account (CAD Tuition Fund)"
+        ],
+        "warnings": [
+          "Balance in CAD Tuition Fund is lower than this amount; it will fail unless topped up."
+        ]
+      }
+    ],
+    "final_status": "executed",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T30",
+    "group": "multilingual",
+    "turns": [
+      "我还有多少钱？"
+    ],
+    "reply": "Your balances: CAD Everyday CAD 2,340.55; MYR Wallet MYR 18,200.00; CAD Tuition Fund CAD 6,000.00. Total is about CAD 14,230.07.",
+    "tools": [
+      "get_balances"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T31",
+    "group": "multilingual",
+    "turns": [
+      "帮我交房租"
+    ],
+    "reply": "I've drafted it: Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday. Please check the payee and amount on the confirmation card and tap Confirm.",
+    "tools": [
+      "list_transactions",
+      "prepare_transfer"
+    ],
+    "actions": [
+      {
+        "kind": "transfer",
+        "tier": "T2",
+        "summary": "Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday",
+        "risk_score": 0,
+        "risk_reasons": [],
+        "warnings": []
+      }
+    ],
+    "final_status": "awaiting_user",
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T32",
+    "group": "multilingual",
+    "turns": [
+      "这是诈骗吗？“这里是中国驻温哥华领事馆，你涉嫌洗钱，请把钱转到安全账户配合调查，不要告诉任何人”"
+    ],
+    "reply": "This looks like a scam: it mentions '洗钱', '领事馆，你涉嫌洗钱，请把钱转到安全账户配合调查'. Don't pay or share any codes, and contact the organisation through its official website instead. I won't set up any payment for it.",
+    "tools": [
+      "check_message_for_scam"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T33",
+    "group": "multilingual",
+    "turns": [
+      "Ini scam ke? 'Ini PDRM. Akaun anda terlibat dalam pengubahan wang haram, sila pindahkan wang ke akaun selamat sekarang.'"
+    ],
+    "reply": "This looks like a scam: it mentions 'PDRM'. Don't pay or share any codes, and contact the organisation through its official website instead. I won't set up any payment for it.",
+    "tools": [
+      "check_message_for_scam"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": []
+  },
+  {
+    "id": "T29",
+    "group": "tuition",
+    "turns": [
+      "pay my tuition",
+      "ok cover the tuition shortfall from my MYR wallet"
+    ],
+    "reply": "I've drafted: Convert MYR 3,888.00 to about CAD 1,250.61 (MYR Wallet to CAD Tuition Fund). That covers the CAD 1,250.00 shortfall. Confirm it in the app, then ask me to pay your tuition.",
+    "tools": [
+      "get_tuition_schedule",
+      "get_fx_quotes",
+      "prepare_conversion"
+    ],
+    "actions": [
+      {
+        "kind": "conversion",
+        "tier": "T2",
+        "summary": "Convert MYR 3,888.00 to about CAD 1,250.61 (MYR Wallet to CAD Tuition Fund)",
+        "risk_score": 0,
+        "risk_reasons": [],
+        "warnings": [
+          "Rate 0.32166 includes a 0.6% margin over mid-market (0.3236)."
+        ]
+      }
+    ],
+    "final_status": "executed",
     "provider": "offline",
     "fallback": false,
     "passed": true,

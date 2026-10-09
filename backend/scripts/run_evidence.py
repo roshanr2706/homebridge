@@ -78,9 +78,9 @@ def main() -> None:
 
     ce = classifier_eval()
     verify = AuditLog(str(audit_path)).verify()
-    (out / "scripted_tasks.json").write_text(json.dumps(tasks, indent=2, ensure_ascii=False))
-    (out / "attack_report.json").write_text(json.dumps(attacks, indent=2, ensure_ascii=False))
-    (out / "classifier_eval.json").write_text(json.dumps(ce, indent=2))
+    (out / "scripted_tasks.json").write_text(json.dumps(tasks, indent=2, ensure_ascii=False), encoding="utf-8")
+    (out / "attack_report.json").write_text(json.dumps(attacks, indent=2, ensure_ascii=False), encoding="utf-8")
+    (out / "classifier_eval.json").write_text(json.dumps(ce, indent=2), encoding="utf-8")
 
     passed = sum(t["passed"] for t in tasks)
     blocked = sum(a["blocked"] for a in attacks)
@@ -103,7 +103,7 @@ def main() -> None:
     lines += ["", "| Task | Group | Result | Tools | Final status |", "|---|---|---|---|---|"]
     lines += [f"| {t['id']} | {t['group']} | {'pass' if t['passed'] else 'FAIL'} | {', '.join(t['tools'])} | "
               f"{t['final_status'] or ''} |" for t in tasks]
-    (out / "SUMMARY.md").write_text("\n".join(lines) + "\n")
+    (out / "SUMMARY.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines[:9]))
 
 

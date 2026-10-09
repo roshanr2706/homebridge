@@ -1,7 +1,7 @@
 """Our own small model: scam / injection / benign text classifier.
 
-TF-IDF (word 1-2 grams plus character 3-5 grams, so misspellings and Malaysian
-English still match) feeding a logistic regression. Trains in well under a
+TF-IDF (word 1-2 grams plus character 1-4 grams, so misspellings, Malaysian
+English and Chinese still match) feeding a logistic regression. Trains in well under a
 second at startup from data/classifier_train.jsonl, runs offline, and can
 explain each prediction by listing the features that pushed it.
 
@@ -29,10 +29,12 @@ class TextRiskClassifier:
     def __init__(self) -> None:
         self.features = FeatureUnion([
             ("word", TfidfVectorizer(ngram_range=(1, 2), lowercase=True, sublinear_tf=True, min_df=1)),
-            ("char", TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), lowercase=True,
+            # Plain char n-grams from 1 to 4: robust to misspellings and Malaysian English, and they also
+            # work for Chinese, which has no spaces between words.
+            ("char", TfidfVectorizer(analyzer="char", ngram_range=(1, 4), lowercase=True,
                                      sublinear_tf=True, min_df=2)),
         ])
-        self.model = LogisticRegression(max_iter=2000, C=6.0, class_weight="balanced")
+        self.model = LogisticRegression(max_iter=3000, C=20.0, class_weight="balanced")
         self.pipe = Pipeline([("f", self.features), ("clf", self.model)])
         self.trained = False
 
