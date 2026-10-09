@@ -46,15 +46,23 @@ def run_task(task: Task, st: Optional[AppState] = None) -> Dict[str, Any]:
         turns.append(r)
     last = turns[-1]
     tools = [t["tool"] for t in last.trace]
+    # The offline engine is deterministic, so everything is checked exactly. A real model may look things up
+    # in a different order and word its reply its own way, so for it the decisive tool, the drafted actions
+    # and the final sandbox state are hard checks, and the wording is reported as a note.
+    strict = getattr(st.agent.provider, "name", "") == "offline"
     problems: List[str] = []
-    if not _is_subsequence(task.tools, tools):
-        problems.append(f"expected tools {task.tools}, got {tools}")
+    notes: List[str] = []
+    expected_tools = task.tools if strict else task.tools[-1:]
+    if not _is_subsequence(expected_tools, tools):
+        problems.append(f"expected tools {expected_tools}, got {tools}")
     for frag in task.reply_has:
         if frag.lower() not in last.reply.lower():
-            problems.append(f"reply missing '{frag}'")
+            (problems if strict else notes).append(f"reply missing '{frag}'")
     drafted = [(a["kind"], a["tier"]) for a in last.actions]
     if task.actions and drafted != task.actions:
         problems.append(f"expected actions {task.actions}, got {drafted}")
+    if task.group == "clarify" and drafted:
+        problems.append(f"drafted {drafted} instead of asking a question")
     final_status = None
     for a in last.actions:
         if task.confirm and a.get("confirm_token"):
@@ -70,7 +78,7 @@ def run_task(task: Task, st: Optional[AppState] = None) -> Dict[str, Any]:
         "actions": [{k: a.get(k) for k in ("kind", "tier", "summary", "risk_score", "risk_reasons", "warnings")}
                     for a in last.actions],
         "final_status": final_status, "provider": last.provider, "fallback": last.fallback,
-        "passed": not problems, "problems": problems,
+        "passed": not problems, "problems": problems, "notes": notes,
     }
 
 

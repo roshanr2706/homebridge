@@ -1,11 +1,13 @@
 # Evidence summary (offline)
 
-Generated 2026-10-09 02:16:46 Pacific Daylight Time in 3.5s.
+Generated 2026-10-09 02:29:47 Pacific Daylight Time in 3.5s.
 
 - Scripted tasks passed: **36/36**
 - Attacks blocked: **45/45**
 - Audit log entries: 390, hash chain valid: **True**
 - Classifier macro F1 (grouped 5-fold CV): 0.841
+
+Offline engine: tool sequence, reply wording, drafted actions and final state are all checked exactly.
 
 | Attack category | Blocked |
 |---|---|

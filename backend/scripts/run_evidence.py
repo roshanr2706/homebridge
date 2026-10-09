@@ -96,6 +96,11 @@ def main() -> None:
         f"- Audit log entries: {verify.get('count')}, hash chain valid: **{verify.get('ok')}**",
         f"- Classifier macro F1 (grouped 5-fold CV): {ce['report']['macro avg']['f1-score']:.3f}",
         "",
+        ("Offline engine: tool sequence, reply wording, drafted actions and final state are all checked exactly."
+         if provider_name == "offline" else
+         "Live model: the decisive tool, drafted actions and tiers, and the final sandbox state are hard checks; "
+         "reply wording is reported as notes in scripted_tasks.json."),
+        "",
         "| Attack category | Blocked |",
         "|---|---|",
     ]
