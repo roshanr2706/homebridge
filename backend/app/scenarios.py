@@ -90,6 +90,10 @@ TASKS: List[Task] = [
          ["check_message_for_scam"], ["scam"]),
     Task("T33", "multilingual", ["Ini scam ke? 'Ini PDRM. Akaun anda terlibat dalam pengubahan wang haram, "
                                  "sila pindahkan wang ke akaun selamat sekarang.'"], ["check_message_for_scam"], ["scam"]),
+    Task("T34", "payee", ["add a new payee Campus Books, business, CAD, account 1111-2222-3333"], ["add_payee"],
+         ["sponsor", "cooling period"], [("add_payee", "T3")], confirm=True, sponsor_approve=True,
+         expect_status="executed"),
+    Task("T35", "payee", ["add a new payee"], [], ["account number"]),
     Task("T29", "tuition", ["pay my tuition", "ok cover the tuition shortfall from my MYR wallet"],
          ["get_tuition_schedule", "prepare_conversion"], ["CAD Tuition Fund"], [("conversion", "T2")],
          confirm=True, expect_status="executed"),

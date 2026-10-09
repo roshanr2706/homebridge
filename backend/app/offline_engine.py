@@ -69,9 +69,9 @@ def _normalize(text: str) -> str:
     return low + (" " + " ".join(extra) if extra else "")
 
 
-def _call(name: str, **args: Any) -> Dict[str, Any]:
+def _call(tool_name: str, /, **args: Any) -> Dict[str, Any]:
     return {"role": "assistant", "content": None, "reasoning_content": None,
-            "tool_calls": [{"id": "call_" + uuid.uuid4().hex[:8], "name": name, "arguments": args}]}
+            "tool_calls": [{"id": "call_" + uuid.uuid4().hex[:8], "name": tool_name, "arguments": args}]}
 
 
 def _say(text: str) -> Dict[str, Any]:
@@ -192,6 +192,17 @@ class OfflineEngine:
                         f"(mainly {top}) and earned CAD {b['income_cad']:,.0f} from my part-time job. "
                         f"Total across my accounts is about CAD {s['total']:,.0f}. Next tuition installment is "
                         f"coming up and I'm keeping that money in the tuition fund.")
+
+        # 6b. New payee: always goes to the sponsor, then a cooling period
+        if re.search(r"\b(add|new|save)\b.{0,12}\bpayee\b", low):
+            if "add_payee" not in done:
+                return self._add_payee(text, low)
+            a = last["action"]
+            return _say(f"I've drafted a request to add {a['summary'].replace('Add new payee ', '')}. New payees always "
+                        "need your sponsor's approval, and then there's a short cooling period before the first "
+                        "payment. That pause is what stops most 'urgent new account' scams. Confirm it in the app "
+                        "to send it to your dad." + (" I can't pay them until then." if re.search(r"pay", low)
+                                                     else ""))
 
         # 7a. Cover a tuition shortfall from the MYR wallet (and optionally pay it)
         if re.search(r"tuition|yuran", low) and not low.rstrip().endswith("?") and re.search(
@@ -386,6 +397,20 @@ class OfflineEngine:
                     "official website.")
         return ("I noticed instructions in that message that try to change how I work, so I'm ignoring them. "
                 "Payments can only be confirmed by you in the app. What would you like to do?")
+
+    @staticmethod
+    def _add_payee(text: str, low: str) -> Dict[str, Any]:
+        number = re.search(r"\b\d{4}-\d{4}-\d{4}\b|\b\d{8,16}\b", text)
+        quoted = re.search(r"['\"“]([^'\"”]{2,60})['\"”]", text)
+        named = re.search(r"payee(?: called| named)?\s+([A-Z][\w&.' -]{1,58}?)(?:,| with| for| account|$)", text)
+        name = (quoted or named).group(1).strip() if (quoted or named) else ""
+        if not name or not number:
+            return _say("Sure. What's the payee's name, and their account number? For example: add payee "
+                        "Campus Books, business, CAD, account 1111-2222-3333.")
+        kinds = ["rent", "tuition", "utilities", "phone", "individual", "business", "crypto", "gift_card"]
+        kind = next((k for k in kinds if k.replace("_", " ") in low), "unknown")
+        cur = next((c for c in _currencies(text) if c in ("CAD", "MYR", "USD")), "CAD")
+        return _call("add_payee", name=name, kind=kind, currency=cur, account_number=number.group(0))
 
     def _cover_tuition(self, low, res, done):
         if "get_tuition_schedule" not in done:
