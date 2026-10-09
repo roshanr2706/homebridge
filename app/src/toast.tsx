@@ -1,6 +1,7 @@
 // App-wide banner for things that happen elsewhere (the sponsor decided, a new request arrived).
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, useTheme } from './theme';
 import { Body } from './ui';
@@ -14,6 +15,7 @@ export const useToast = () => useContext(Ctx);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const [msg, setMsg] = useState<ToastMsg | null>(null);
   const [anim] = useState(() => new Animated.Value(0));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -46,7 +48,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           pointerEvents="box-none"
           style={[
             styles.wrap,
-            { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }] },
+            // Just below the app header, which itself starts below the status bar on a phone.
+            { top: 64 + insets.top, opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [-20, 0] }) }] },
           ]}
         >
           <Pressable onPress={hide} accessibilityRole="alert" style={[styles.toast, { backgroundColor: t.surface, borderColor: color, shadowColor: t.shadow }]}>
@@ -63,7 +66,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { position: 'absolute', top: 64, left: 12, right: 12, alignItems: 'center' },
+  wrap: { position: 'absolute', left: 12, right: 12, alignItems: 'center' },
   toast: {
     flexDirection: 'row',
     gap: 10,

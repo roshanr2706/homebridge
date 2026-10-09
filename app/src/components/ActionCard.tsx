@@ -3,7 +3,7 @@ import { StyleSheet, TextInput, View } from 'react-native';
 
 import type { Action } from '../api';
 import { amount, cityTime, fonts, klHour, money, useTheme } from '../theme';
-import { Bar, Body, Button, Eyebrow, Mono, Pill, Row } from '../ui';
+import { Bar, Body, Button, DashedRule, Eyebrow, Mono, Pill, Row } from '../ui';
 
 type Props = {
   action: Action;
@@ -171,20 +171,22 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
   return (
     <View style={[styles.card, { backgroundColor: t.surface, borderColor: risky ? t.danger : t.border, shadowColor: t.shadow }]}>
       {/* perforated top edge, like a cheque stub */}
-      <View style={[styles.stub, { borderColor: risky ? t.danger : t.accent, backgroundColor: risky ? t.dangerBg : t.accentSoft }]}>
+      <View style={[styles.stub, { backgroundColor: risky ? t.dangerBg : t.accentSoft }]}>
         <Eyebrow style={{ color: risky ? t.danger : t.accent }}>{KIND[a.kind] ?? a.kind}</Eyebrow>
         <Row style={{ gap: 6 }}>
           <Mono style={{ fontSize: 11, color: risky ? t.danger : t.accent, fontFamily: fonts.monoBold }}>{a.tier}</Mono>
           <Body style={{ fontSize: 11, color: risky ? t.danger : t.accent }}>{TIER[a.tier] ?? ''}</Body>
         </Row>
       </View>
+      <DashedRule color={risky ? t.danger : t.accent} />
 
       <View style={{ padding: 14, paddingTop: 12 }}>
         <Mono style={{ fontFamily: fonts.monoBold, fontSize: a.kind === 'add_payee' ? 18 : 24, letterSpacing: -0.5 }}>{h.big}</Mono>
         {h.sub ? <Body style={{ color: t.muted, fontSize: 14, marginTop: 2 }}>{h.sub}</Body> : null}
 
         {details(a).length > 0 && (
-          <View style={[styles.details, { borderColor: t.border }]}>
+          <View style={styles.details}>
+            <DashedRule color={t.border} style={{ marginBottom: 8 }} />
             {details(a).map(([k, v]) => (
               <Row key={k} style={{ justifyContent: 'space-between', paddingVertical: 3, gap: 12 }}>
                 <Body style={{ fontSize: 12, color: t.muted }}>{k}</Body>
@@ -318,10 +320,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderStyle: 'dashed',
   },
-  details: { marginTop: 12, paddingTop: 8, borderTopWidth: 1, borderStyle: 'dashed' },
+  details: { marginTop: 12 },
   box: { borderRadius: 10, padding: 10, marginTop: 12 },
   note: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14 },
 });

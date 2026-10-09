@@ -46,7 +46,7 @@ export function LedgerScreen({ active, role }: { active: boolean; role: Role }) 
       setVerify(v);
       setError('');
     } catch {
-      setError(`Can't reach the server at ${api.base}`);
+      setError(api.unreachable);
     }
   }, [role]);
 

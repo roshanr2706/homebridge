@@ -48,7 +48,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
       setTotal(o.total_cad);
       setError('');
     } catch {
-      setError(`Can't reach the server at ${api.base}`);
+      setError(api.unreachable);
     } finally {
       setLoading(false);
     }

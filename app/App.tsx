@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Fraunces_400Regular_Italic } from '@expo-google-fonts/fraunces/400Regular_Italic';
 import { Fraunces_600SemiBold } from '@expo-google-fonts/fraunces/600SemiBold';
 import { IBMPlexMono_400Regular } from '@expo-google-fonts/ibm-plex-mono/400Regular';
@@ -92,7 +92,8 @@ function Shell({ epoch, provider, onReset, fixedRole }: ShellProps) {
     ) : null;
 
   return (
-    <SafeAreaView style={[styles.root, { backgroundColor: t.bg }]} edges={fixedRole ? [] : ['top', 'bottom']}>
+    // The mock phones on the stage sit inside the stage's own safe area, so they take no insets.
+    <SafeAreaView style={[styles.root, { backgroundColor: t.bg }]} edges={fixedRole ? [] : ['top', 'bottom', 'left', 'right']}>
       {!fixedRole && <StatusBar style="auto" />}
       <View style={[styles.header, { borderBottomColor: t.border }]}>
         {fixedRole ? (
@@ -180,6 +181,7 @@ function Stage() {
   const t = useTheme();
   const toast = useToast();
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const wide = width >= 980;
   const [split, setSplit] = useState(true);
   const [epoch, setEpoch] = useState(0);
@@ -208,7 +210,10 @@ function Stage() {
       <View style={{ flex: 1 }}>
         <Shell epoch={epoch} provider={provider} onReset={reset} />
         {wide && (
-          <Pressable onPress={() => setSplit(true)} style={[styles.floating, { backgroundColor: t.surface, borderColor: t.border }]}>
+          <Pressable
+            onPress={() => setSplit(true)}
+            style={[styles.floating, { bottom: 70 + insets.bottom, right: 16 + insets.right, backgroundColor: t.surface, borderColor: t.border }]}
+          >
             <Body style={{ fontSize: 12, fontFamily: fonts.bodyBold }}>Show both phones</Body>
           </Pressable>
         )}
@@ -216,11 +221,14 @@ function Stage() {
     );
   }
 
-  const phoneH = Math.min(860, height - 110);
-  const phoneW = Math.min(410, (width - 140) / 2);
+  // The stage only appears on wide windows: a laptop browser, or a large tablet, where it needs the
+  // device's safe area (status bar, home indicator) like the single-phone shell does.
+  const phoneH = Math.min(860, height - insets.top - insets.bottom - 110);
+  const phoneW = Math.min(410, (width - insets.left - insets.right - 140) / 2);
   return (
-    <View style={{ flex: 1, backgroundColor: t.sunken }}>
-      <View style={[styles.stageBar, { borderBottomColor: t.border, backgroundColor: t.bg }]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: t.sunken }} edges={['bottom', 'left', 'right']}>
+      <StatusBar style="auto" />
+      <View style={[styles.stageBar, { borderBottomColor: t.border, backgroundColor: t.bg, paddingTop: 10 + insets.top }]}>
         <Row style={{ gap: 10 }}>
           <Mark />
           <View>
@@ -255,7 +263,7 @@ function Stage() {
           </View>
         ))}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -319,5 +327,5 @@ const styles = StyleSheet.create({
     shadowRadius: 40,
     elevation: 8,
   },
-  floating: { position: 'absolute', right: 16, bottom: 70, borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  floating: { position: 'absolute', borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
 });

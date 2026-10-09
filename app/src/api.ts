@@ -8,6 +8,14 @@ export type Role = 'student' | 'sponsor';
 const sameOrigin =
   Platform.OS === 'web' && !__DEV__ && typeof window !== 'undefined' ? window.location.origin : undefined;
 const BASE = (process.env.EXPO_PUBLIC_API_URL || sameOrigin || 'http://localhost:8000').replace(/\/$/, '');
+// On a phone, "localhost" is the phone itself, so the dev hint says where to point the app. Release
+// builds block plain http on Android, so an installed APK needs an https server baked in at build time.
+const UNREACHABLE =
+  Platform.OS === 'web'
+    ? `Can't reach the server at ${BASE}`
+    : __DEV__
+      ? `Can't reach the server at ${BASE}. On a phone, set EXPO_PUBLIC_API_URL in app/.env to your computer's LAN address (Android emulator: http://10.0.2.2:8000), then reload the app.`
+      : `Can't reach the server at ${BASE}. Check your connection; this build only talks to an https server set by EXPO_PUBLIC_API_URL when it was built.`;
 const TOKENS: Record<Role, string> = {
   student: process.env.EXPO_PUBLIC_STUDENT_TOKEN ?? 'demo-student',
   sponsor: process.env.EXPO_PUBLIC_SPONSOR_TOKEN ?? 'demo-sponsor',
@@ -143,6 +151,7 @@ async function call<T>(role: Role, path: string, method = 'GET', body?: unknown)
 
 export const api = {
   base: BASE,
+  unreachable: UNREACHABLE,
   health: () => call<{ ok: boolean; provider: string; demo_mode: boolean }>('student', '/health'),
   chat: (message: string, session_id = 'app') => call<ChatResponse>('student', '/chat', 'POST', { message, session_id }),
   overview: () => call<Overview>('student', '/overview'),

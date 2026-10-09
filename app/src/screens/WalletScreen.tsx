@@ -23,7 +23,7 @@ export function WalletScreen({ active }: { active: boolean }) {
       setNow(Date.now());
       setError('');
     } catch {
-      setError(`Can't reach the server at ${api.base}`);
+      setError(api.unreachable);
     } finally {
       setLoading(false);
     }
