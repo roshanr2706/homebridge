@@ -287,7 +287,7 @@ def test_limits_tightened_after_draft_send_it_to_sponsor(api):
     client, st = api
     a = _draft(client, "pay hydro 1400")
     assert a["tier"] == "T2"
-    r = client.post("/sponsor/limits", json={"single_cad": 200, "daily_cad": 500}, headers=P)
+    r = client.post("/sponsor/limits", json={"single_cad": 200, "daily_cad": 500, "pin": "246810"}, headers=P)
     assert r.status_code == 200
     r = client.post(f"/actions/{a['action_id']}/confirm", json={"token": a["confirm_token"]}, headers=S)
     assert r.status_code == 200 and r.json()["status"] == "awaiting_sponsor", r.json()
@@ -298,7 +298,7 @@ def test_audit_keeps_no_pasted_text_and_bounds_tool_args(api):
     client, st = api
     pasted = "Is this a scam? Pay the fine to account 6620-1100-4471 or you will be arrested"
     client.post("/chat", json={"message": pasted}, headers=S)
-    log = str(client.get("/audit", headers=P).json())
+    log = str(client.get("/audit", headers=S).json())   # the student's view includes her chat events
     assert "arrested" not in log and "6620-1100-4471" not in log
     evil = fresh(provider=EvilProvider([("prepare_transfer", {"payee": "hydro", "amount": 10,
                                                               "x": ["A" * 5000] * 100})]))
@@ -336,5 +336,5 @@ def test_params_changed_after_confirm_fail_at_execution(api):
     client.post(f"/actions/{a['action_id']}/confirm", json={"token": a["confirm_token"]}, headers=S)
     st.policy.actions[a["action_id"]].params["amount"] = 40.0  # e.g. an edited database row
     before = st.bank.accounts(STUDENT)
-    r = client.post(f"/sponsor/actions/{a['action_id']}/approve", json={}, headers=P).json()
+    r = client.post(f"/sponsor/actions/{a['action_id']}/approve", json={"pin": "246810"}, headers=P).json()
     assert r["status"] == "failed" and st.bank.accounts(STUDENT) == before

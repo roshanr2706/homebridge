@@ -487,8 +487,7 @@ def prepare_transfer(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     prov = {"amount": "untrusted" if _amount_from_untrusted(ctx, amount) else "user"}
     act = ctx.policy.draft_transfer(ctx.user_id, ctx.session_id, p["id"], amount, str(a.get("memo") or ""),
                                     str(a.get("from_account_id") or ""), ctx.flags(), prov)
-    ctx.created_actions.append(act)
-    return {"action": act.for_model()}
+    return _drafted(ctx, act)
 
 
 @tool("prepare_conversion",
@@ -527,7 +526,16 @@ def add_payee(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
             else "user"}
     act = ctx.policy.draft_add_payee(ctx.user_id, ctx.session_id, str(a["name"]), str(a.get("kind") or "unknown"),
                                      str(a.get("currency") or "CAD"), number, prov)
+    return _drafted(ctx, act)
+
+
+def _drafted(ctx: ToolContext, act: Any) -> Dict[str, Any]:
+    """The draft goes to the app either way (the card shows the compliance checks); a draft the compliance
+    layer blocked comes back to the model as a refusal, so it never tells the user to confirm it."""
     ctx.created_actions.append(act)
+    if act.status == "blocked":
+        return {"error": f"{(act.result or {}).get('error', 'Blocked by compliance screening.')} Nothing was saved "
+                         "or sent.", "refused_by_policy": True, "action": act.for_model()}
     return {"action": act.for_model()}
 
 

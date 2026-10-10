@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
+from typing import List, Optional
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 VAR_DIR = Path(os.getenv("HB_VAR_DIR", BASE_DIR / "var"))
@@ -27,7 +29,7 @@ class Limits:
     payee_cooling_seconds: int = 24 * 3600
     # Pending actions expire after this many seconds.
     pending_ttl_seconds: int = 600
-    # Max transfer drafts per session per hour (slows down scripted abuse).
+    # Max money drafts per account owner per hour, across all chat sessions (slows down scripted abuse).
     drafts_per_hour: int = 20
     # Risk score at or above which an action needs the sponsor regardless of size.
     sponsor_risk_threshold: int = 50
@@ -47,6 +49,23 @@ class Settings:
     db_path: str = field(default_factory=lambda: _env("HB_DB", ":memory:"))
     audit_path: str = field(default_factory=lambda: _env("HB_AUDIT", str(VAR_DIR / "audit.jsonl")))
     limits: Limits = field(default_factory=Limits)
+    # Demo mode pins the sandbox's "today" so the screenshots, video and docs show the same dates.
+    # Tests pass their own date; outside demo mode the real date is used.
+    demo_today: str = field(default_factory=lambda: _env("HB_DEMO_TODAY", "2026-10-08"))
+    # /demo/reset needs this in an X-Operator header, and only works in demo mode (see R11).
+    operator_token: str = field(default_factory=lambda: _env("HB_OPERATOR_TOKEN", "demo-operator"))
+    # Browsers may call the API only from these origins. The exported web app is served by the API itself
+    # (same origin, no CORS needed); the defaults cover the Expo dev server and a local API.
+    cors_origins: List[str] = field(default_factory=lambda: [
+        o.strip() for o in _env("HB_CORS_ORIGINS", "http://localhost:8081,http://127.0.0.1:8081,"
+                                "http://localhost:8000,http://127.0.0.1:8000,http://localhost:19006").split(",")
+        if o.strip()])
+
+    def pinned_today(self) -> Optional[date]:
+        """The fixed demo date, or None outside demo mode (or when HB_DEMO_TODAY is empty)."""
+        if not self.demo_mode or not self.demo_today:
+            return None
+        return date.fromisoformat(self.demo_today)
 
     def __post_init__(self) -> None:
         if self.demo_mode:

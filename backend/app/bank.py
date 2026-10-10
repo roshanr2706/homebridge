@@ -93,6 +93,16 @@ CREATE TABLE IF NOT EXISTS card_activity (
 );
 """
 SCHEMA += CARD_SCHEMA
+# Compliance and sponsor authentication: each person's KYC level (compliance.py) and the sponsor's
+# approval PIN, stored only as a salted PBKDF2 hash with a wrong-attempt counter (authn.py).
+SECURITY_SCHEMA = """
+CREATE TABLE IF NOT EXISTS kyc (user_id TEXT PRIMARY KEY, level TEXT, verified_on TEXT, method TEXT);
+CREATE TABLE IF NOT EXISTS user_pins (
+  user_id TEXT PRIMARY KEY, salt TEXT, hash TEXT, iterations INTEGER, failures INTEGER DEFAULT 0,
+  locked_until REAL DEFAULT 0
+);
+"""
+SCHEMA += SECURITY_SCHEMA
 
 
 class Bank:
@@ -101,8 +111,8 @@ class Bank:
         self.db = sqlite3.connect(db_path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.today: Optional[date] = None  # the sandbox's "today", set by reset(); card payments use it
-        with self._lock:  # a file database from before the Credit Builder gets empty card tables
-            self.db.executescript(CARD_SCHEMA)
+        with self._lock:  # a file database from an older version gets the newer (empty) tables
+            self.db.executescript(CARD_SCHEMA + SECURITY_SCHEMA)
             self.db.commit()
 
     # ------------------------------------------------------------------ setup
@@ -276,6 +286,18 @@ class Bank:
         )
         return {r["currency"]: int(r["s"] or 0) for r in rows}
 
+    def outflow_from_accounts(self, account_ids: List[str], since_ts: str) -> Dict[str, int]:
+        """Minor-unit money out of the given accounts since an ISO timestamp, conversions included
+        (the sponsor's digest: what left the accounts they fund)."""
+        if not account_ids:
+            return {}
+        marks = ",".join("?" * len(account_ids))
+        rows = self._q(
+            f"SELECT currency, SUM(-amount) AS s FROM transactions WHERE account_id IN ({marks}) AND ts>=? "
+            "AND amount<0 GROUP BY currency", (*account_ids, since_ts),
+        )
+        return {r["currency"]: int(r["s"] or 0) for r in rows}
+
     def known_counterparties(self, owner: str) -> List[str]:
         rows = self._q(
             "SELECT DISTINCT counterparty FROM transactions t JOIN accounts a ON a.id=t.account_id WHERE a.owner=?",
@@ -371,6 +393,10 @@ class Bank:
 
     def reject_payee(self, payee_id: str) -> None:
         self._x("UPDATE payees SET status='rejected' WHERE id=?", (payee_id,))
+
+    def block_payee(self, payee_id: str) -> None:
+        """A sanctions-screening hit (compliance.py): the payee can never be paid."""
+        self._x("UPDATE payees SET status='blocked' WHERE id=?", (payee_id,))
 
     def set_budget(self, owner: str, category: str, monthly: float, currency: str) -> None:
         self._x(
@@ -468,6 +494,27 @@ class Bank:
     def load_alerts(self, owner: str, since: float) -> List[Dict[str, Any]]:
         return [dict(r) for r in self._q("SELECT * FROM alerts WHERE owner=? AND ts >= ? ORDER BY ts, id",
                                          (owner, since))]
+
+    # KYC and the sponsor PIN (see compliance.py and authn.py).
+    def kyc(self, user_id: str) -> Optional[Dict[str, Any]]:
+        rows = self._q("SELECT * FROM kyc WHERE user_id=?", (user_id,))
+        return dict(rows[0]) if rows else None
+
+    def set_kyc(self, user_id: str, level: str, verified_on: str, method: str) -> None:
+        self._x("INSERT OR REPLACE INTO kyc VALUES (?,?,?,?)", (user_id, level, verified_on, method))
+
+    def has_security_seed(self) -> bool:
+        return bool(self._q("SELECT 1 FROM kyc LIMIT 1"))
+
+    def pin_record(self, user_id: str) -> Optional[Dict[str, Any]]:
+        rows = self._q("SELECT * FROM user_pins WHERE user_id=?", (user_id,))
+        return dict(rows[0]) if rows else None
+
+    def save_pin(self, user_id: str, salt: str, digest: str, iterations: int) -> None:
+        self._x("INSERT OR REPLACE INTO user_pins VALUES (?,?,?,?,0,0)", (user_id, salt, digest, iterations))
+
+    def set_pin_state(self, user_id: str, failures: int, locked_until: float) -> None:
+        self._x("UPDATE user_pins SET failures=?, locked_until=? WHERE user_id=?", (failures, locked_until, user_id))
 
     def credit_sponsor_topup(self, student: str, amount_minor: int, currency: str, memo: str) -> None:
         acc = self.find_account(student, currency)

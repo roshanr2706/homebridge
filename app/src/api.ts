@@ -20,6 +20,33 @@ const TOKENS: Record<Role, string> = {
   student: process.env.EXPO_PUBLIC_STUDENT_TOKEN ?? 'demo-student',
   sponsor: process.env.EXPO_PUBLIC_SPONSOR_TOKEN ?? 'demo-sponsor',
 };
+// Sent only to /demo/reset, and only when the server says demo mode is on. The server refuses a reset outside
+// demo mode whatever is sent. Not a secret in a demo build (see R11 in docs/security_self_assessment.md).
+const OPERATOR = process.env.EXPO_PUBLIC_OPERATOR_TOKEN ?? 'demo-operator';
+// Shown as a hint under the sponsor's PIN field in demo mode only; never prefilled.
+export const DEMO_PIN_HINT = process.env.EXPO_PUBLIC_DEMO_PIN ?? '246810';
+
+// One line per compliance check on an action card (backend/app/compliance.py).
+export type ComplianceCheck = {
+  id: string;
+  label: string;
+  status: 'pass' | 'flag' | 'block' | 'report' | 'na';
+  detail: string;
+};
+export type Compliance = {
+  outcome: 'clear' | 'review' | 'blocked';
+  blocked: boolean;
+  block_reason: string | null;
+  checks: ComplianceCheck[];
+  reports: string[];
+  record: Record<string, any> | null;
+  purpose_code: { code: string; label: string } | null;
+  cross_border: boolean;
+  amount_cad: number;
+};
+
+export type Kyc = { user_id: string; level: string; label: string; moves_money: boolean; max_single_cad: number; max_daily_cad: number };
+export type Sharing = { scope: string; summary: string; consented_at_onboarding: boolean };
 
 export type Action = {
   action_id: string;
@@ -44,6 +71,7 @@ export type Action = {
   provenance?: Record<string, string>;
   // Why it can't be confirmed or approved right now (payments are locked), or null.
   frozen?: string | null;
+  compliance?: Compliance;
 };
 
 // Who locked each kind of money: the sponsor's own funds, and the student's own money.
@@ -63,12 +91,16 @@ export type Digest = {
   awaiting_sponsor: number;
   stopped: number;
   money_out_cad: number;
+  // 'sponsor_funded' in the sponsor's view: only money out of the accounts they fund.
+  money_out_scope?: 'sponsor_funded' | 'all';
   flagged: { action_id: string; summary: string; risk_score: number; status: string }[];
   alerts: number;
   frozen: boolean;
 };
 
+// Data minimisation: only the accounts the sponsor funds and the requests sent to them.
 export type SponsorOverview = {
+  student: { id: string; name: string };
   accounts: Account[];
   total_cad: number;
   limits: Record<string, number>;
@@ -76,6 +108,9 @@ export type SponsorOverview = {
   freeze: FreezeState;
   alerts: Alert[];
   digest: Digest;
+  kyc: { student: Kyc; sponsor: Kyc; limit_ceiling: { single_cad: number; daily_cad: number } };
+  pin: { set: boolean; locked: boolean; failures: number };
+  sharing: Sharing;
 };
 
 export type Account = {
@@ -224,16 +259,24 @@ export type Overview = {
   credit?: CreditProfile;
   freeze: FreezeState;
   limits: { single_cad: number; daily_cad: number };
+  kyc?: Kyc;
+  sharing?: Sharing;
   rates: Record<string, number>;
 };
+
+// Ringgit is non-internationalised: in production the MYR wallet is a linked account at a Malaysian bank.
+export const accountNote = (a: { currency: string }) => (a.currency === 'MYR' ? 'MYR (linked Malaysian account)' : '');
 
 export type AuditEntry = { seq: number; ts: number; event: string; actor: string; data: Record<string, any>; prev: string; hash: string };
 export type Verify = { ok: boolean; count: number; head?: string; broken_at?: number; simulated_tamper_seq?: number };
 
-async function call<T>(role: Role, path: string, method = 'GET', body?: unknown): Promise<T> {
+export type AuditPage = { entries: AuditEntry[]; scope: Role; visible: number; total: number };
+export type Health = { ok: boolean; provider: string; demo_mode: boolean; today?: string };
+
+async function call<T>(role: Role, path: string, method = 'GET', body?: unknown, extra: Record<string, string> = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKENS[role]}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKENS[role]}`, ...extra },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
@@ -247,7 +290,7 @@ async function call<T>(role: Role, path: string, method = 'GET', body?: unknown)
 export const api = {
   base: BASE,
   unreachable: UNREACHABLE,
-  health: () => call<{ ok: boolean; provider: string; demo_mode: boolean }>('student', '/health'),
+  health: () => call<Health>('student', '/health'),
   // Each chat in the app has its own session id ("New chat" makes a fresh one), so a flag in one chat
   // does not follow the student into the next. Rate limits are per account on the server, not per chat.
   chat: (message: string, session_id: string) => call<ChatResponse>('student', '/chat', 'POST', { message, session_id }),
@@ -264,13 +307,19 @@ export const api = {
   freeze: () => call<{ freeze: FreezeState }>('student', '/freeze', 'POST'),
   unfreeze: () => call<{ freeze: FreezeState; note: string }>('student', '/unfreeze', 'POST'),
   sponsorFreeze: (scope: 'sponsor_funded' | 'all') => call<{ freeze: FreezeState }>('sponsor', '/sponsor/freeze', 'POST', { scope }),
-  sponsorUnfreeze: () => call<{ freeze: FreezeState }>('sponsor', '/sponsor/unfreeze', 'POST'),
-  approve: (id: string, note = '') => call<Action>('sponsor', `/sponsor/actions/${id}/approve`, 'POST', { note }),
+  // Unlocking, approving and changing limits need the sponsor's PIN, checked on the server.
+  sponsorUnfreeze: (pin: string) => call<{ freeze: FreezeState }>('sponsor', '/sponsor/unfreeze', 'POST', { pin }),
+  approve: (id: string, note: string, pin: string) => call<Action>('sponsor', `/sponsor/actions/${id}/approve`, 'POST', { note, pin }),
   reject: (id: string, note = '') => call<Action>('sponsor', `/sponsor/actions/${id}/reject`, 'POST', { note }),
-  setLimits: (single_cad: number, daily_cad: number) =>
-    call<{ limits: Record<string, number> }>('sponsor', '/sponsor/limits', 'POST', { single_cad, daily_cad }),
-  audit: (role: Role, since = 0) => call<{ entries: AuditEntry[] }>(role, `/audit?since=${since}`),
+  setLimits: (single_cad: number, daily_cad: number, pin: string) =>
+    call<{ limits: Record<string, number> }>('sponsor', '/sponsor/limits', 'POST', { single_cad, daily_cad, pin }),
+  audit: (role: Role, since = 0) => call<AuditPage>(role, `/audit?since=${since}`),
   auditVerify: (role: Role = 'sponsor', tamperSeq?: number) =>
     call<Verify>(role, `/audit/verify${tamperSeq === undefined ? '' : `?tamper_seq=${tamperSeq}`}`),
-  reset: () => call<{ ok: boolean }>('student', '/demo/reset', 'POST'),
+  // The operator header goes out only when the server says it is in demo mode.
+  reset: async () => {
+    const h = await call<Health>('student', '/health');
+    if (!h.demo_mode) throw new Error('Reset is only available in demo mode');
+    return call<{ ok: boolean }>('student', '/demo/reset', 'POST', undefined, { 'X-Operator': OPERATOR });
+  },
 };

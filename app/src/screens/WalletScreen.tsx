@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
-import { api, type ForecastCard, type Overview } from '../api';
+import { accountNote, api, type ForecastCard, type Overview } from '../api';
 import { usePoll } from '../hooks';
 import { BudgetCard, CreditCard, RunwayCard, TuitionCard, creditCardFromProfile } from '../components/ResultCards';
 import { stepUp } from '../stepUp';
@@ -130,7 +130,10 @@ export function WalletScreen({ active }: { active: boolean }) {
                   <Body style={{ fontFamily: fonts.bodyBold }}>{a.label}</Body>
                   {a.sponsor_funded && <Pill label="FROM DAD" tone="gold" />}
                 </Row>
-                <Mono style={{ fontSize: 11, color: t.faint, marginTop: 2 }}>{a.number}</Mono>
+                <Mono style={{ fontSize: 11, color: t.faint, marginTop: 2 }}>
+                  {accountNote(a) ? `${accountNote(a)} · ` : ''}
+                  {a.number}
+                </Mono>
               </View>
               <Mono style={{ fontSize: 17, fontFamily: fonts.monoBold }}>{money(a.balance, a.currency)}</Mono>
             </Row>
