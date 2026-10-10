@@ -17,7 +17,7 @@ from . import credit
 from .audit import AuditLog
 from .bank import Bank, to_minor
 from .fx import FxMarket, FxUnavailable
-from .guard import check as guard_check
+from .guard import SCAM_SUSPICIOUS_CONFIDENCE, check as guard_check
 from .classifier import shared as shared_classifier
 from .policy import PendingAction, PolicyEngine, PolicyError
 
@@ -33,7 +33,8 @@ class ToolContext:
     audit: AuditLog
     today: date
     guard_flags: List[str] = field(default_factory=list)
-    earlier_flags: List[str] = field(default_factory=list)   # from earlier turns still in the model's context
+    earlier_flags: List[str] = field(default_factory=list)   # strong flags carried from recent earlier turns
+    strong_flags: List[str] = field(default_factory=list)    # this turn's flags that will carry to later turns
     untrusted_texts: List[str] = field(default_factory=list)
     created_actions: List[PendingAction] = field(default_factory=list)
 
@@ -343,15 +344,43 @@ def check_message_for_scam(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any
     ctx.untrusted_texts.append(text)
     g = guard_check(text)
     explain = shared_classifier().explain(text) if g.model.get("label") != "benign" else []
-    verdict = "likely_scam" if "scam" in g.flags else ("suspicious" if g.flags else "no_known_pattern")
+    scam_p = float((g.model.get("probs") or {}).get("scam", 0.0))
+    signals = [dict(s) for s in g.signals]
+    if g.sources.get("scam") == "model" or (not signals and scam_p >= SCAM_SUSPICIOUS_CONFIDENCE):
+        # No rule matched, but our classifier leans scam: say so, so the reply never reads "no scam signs".
+        signals.append({"category": "model", "name": f"Wording similar to known scams ({round(scam_p * 100)}%)"})
+    verdict = ("likely_scam" if "scam" in g.flags else
+               "suspicious" if g.flags or scam_p >= SCAM_SUSPICIOUS_CONFIDENCE else "no_known_pattern")
     tips = []
     if verdict != "no_known_pattern":
-        tips = ["Do not pay or share codes. Contact the organisation using a number from its official website.",
-                "Government agencies in Canada do not demand payment by gift card, crypto or wire under threat.",
-                "If you already paid, contact your bank right away and report it to the Canadian Anti-Fraud Centre."]
+        names = " ".join(s["name"] for s in signals)
+        tips = ["Do not pay or share codes. Contact the organisation using a number from its official website."]
+        if re.search(r"police|government|parcel|embassy|safe account|crime", names, re.IGNORECASE):
+            tips.append("Police, customs and embassies never ask you to move money to a 'safe account' or pay by "
+                        "phone. Hang up and call the official number yourself.")
+        elif re.search(r"friend|family|new number", names, re.IGNORECASE):
+            tips.append("Call the person on a number you already have before sending anything.")
+        elif re.search(r"job|cheque", names, re.IGNORECASE):
+            tips.append("Real employers never ask you to pay to start, or to send back part of a cheque.")
+        else:
+            tips.append("Government agencies in Canada do not demand payment by gift card, crypto or wire under threat.")
+        tips.append("If you already paid, contact your bank right away and report it to the Canadian Anti-Fraud Centre.")
     if "scam" in g.flags and "scam" not in ctx.guard_flags:
         ctx.guard_flags.append("scam")
-    return {"verdict": verdict, "signals": g.matches, "model": g.model, "model_keywords": explain, "advice": tips}
+    if "scam" in g.flags and g.strong("scam") and "scam" not in ctx.strong_flags:
+        ctx.strong_flags.append("scam")
+    return {"verdict": verdict, "signals": signals, "quote": g.quote if g.signals else "",
+            "explanation": _scam_explanation(signals, g.quote if g.signals else ""),
+            "model": g.model, "model_keywords": explain, "advice": tips}
+
+
+def _scam_explanation(signals: List[Dict[str, str]], quote: str) -> str:
+    """One readable line: the named warning signs, and at most one short quoted phrase."""
+    if not signals:
+        return ""
+    names = [s["name"][0].lower() + s["name"][1:] for s in signals[:3]]
+    line = "Warning signs: " + "; ".join(names)
+    return line + (f' ("{quote}")' if quote else "") + "."
 
 
 @tool("get_pending_actions", "Drafted payments, conversions, payee requests and sponsor requests, with status.", {})
