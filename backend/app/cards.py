@@ -67,7 +67,10 @@ def _scam(args: Dict[str, Any], r: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if "verdict" not in r:
         return None
     model = r.get("model") or {}
-    return {"type": "scam_check", "verdict": r["verdict"], "signals": r.get("signals", {}),
+    # Named warning signs ("Asks for gift cards") and at most one short quoted phrase, never raw rule matches.
+    return {"type": "scam_check", "verdict": r["verdict"],
+            "signals": [{"category": s.get("category", ""), "name": s.get("name", "")} for s in r.get("signals", [])],
+            "quote": r.get("quote") or "",
             "model_label": model.get("label"), "model_confidence": model.get("confidence"),
             "model_keywords": r.get("model_keywords", []), "advice": r.get("advice", [])}
 

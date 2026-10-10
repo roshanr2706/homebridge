@@ -187,17 +187,16 @@ class OfflineEngine:
 
         # 1. Scam check of a pasted or quoted message
         if re.search(r"scam|is this (real|legit)|legit ke|real or not|should i pay this", low) or (
-                len(text) > 120 and "scam" in note.lower()):
+                "scam" in note.lower()):
             if "check_message_for_scam" not in done:
                 return _call("check_message_for_scam", text=text)
             r = last
             if r["verdict"] == "no_known_pattern":
                 return _say("I don't see common scam signs in that message. It still makes sense to check it "
                             "against the organisation's official website or app before paying anything.")
-            signs = sorted({s for v in r["signals"].values() for s in v}, key=len)[:3]
-            lead = "This looks like a scam" if r["verdict"] == "likely_scam" else "This looks suspicious"
-            why = (": it mentions " + ", ".join(f"'{s}'" for s in signs)) if signs else ""
-            return _say(f"{lead}{why}. Don't pay or share any codes, and contact the organisation through its "
+            lead = "This looks like a scam" if r["verdict"] == "likely_scam" else "This has some warning signs"
+            why = f" {r['explanation']}" if r.get("explanation") else ""
+            return _say(f"{lead}.{why} Don't pay or share any codes, and contact the organisation through its "
                         "official website instead. I won't set up any payment for it.")
 
         # 2. Anything the guard flagged as manipulation gets a refusal, no tools
@@ -552,9 +551,9 @@ class OfflineEngine:
                     "internal instructions, confirmation codes or anyone else's information. If you need your full "
                     "account number for a form, it's in your bank's official app.")
         if "escalation" in note:
-            return ("I can't do that from chat. Approvals, limits and roles come from each person's own login: "
-                    "payments are confirmed by you in the app, sponsor approvals happen in your sponsor's app, and "
-                    "only your sponsor can change limits.")
+            return ("I can't do that from chat, and I can't approve anything. Approvals, limits and roles come from "
+                    "each person's own login: payments are confirmed by you in the app, only your sponsor can "
+                    "approve, from their own app, and only your sponsor can change limits.")
         if "scam" in note:
             return ("This has the hallmarks of a scam (pressure, threats or unusual payment methods), so I won't "
                     "set up that payment. If you're unsure, contact the organisation using contact details from its "

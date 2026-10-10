@@ -352,6 +352,13 @@ class PolicyEngine:
         if history and amount > 3 * max(history):
             risk += 25
             reasons.append("Much larger than past payments to this payee")
+        elif history:
+            # A smaller jump still matters when the new amount came from a message ("rent is now 1,480").
+            usual = sorted(history)[len(history) // 2]
+            if amount > 1.2 * usual and amount - usual >= 20:
+                risk += 20
+                reasons.append(f"Usually {currency} {usual:,.2f} to this payee; this is "
+                               f"{round(100 * (amount - usual) / usual)}% more")
         if any(v == "untrusted" for v in provenance.values()):
             risk += 30
             reasons.append("Payment details came from content the user did not type (e.g. a pasted message)")

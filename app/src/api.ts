@@ -166,7 +166,8 @@ export type Card =
   | {
       type: 'scam_check';
       verdict: 'likely_scam' | 'suspicious' | 'no_known_pattern';
-      signals: Record<string, string[]>;
+      signals: { category: string; name: string }[];
+      quote?: string;
       model_label?: string;
       model_confidence?: number;
       model_keywords: string[];
@@ -204,7 +205,9 @@ export type ChatResponse = {
   reply: string;
   actions: Action[];
   cards: Card[];
-  guard: { flags: string[] };
+  // flags: this message; carried: flags from earlier turns that applied to it; session_flags: what the chat
+  // carries into its next turn (strong flags from the last few turns).
+  guard: { flags: string[]; carried?: string[]; session_flags?: string[] };
   trace: { tool: string; ok: boolean; ms: number }[];
   provider: string;
   fallback: boolean;
@@ -245,7 +248,10 @@ export const api = {
   base: BASE,
   unreachable: UNREACHABLE,
   health: () => call<{ ok: boolean; provider: string; demo_mode: boolean }>('student', '/health'),
-  chat: (message: string, session_id = 'app') => call<ChatResponse>('student', '/chat', 'POST', { message, session_id }),
+  // Each chat in the app has its own session id ("New chat" makes a fresh one), so a flag in one chat
+  // does not follow the student into the next. Rate limits are per account on the server, not per chat.
+  chat: (message: string, session_id: string) => call<ChatResponse>('student', '/chat', 'POST', { message, session_id }),
+  newSessionId: () => `c-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
   overview: () => call<Overview>('student', '/overview'),
   forecast: () => call<ForecastCard>('student', '/forecast'),
   accounts: () => call<{ accounts: Account[] }>('student', '/accounts'),

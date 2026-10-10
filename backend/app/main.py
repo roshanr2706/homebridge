@@ -37,7 +37,8 @@ CHATS_PER_MINUTE = int(os.getenv("HB_CHATS_PER_MINUTE", "30"))
 
 class ChatIn(BaseModel):
     message: str = Field(..., max_length=4000)
-    session_id: str = Field("default", max_length=64)
+    # The app makes a fresh id for each "New chat". Rate limits are keyed by the account owner, not this id.
+    session_id: str = Field("default", max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
 
 
 class ConfirmIn(BaseModel):
