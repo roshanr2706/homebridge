@@ -1,0 +1,548 @@
+{
+ "entries": [
+  {
+   "seq": 0,
+   "ts": 1791651303.957,
+   "event": "user_message",
+   "actor": "aisha",
+   "data": {
+    "session": "aisha:fixture-0",
+    "chars": 25,
+    "guard": []
+   },
+   "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+   "hash": "78ba429da93a348620355c05803fcab871321992e281e000bb3bf3614de9bdc5"
+  },
+  {
+   "seq": 1,
+   "ts": 1791651303.967,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "get_balances",
+    "tier": "T0",
+    "args": {
+     "total_currency": "CAD"
+    },
+    "ok": true
+   },
+   "prev": "78ba429da93a348620355c05803fcab871321992e281e000bb3bf3614de9bdc5",
+   "hash": "fdd480e7b4810c9784add6eda14501265396720ac388cbd0cb3c7e7ab454a7fe"
+  },
+  {
+   "seq": 2,
+   "ts": 1791651303.968,
+   "event": "assistant_reply",
+   "actor": "agent",
+   "data": {
+    "session": "aisha:fixture-0",
+    "tools": [
+     "get_balances"
+    ],
+    "actions": [],
+    "fallback": false
+   },
+   "prev": "fdd480e7b4810c9784add6eda14501265396720ac388cbd0cb3c7e7ab454a7fe",
+   "hash": "1e7266b4547b91ab2ac0063ff5647b1009676c01e3fce7f15c44de7d74bcbff2"
+  },
+  {
+   "seq": 3,
+   "ts": 1791651303.979,
+   "event": "user_message",
+   "actor": "aisha",
+   "data": {
+    "session": "aisha:fixture-1",
+    "chars": 40,
+    "guard": []
+   },
+   "prev": "1e7266b4547b91ab2ac0063ff5647b1009676c01e3fce7f15c44de7d74bcbff2",
+   "hash": "9577217f6c5d819c6ad409dabace6010c2cc50ff2d08a59512a8b8b55b22a5a6"
+  },
+  {
+   "seq": 4,
+   "ts": 1791651303.981,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "get_fx_quotes",
+    "tier": "T0",
+    "args": {
+     "from_currency": "MYR",
+     "to_currency": "CAD",
+     "amount": 5000.0,
+     "own_wallet": true
+    },
+    "ok": true
+   },
+   "prev": "9577217f6c5d819c6ad409dabace6010c2cc50ff2d08a59512a8b8b55b22a5a6",
+   "hash": "1275ae3a930909248b438b9bee0243f87dbfc63011f88b12f871080bd0e6b765"
+  },
+  {
+   "seq": 5,
+   "ts": 1791651303.984,
+   "event": "assistant_reply",
+   "actor": "agent",
+   "data": {
+    "session": "aisha:fixture-1",
+    "tools": [
+     "get_fx_quotes"
+    ],
+    "actions": [],
+    "fallback": false
+   },
+   "prev": "1275ae3a930909248b438b9bee0243f87dbfc63011f88b12f871080bd0e6b765",
+   "hash": "8d04f85c41c6b6575ee368a739e1fb76273a6ad50f810f1c7f3bcf5d9fcabaf0"
+  },
+  {
+   "seq": 6,
+   "ts": 1791651303.994,
+   "event": "user_message",
+   "actor": "aisha",
+   "data": {
+    "session": "aisha:fixture-2",
+    "chars": 46,
+    "guard": []
+   },
+   "prev": "8d04f85c41c6b6575ee368a739e1fb76273a6ad50f810f1c7f3bcf5d9fcabaf0",
+   "hash": "b3df3a139a449e60c35ea9668fa1a525ce05310f0e9fab56412cf99d16849800"
+  },
+  {
+   "seq": 7,
+   "ts": 1791651303.996,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "forecast_cashflow",
+    "tier": "T0",
+    "args": {},
+    "ok": true
+   },
+   "prev": "b3df3a139a449e60c35ea9668fa1a525ce05310f0e9fab56412cf99d16849800",
+   "hash": "826cb71786892312612bc394b26ff5484a28681315aab91bb9d08a91ba95ae06"
+  },
+  {
+   "seq": 8,
+   "ts": 1791651304.008,
+   "event": "assistant_reply",
+   "actor": "agent",
+   "data": {
+    "session": "aisha:fixture-2",
+    "tools": [
+     "forecast_cashflow"
+    ],
+    "actions": [],
+    "fallback": false
+   },
+   "prev": "826cb71786892312612bc394b26ff5484a28681315aab91bb9d08a91ba95ae06",
+   "hash": "da0127eec910d27d9a4ba2ef78c15816a059d46ec517026eb37b29d2e793308b"
+  },
+  {
+   "seq": 9,
+   "ts": 1791651304.02,
+   "event": "user_message",
+   "actor": "aisha",
+   "data": {
+    "session": "aisha:fixture-3",
+    "chars": 16,
+    "guard": []
+   },
+   "prev": "da0127eec910d27d9a4ba2ef78c15816a059d46ec517026eb37b29d2e793308b",
+   "hash": "333eb7600b511236ddb2bbd24fe387df00c15338b34d6ca03011c204c27d61ed"
+  },
+  {
+   "seq": 10,
+   "ts": 1791651304.021,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "get_credit_profile",
+    "tier": "T0",
+    "args": {},
+    "ok": true
+   },
+   "prev": "333eb7600b511236ddb2bbd24fe387df00c15338b34d6ca03011c204c27d61ed",
+   "hash": "4c5e4dac8c2b5f4a9b9040cb403136d985c860e707d23c1e4051d3d89236a2e3"
+  },
+  {
+   "seq": 11,
+   "ts": 1791651304.029,
+   "event": "assistant_reply",
+   "actor": "agent",
+   "data": {
+    "session": "aisha:fixture-3",
+    "tools": [
+     "get_credit_profile"
+    ],
+    "actions": [],
+    "fallback": false
+   },
+   "prev": "4c5e4dac8c2b5f4a9b9040cb403136d985c860e707d23c1e4051d3d89236a2e3",
+   "hash": "40ca7a761b17371f233824c0eb33744b8f2e51e97258442df0d2f06f49729806"
+  },
+  {
+   "seq": 12,
+   "ts": 1791651304.04,
+   "event": "user_message",
+   "actor": "aisha",
+   "data": {
+    "session": "aisha:fixture-4",
+    "chars": 23,
+    "guard": []
+   },
+   "prev": "40ca7a761b17371f233824c0eb33744b8f2e51e97258442df0d2f06f49729806",
+   "hash": "a74fbfb119b8f1957059809dc50385bff482f554e9b0e2fa9e71beae846cfc8d"
+  },
+  {
+   "seq": 13,
+   "ts": 1791651304.042,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "list_transactions",
+    "tier": "T0",
+    "args": {
+     "category": "rent",
+     "days": 60,
+     "limit": 1
+    },
+    "ok": true
+   },
+   "prev": "a74fbfb119b8f1957059809dc50385bff482f554e9b0e2fa9e71beae846cfc8d",
+   "hash": "af0e32e5a98a90bdd670f915d047821eba99a3f1baced9e2b9787aade1fa951c"
+  },
+  {
+   "seq": 14,
+   "ts": 1791651304.043,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "get_balances",
+    "tier": "T0",
+    "args": {
+     "total_currency": "CAD"
+    },
+    "ok": true
+   },
+   "prev": "af0e32e5a98a90bdd670f915d047821eba99a3f1baced9e2b9787aade1fa951c",
+   "hash": "3f77c272648c889185b301a8feb685311eb9031fca598502d997a153f4861d0b"
+  },
+  {
+   "seq": 15,
+   "ts": 1791651304.046,
+   "event": "action_drafted",
+   "actor": "aisha",
+   "data": {
+    "action_id": "act_cebc5a3bca",
+    "kind": "transfer",
+    "params": {
+     "payee_id": "py_rent",
+     "payee_name": "Maple Court Rentals",
+     "amount": 1150.0,
+     "currency": "CAD",
+     "from_account_id": "acc_cad",
+     "from_account": "CAD Everyday",
+     "memo": ""
+    },
+    "tier": "T2",
+    "risk": 0,
+    "reasons": [],
+    "provenance": {
+     "amount": "user"
+    }
+   },
+   "prev": "3f77c272648c889185b301a8feb685311eb9031fca598502d997a153f4861d0b",
+   "hash": "9b582a624c63809fc3997ecaeaba40896fc5e3af3602b0c11f52f2cc824d6f8e"
+  },
+  {
+   "seq": 16,
+   "ts": 1791651304.046,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "prepare_transfer",
+    "tier": "T2/T3",
+    "args": {
+     "payee": "rent",
+     "amount": 1150.0
+    },
+    "ok": true
+   },
+   "prev": "9b582a624c63809fc3997ecaeaba40896fc5e3af3602b0c11f52f2cc824d6f8e",
+   "hash": "1944f6a22841137a9219a560d81e9467300618e7e00f8d97c9d6820e0fe14e88"
+  },
+  {
+   "seq": 17,
+   "ts": 1791651304.048,
+   "event": "assistant_reply",
+   "actor": "agent",
+   "data": {
+    "session": "aisha:fixture-4",
+    "tools": [
+     "list_transactions",
+     "get_balances",
+     "prepare_transfer"
+    ],
+    "actions": [
+     "act_cebc5a3bca"
+    ],
+    "fallback": false
+   },
+   "prev": "1944f6a22841137a9219a560d81e9467300618e7e00f8d97c9d6820e0fe14e88",
+   "hash": "feda341a24dcf85c2e75c414099a6df935d2aed0cba0bea24043229538c02ca6"
+  },
+  {
+   "seq": 18,
+   "ts": 1791651304.059,
+   "event": "user_message",
+   "actor": "aisha",
+   "data": {
+    "session": "aisha:fixture-5",
+    "chars": 21,
+    "guard": []
+   },
+   "prev": "feda341a24dcf85c2e75c414099a6df935d2aed0cba0bea24043229538c02ca6",
+   "hash": "605b34c11353a0d293d5bc8dff7a86b41a1f3e12c014b62cc55a00287166694a"
+  },
+  {
+   "seq": 19,
+   "ts": 1791651304.06,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "get_tuition_schedule",
+    "tier": "T0",
+    "args": {},
+    "ok": true
+   },
+   "prev": "605b34c11353a0d293d5bc8dff7a86b41a1f3e12c014b62cc55a00287166694a",
+   "hash": "73ab211d82e6bcef2f6ff66aa90de4440d16d3c817a463af85c01ae47bfb74e0"
+  },
+  {
+   "seq": 20,
+   "ts": 1791651304.062,
+   "event": "action_drafted",
+   "actor": "aisha",
+   "data": {
+    "action_id": "act_afe27b6a19",
+    "kind": "transfer",
+    "params": {
+     "payee_id": "py_ubc",
+     "payee_name": "UBC Student Financial Services",
+     "amount": 7250.0,
+     "currency": "CAD",
+     "from_account_id": "acc_tui",
+     "from_account": "CAD Tuition Fund",
+     "memo": "Winter Term 2, installment 1"
+    },
+    "tier": "T3",
+    "risk": 0,
+    "reasons": [
+     "Amount above the single-payment limit of CAD 1,500",
+     "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+     "Paid from a sponsor-funded account (CAD Tuition Fund)"
+    ],
+    "provenance": {
+     "amount": "user"
+    }
+   },
+   "prev": "73ab211d82e6bcef2f6ff66aa90de4440d16d3c817a463af85c01ae47bfb74e0",
+   "hash": "6a8d225ec45f91cca3270fe196450e09a65115c4467456c608644f5d4f9af692"
+  },
+  {
+   "seq": 21,
+   "ts": 1791651304.062,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "prepare_transfer",
+    "tier": "T2/T3",
+    "args": {
+     "payee": "UBC Student Financial Services",
+     "amount": 7250.0,
+     "memo": "Winter Term 2, installment 1"
+    },
+    "ok": true
+   },
+   "prev": "6a8d225ec45f91cca3270fe196450e09a65115c4467456c608644f5d4f9af692",
+   "hash": "bdd6f9a959d62a294086586406a21af83095f33def495dd5c425653c5ba4226a"
+  },
+  {
+   "seq": 22,
+   "ts": 1791651304.064,
+   "event": "assistant_reply",
+   "actor": "agent",
+   "data": {
+    "session": "aisha:fixture-5",
+    "tools": [
+     "get_tuition_schedule",
+     "prepare_transfer"
+    ],
+    "actions": [
+     "act_afe27b6a19"
+    ],
+    "fallback": false
+   },
+   "prev": "bdd6f9a959d62a294086586406a21af83095f33def495dd5c425653c5ba4226a",
+   "hash": "e0e733952ff64f6224a708adb48c2ad7714d65bd657d2f23a4296d24d5683ad9"
+  },
+  {
+   "seq": 23,
+   "ts": 1791651304.079,
+   "event": "user_message",
+   "actor": "aisha",
+   "data": {
+    "session": "aisha:fixture-6",
+    "chars": 87,
+    "guard": [
+     "scam"
+    ]
+   },
+   "prev": "e0e733952ff64f6224a708adb48c2ad7714d65bd657d2f23a4296d24d5683ad9",
+   "hash": "feb92eced34c3fbf4d584a5f6591ef03a0ed48422035cdd16a0d9dcb432f2dc4"
+  },
+  {
+   "seq": 24,
+   "ts": 1791651304.093,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "check_message_for_scam",
+    "tier": "T0",
+    "args": {
+     "text": "<87 chars>"
+    },
+    "ok": true
+   },
+   "prev": "feb92eced34c3fbf4d584a5f6591ef03a0ed48422035cdd16a0d9dcb432f2dc4",
+   "hash": "40905008d41e6b3954cbd8275d4ae24659449d4113ea4656cecd4abdce858dbd"
+  },
+  {
+   "seq": 25,
+   "ts": 1791651304.094,
+   "event": "assistant_reply",
+   "actor": "agent",
+   "data": {
+    "session": "aisha:fixture-6",
+    "tools": [
+     "check_message_for_scam"
+    ],
+    "actions": [],
+    "fallback": false
+   },
+   "prev": "40905008d41e6b3954cbd8275d4ae24659449d4113ea4656cecd4abdce858dbd",
+   "hash": "614b89aa8e76ecd6387f9001b24eff28f1c4dfb1296b3489818fbf4516d0da26"
+  },
+  {
+   "seq": 26,
+   "ts": 1791651304.106,
+   "event": "user_message",
+   "actor": "aisha",
+   "data": {
+    "session": "aisha:fixture-7",
+    "chars": 11,
+    "guard": []
+   },
+   "prev": "614b89aa8e76ecd6387f9001b24eff28f1c4dfb1296b3489818fbf4516d0da26",
+   "hash": "94f629a2942035c0a79014a7564e69cd5148ce916d4ea83d966f77028676bbc3"
+  },
+  {
+   "seq": 27,
+   "ts": 1791651304.108,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "forecast_cashflow",
+    "tier": "T0",
+    "args": {
+     "until": "end_of_term"
+    },
+    "ok": true
+   },
+   "prev": "94f629a2942035c0a79014a7564e69cd5148ce916d4ea83d966f77028676bbc3",
+   "hash": "c056f3077c944dd1aacddd7224eb42ddf37fd32859054da68d6afd63166092a6"
+  },
+  {
+   "seq": 28,
+   "ts": 1791651304.123,
+   "event": "assistant_reply",
+   "actor": "agent",
+   "data": {
+    "session": "aisha:fixture-7",
+    "tools": [
+     "forecast_cashflow"
+    ],
+    "actions": [],
+    "fallback": false
+   },
+   "prev": "c056f3077c944dd1aacddd7224eb42ddf37fd32859054da68d6afd63166092a6",
+   "hash": "0a6034642d8924decaeff402f8570a37db5f0178f555dffd2cd5382f58df3f05"
+  },
+  {
+   "seq": 29,
+   "ts": 1791651304.132,
+   "event": "user_message",
+   "actor": "aisha",
+   "data": {
+    "session": "aisha:fixture-tx",
+    "chars": 27,
+    "guard": []
+   },
+   "prev": "0a6034642d8924decaeff402f8570a37db5f0178f555dffd2cd5382f58df3f05",
+   "hash": "53d5b16d7262d442a5898cf577e55f39b4b8d3e3430135ccc3b48a6b8479c4d7"
+  },
+  {
+   "seq": 30,
+   "ts": 1791651304.133,
+   "event": "tool_call",
+   "actor": "aisha",
+   "data": {
+    "tool": "list_transactions",
+    "tier": "T0",
+    "args": {
+     "limit": 10
+    },
+    "ok": true
+   },
+   "prev": "53d5b16d7262d442a5898cf577e55f39b4b8d3e3430135ccc3b48a6b8479c4d7",
+   "hash": "c6300c4c9a93feae8f4cd82ad10afb72cfeb0d0e8b2cad4e3ac56fa48111bf8f"
+  },
+  {
+   "seq": 31,
+   "ts": 1791651304.134,
+   "event": "assistant_reply",
+   "actor": "agent",
+   "data": {
+    "session": "aisha:fixture-tx",
+    "tools": [
+     "list_transactions"
+    ],
+    "actions": [],
+    "fallback": false
+   },
+   "prev": "c6300c4c9a93feae8f4cd82ad10afb72cfeb0d0e8b2cad4e3ac56fa48111bf8f",
+   "hash": "027679c498e7578d7a4b0288457bf40777fd9263eb0584f5508ab6ac0db3fe40"
+  },
+  {
+   "seq": 32,
+   "ts": 1791651304.142,
+   "event": "action_confirmed",
+   "actor": "aisha",
+   "data": {
+    "action_id": "act_afe27b6a19"
+   },
+   "prev": "027679c498e7578d7a4b0288457bf40777fd9263eb0584f5508ab6ac0db3fe40",
+   "hash": "cb3a5b9e22db11af89d91e8176661f670837a3a0f1a2cdd9702747432d9b9215"
+  },
+  {
+   "seq": 33,
+   "ts": 1791651304.142,
+   "event": "sponsor_approval_requested",
+   "actor": "system",
+   "data": {
+    "action_id": "act_afe27b6a19"
+   },
+   "prev": "cb3a5b9e22db11af89d91e8176661f670837a3a0f1a2cdd9702747432d9b9215",
+   "hash": "97fd5930e75ee7a54250501cfd4599e5e6cb05a8ccb0142308e369fc85f61c82"
+  }
+ ]
+}
