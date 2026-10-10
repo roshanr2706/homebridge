@@ -60,6 +60,11 @@ INTENT_WORDS = [
     (r"预算|bajet", "budget"),
     (r"爸爸|父亲|ayah|bapa", "dad"),
     (r"问.{0,6}要|minta", "ask"),
+    # Credit Builder
+    (r"信用卡|kad kredit", "credit card"),
+    (r"还(信用卡|卡|款)|还清", "pay"),
+    (r"建立|积累|bina", "build"),
+    (r"提高|提升|改善|naikkan|tingkatkan|baiki", "improve"),
 ]
 
 
@@ -204,6 +209,12 @@ class OfflineEngine:
                         "to send it to your dad." + (" I can't pay them until then." if re.search(r"pay", low)
                                                      else ""))
 
+        # 6c. Credit Builder: profile, building advice, paying the secured card
+        if re.search(r"\bcredit\b|secured card|credit score|\bkredit\b", low) or (
+                re.search(r"\b(pay|bayar)\b", low) and re.search(r"\bmy card\b|\bthe card\b", low)):
+            if not re.search(r"gift ?cards?|compass card", low):
+                return self._credit(text, low, res, done)
+
         # 7a. Cover a tuition shortfall from the MYR wallet (and optionally pay it)
         if re.search(r"tuition|yuran", low) and not low.rstrip().endswith("?") and re.search(
                 r"(cover|top ?up|fill)\s+(up\s+)?(the |my )?(tuition )?(shortfall|gap|fund)", low):
@@ -341,12 +352,6 @@ class OfflineEngine:
                 msg += " Possible duplicate charge from " + ", ".join(b["possible_duplicate_charges"]) + "; worth checking."
             return _say(msg)
 
-        if re.search(r"credit|secured card|credit score", low):
-            if "credit_building_plan" not in done:
-                return _call("credit_building_plan", has_credit_card=False, has_sin=True)
-            return _say("Here's how to build credit from scratch: " + " ".join(
-                f"({i + 1}) {s}" for i, s in enumerate(last["steps"][:5])) + " " + last["disclosure"])
-
         if re.search(r"payees?\b|who can i pay", low):
             if "list_payees" not in done:
                 return _call("list_payees")
@@ -371,6 +376,80 @@ class OfflineEngine:
 
         return _say("I can help with balances, spending, tuition, exchange rates, payments, credit building and "
                     "checking suspicious messages. What would you like to do?")
+
+    # --------------------------------------------------------------- credit
+    def _credit(self, text: str, low: str, res, done) -> Dict[str, Any]:
+        last = res[-1][1] if res else {}
+        pay = re.search(r"\b(pay|paying|bayar)\b|pay ?(it )?(off|down)|clear (my|the) (credit )?card", low)
+        if pay:
+            if "prepare_card_payment" not in done:
+                if re.search(r"30\s*%|30 ?percent|under 30|below 30|bawah 30", low):
+                    return _call("prepare_card_payment", target="under_30")
+                if re.search(r"10\s*%|10 ?percent|under 10|below 10", low):
+                    return _call("prepare_card_payment", target="under_10")
+                if re.search(r"minimum|\bmin\b", low):
+                    return _call("prepare_card_payment", target="minimum")
+                if re.search(r"statement", low):
+                    return _call("prepare_card_payment", target="statement_balance")
+                if re.search(r"\boff\b|\bfull\b|whole|entire|everything|all of it|clear|还清", low):
+                    return _call("prepare_card_payment", target="full_balance")
+                amt = _amount(text)
+                if amt is not None:
+                    return _call("prepare_card_payment", amount=amt)
+                return _call("prepare_card_payment", target="recommended")
+            if last.get("nothing_to_pay"):
+                return _say(f"{last['note'][0].upper()}{last['note'][1:]} Your card is at {last['utilization_pct']}% "
+                            "of its limit.")
+            after = last["card_after"]
+            msg = _action_text(last["action"])
+            msg += (f" Once it goes through, your card balance drops to CAD {after['balance']:,.2f}, "
+                    f"{after['utilization_pct']}% of your limit")
+            if after["utilization_pct"] < 30:
+                msg += f", under the 30% mark before your statement closes on {last['next_statement_date']}."
+            else:
+                msg += (f". That is still above 30%; paying a bit more before {last['next_statement_date']} "
+                        "would help your utilization.")
+            if last.get("target") == "minimum":
+                msg += " The minimum keeps your on-time record, but interest is charged on the rest of the statement."
+            return _say(msg)
+
+        if "get_credit_profile" not in done:
+            return _call("get_credit_profile")
+        prof = res[0][1]
+        build = re.search(r"\bbuild|start|establish|from scratch|nothing|no (credit )?history|secured card|"
+                          r"get a (credit )?card|new to canada", low)
+        if build and "credit_building_plan" not in done:
+            return _call("credit_building_plan", has_credit_card=bool(prof.get("has_card")), has_sin=True)
+        if not prof.get("has_card"):
+            return _say("Here's how to build credit from scratch: " + " ".join(
+                f"({i + 1}) {s}" for i, s in enumerate(last["steps"][:5])) + " " + last["disclosure"])
+        c, st = prof["card"], prof.get("statement") or {}
+        rec = prof["recommended_payment"]
+        if build:
+            msg = (f"You already have the usual first step: your {c['label']}, a secured card with a CAD "
+                   f"{c['credit_limit']:,.0f} limit backed by your deposit, reporting to the bureaus. You've paid "
+                   f"{prof['on_time_streak']} statements on time over {prof['months_of_history']} months. "
+                   "From here: " + " ".join(f"({i + 1}) {s}" for i, s in enumerate(last["steps"][:3])))
+            if prof["utilization_pct"] >= 30:
+                msg += (f" Right now you're at {prof['utilization_pct']}% of your limit, so paying CAD "
+                        f"{rec['amount']:,.2f} would bring you to {rec['utilization_after_pct']}%.")
+            return _say(msg + " " + last["disclosure"])
+        msg = (f"Your {c['label']} is at {prof['utilization_pct']}% utilization (CAD {c['balance']:,.2f} of "
+               f"CAD {c['credit_limit']:,.0f}); your last statement reported {prof['utilization_reported_pct']}%. "
+               f"You've paid {prof['on_time_streak']} statements on time in a row.")
+        if st.get("status") == "due" and st.get("remaining"):
+            msg += (f" Your CAD {st['remaining']:,.2f} statement is due {st['due_date']} (minimum CAD "
+                    f"{st['minimum_due']:,.2f}).")
+        if rec["amount"] > 0:
+            msg += (f" Paying CAD {rec['amount']:,.2f} now covers it and keeps what's reported under 30% "
+                    f"({rec['utilization_after_pct']}%) when the statement closes on {prof['next_statement_date']}. "
+                    "Say 'pay my card' and I'll draft it.")
+        else:
+            msg += " Keep the balance under 30% of the limit when the statement closes, and keep paying on time."
+        msg += (f" Simulated credit health: {prof['credit_health']['label']}. This is not a credit score; "
+                "it's general information from your sandbox card, not personalised advice, and HomeBridge is not "
+                "a licensed adviser.")
+        return _say(msg)
 
     # --------------------------------------------------------------- helpers
     @staticmethod
