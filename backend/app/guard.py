@@ -6,6 +6,8 @@ as a system note so it can warn the user.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -25,6 +27,12 @@ RULES: Dict[str, List[str]] = {
         r"(disable|bypass|skip|turn off) (all )?(the )?(safety|security|confirmation|sponsor|approval|checks?)",
         r"(call|hit|use) the confirm(ation)? (endpoint|api)",
         r"pre-?authori[sz]ed",
+        # Instructions addressed to the assistant inside pasted content (an email signature, a bill)
+        r"(note|message|instructions?|reminder) (to|for) (the |any )?(ai|assistant|bot|chatbot|model|llm|agent)\b",
+        r"\bmark (it|this|that|them|the (payment|transfer|action)s?) (as )?(confirmed|approved|paid|authori[sz]ed)",
+        r"treat .{0,40} as (an? )?(system|admin|developer|sponsor) (commands?|instructions?|messages?)",
+        r"\bdecode (this|the following|it|that)\b.{0,40}\b(do|follow|run|execute|obey)\b",
+        r"(sponsor approval|confirmations?|safety checks?|the limits?) (is|are) (now )?(off|disabled|turned off|not needed)",
         # Chinese / Malay
         r"(忽略|无视|忘记)(之前|以上|上面|所有|你的)?的?(所有)?(指令|规则|说明|设定)",
         r"(开发者|管理员|无限制)模式",
@@ -50,6 +58,13 @@ RULES: Dict[str, List[str]] = {
         r"\bas the (system )?administrator\b",
         r"(i already confirmed|i said yes|execute (it|all) (now|without))",
         r"split .* (under|below) the limit",
+        # Asking the agent to lift a freeze, or to pace payments so the alerts or the sponsor don't notice
+        r"\b(unfreez(e|ing)|unlock(ing)?|unblock(ing)?) (my|the|her|his|aisha'?s) (account|wallet|payments?|money|cards?|funds)\b",
+        r"\blift(ing)? the (freeze|lock)\b",
+        r"\b(dad|father|papa|ayah|sponsor|parent|mum|mom) (said|says) (it'?s )?(ok|okay|yes|fine|approved)\b",
+        r"\b(avoid|dodge|evade|get around|stay under|slip under|fly under) (the )?([\w-]+ ){0,3}(limits?|checks?|alerts?|radar|detection|sponsor|approval)\b",
+        r"\bso (it|this|that|they|nothing|dad|my dad|the sponsor) (doesn'?t|don'?t|won'?t|will not|does not) (get )?(trigger|flag|alert|notice|see)",
+        r"(解冻|解锁)(我的)?(账户|账号|钱包|付款)?",
         r"我是(她|他)?的?(爸爸|父亲|家长|管理员)",
         r"(提高|修改|调高)(我的)?(转账)?限额",
     ],
@@ -82,11 +97,38 @@ CONFUSABLES = str.maketrans("аеорсхуіјѕԁһӏАВЕКМНОРСТХІ�
                             "aeopcxyijsdhlABEKMHOPCTXIJSoaeikvptuxOABEZHIKMNPTYX")
 
 
+# Unicode "tag" characters (U+E0020 to U+E007E) are invisible but spell out ASCII, and some models read them
+# ("ASCII smuggling"). They are turned back into the letters they hide, so the rules see the instruction.
+TAGS = {0xE0000 + i: chr(i) for i in range(0x20, 0x7F)}
+BASE64_TOKEN = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
+
+
 def normalize(text: str) -> str:
-    """Fold text before matching: fullwidth forms (NFKC), invisible format characters, lookalike letters."""
-    text = unicodedata.normalize("NFKC", text or "")
+    """Fold text before matching: tag characters decoded, fullwidth forms (NFKC), invisible format
+    characters removed, lookalike letters mapped."""
+    text = (text or "").translate(TAGS)
+    text = unicodedata.normalize("NFKC", text)
     text = "".join(c for c in text if unicodedata.category(c) != "Cf")
     return text.translate(CONFUSABLES)
+
+
+def decoded_payloads(text: str) -> list:
+    """Readable text hidden in base64 tokens, so "decode this and do what it says" is checked as well."""
+    out = []
+    for tok in BASE64_TOKEN.findall(text or "")[:5]:
+        try:
+            raw = base64.b64decode(tok + "=" * (-len(tok) % 4), validate=True).decode("utf-8")
+        except (binascii.Error, ValueError):
+            continue
+        if raw and sum(c.isprintable() for c in raw) / len(raw) > 0.95 and re.search(r"[a-zA-Z]{3,}", raw):
+            out.append(raw)
+    return out
+
+
+def expand(text: str) -> str:
+    """normalize(), plus any decoded base64 payloads appended on their own lines."""
+    folded = normalize(text)
+    return "\n".join([folded] + [normalize(p) for p in decoded_payloads(folded)])
 
 
 @dataclass
@@ -115,7 +157,7 @@ def looks_pasted(text: str) -> bool:
 
 def check(text: str, use_model: bool = True) -> GuardResult:
     res = GuardResult(looks_pasted=looks_pasted(text))
-    folded = normalize(text)
+    folded = expand(text)
     for cat, patterns in COMPILED.items():
         hits = [m.group(0)[:40].strip() for p in patterns for m in [p.search(folded)] if m]
         if hits:
