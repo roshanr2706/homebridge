@@ -401,3 +401,254 @@ def add_payee(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
 def cancel_pending_action(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     act = ctx.policy.cancel(str(a["action_id"]), ctx.user_id)
     return {"action": act.for_model()}
+
+
+# ------------------------------------------------------------ T0 forecast
+# Cash-flow forecast ("runway"). Read-only: it projects balances from the recurring schedule, recent
+# spending, tuition due dates and pending drafts, and suggests what to do. It never drafts anything.
+from typing import Tuple  # noqa: E402
+
+from .fx import PROVIDERS  # noqa: E402
+from .seed import add_months  # noqa: E402
+
+CADENCE_DAYS = {"weekly": 7, "biweekly": 14}
+CADENCE_MONTHS = {"monthly": 1, "bimonthly": 2}
+MONTH_NAMES = ["january", "february", "march", "april", "may", "june", "july", "august", "september",
+               "october", "november", "december"]
+FORECAST_MAX_DAYS = 180
+LOW_BUFFER_CAD = 300.0   # a low point under this is called "tight"
+
+
+def _short_date(d: date) -> str:
+    return f"{d:%b} {d.day}"
+
+
+def _occurrences(item: Dict[str, Any], start: date, end: date) -> List[date]:
+    """Dates of a recurring item after `start`, up to and including `end`."""
+    anchor = date.fromisoformat(item["next_due"])
+    out: List[date] = []
+    for k in range(400):
+        if item["cadence"] in CADENCE_MONTHS:
+            d = add_months(anchor, k * CADENCE_MONTHS[item["cadence"]])
+        else:
+            d = anchor + timedelta(days=k * CADENCE_DAYS.get(item["cadence"], 30))
+        if d > end:
+            break
+        if d > start:
+            out.append(d)
+    return out
+
+
+def _forecast_end(today: date, until: str, days: Any, unpaid: List[Dict[str, Any]]) -> Tuple[date, str]:
+    if days not in (None, ""):
+        n = max(7, min(int(days), FORECAST_MAX_DAYS))
+        return today + timedelta(days=n), f"{n} days"
+    u = str(until or "next_tuition").strip().lower()
+    future = [date.fromisoformat(t["due"]) for t in unpaid if date.fromisoformat(t["due"]) > today]
+    short_months = [m[:3] for m in MONTH_NAMES]
+    if u in ("next_tuition", "tuition"):
+        end, why = (future[0], "next tuition due date") if future else (today + timedelta(days=90), "90 days")
+    elif u in ("end_of_term", "term_end", "end_of_semester", "last_tuition"):
+        end, why = (future[-1], "last scheduled tuition installment") if future else (
+            today + timedelta(days=120), "120 days")
+    elif u[:3] in short_months:
+        month = short_months.index(u[:3]) + 1
+        year = today.year + (month < today.month)
+        end = add_months(date(year, month, 1), 1) - timedelta(days=1)   # through the end of that month
+        why = f"end of {MONTH_NAMES[month - 1].title()}"
+    else:
+        end, why = date.fromisoformat(u[:10]), "chosen date"
+    end = max(today + timedelta(days=7), min(end, today + timedelta(days=FORECAST_MAX_DAYS)))
+    return end, why
+
+
+def _myr_to_receive(ctx: ToolContext, cad: float) -> List[Dict[str, Any]]:
+    """MYR each provider needs so that CAD `cad` arrives, cheapest first (inverts the true-cost maths in fx.py)."""
+    out = []
+    mid = ctx.fx.mid("MYR", "CAD")
+    for p in PROVIDERS:
+        rate = mid * (1 - p.spread_pct / 100)
+        myr = math.ceil((cad / rate + p.fee_fixed) / (1 - p.fee_pct / 100))
+        q = ctx.fx.quote("MYR", "CAD", myr, p)
+        out.append({"provider": p.name, "provider_key": p.key, "myr": float(myr), "you_receive": q["you_receive"],
+                    "true_cost_cad": q["true_cost"], "true_cost_pct": q["true_cost_pct"], "speed": p.speed})
+    return sorted(out, key=lambda x: x["myr"])
+
+
+@tool("forecast_cashflow",
+      "Forecast the student's CAD spending balance day by day: will the money last until tuition is due, the end "
+      "of term or a date? Uses the recurring schedule (pay, allowance, rent, bills), average day-to-day spending, "
+      "tuition due dates and pending drafts. Returns the low point, the first shortfall date, tuition gaps and "
+      "suggestions (cheapest conversion, spending cut). Read-only: it never drafts or moves money.",
+      {"until": {"type": "string", "description": "'next_tuition' (default), 'end_of_term' (through the last "
+                 "scheduled tuition installment), a month name such as 'january' (through its end), or a date "
+                 "YYYY-MM-DD"},
+       "days": {"type": "integer", "description": "Alternative to 'until': number of days ahead (7 to 180)"}})
+def forecast_cashflow(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
+    today, uid = ctx.today, ctx.user_id
+    unpaid = [t for t in ctx.bank.tuition(uid) if not t["paid"]]
+    end, horizon_why = _forecast_end(today, a.get("until") or "next_tuition", a.get("days"), unpaid)
+    n_days = (end - today).days
+
+    everyday = ctx.bank.find_account(uid, "CAD", "Everyday")
+    if not everyday:
+        return {"error": "No CAD spending account to forecast."}
+    fund = ctx.bank.find_account(uid, "CAD", "Tuition")
+    fund = fund if fund and "Tuition" in fund["label"] else None
+    wallet = ctx.bank.find_account(uid, "MYR", "Wallet")
+    accs = ctx.bank.accounts(uid)
+    labels = {x["id"]: x["label"] for x in accs}
+    bal = {x["id"]: x["balance"] for x in accs}
+    spend_id = everyday["id"]
+    tuition_acc = fund["id"] if fund else spend_id
+
+    events: List[Dict[str, Any]] = []
+    included: List[str] = []
+    not_counted: List[str] = []
+    covered: set = set()
+
+    # Pending drafts count as if confirmed today, so the forecast shows what confirming them would do.
+    for act in ctx.policy.list_for(uid, ["awaiting_user", "awaiting_sponsor"]):
+        p = act.params
+        if act.kind == "transfer" and p.get("from_account_id") in bal:
+            bal[p["from_account_id"]] -= p["amount"]
+            if (ctx.bank.payee(p["payee_id"]) or {}).get("kind") == "tuition":
+                match = next((t for t in unpaid if t["id"] not in covered and abs(t["amount"] - p["amount"]) < 0.01),
+                             None)
+                if match:  # this draft pays that installment, so it is not taken out again on the due date
+                    covered.add(match["id"])
+            events.append({"date": today.isoformat(), "label": f"Pending: {act.summary}", "amount": -p["amount"],
+                           "currency": p["currency"], "account": labels.get(p["from_account_id"], ""),
+                           "kind": "pending"})
+        elif act.kind == "conversion" and p.get("from_account_id") in bal and p.get("to_account_id") in bal:
+            bal[p["from_account_id"]] -= p["amount"]
+            bal[p["to_account_id"]] += p["expected_receive"]
+            events.append({"date": today.isoformat(), "label": f"Pending: {act.summary}",
+                           "amount": p["expected_receive"], "currency": p["to_currency"],
+                           "account": labels.get(p["to_account_id"], ""), "kind": "pending"})
+        else:
+            not_counted.append(act.summary)
+            continue
+        included.append(act.summary)
+
+    # Day-to-day spending: the last 30 days of spending-account outflows that are not recurring items.
+    recurring = [r for r in ctx.bank.recurring(uid) if r["account_id"] in bal]
+    fixed = {r["counterparty"] for r in recurring}
+    by_cat: Dict[str, float] = {}
+    for r in ctx.bank.transactions(uid, 30, "", today):
+        if (r["account"] == everyday["label"] and r["amount"] < 0 and r["counterparty"] not in fixed
+                and r["category"] not in ("conversion", "tuition")):
+            by_cat[r["category"]] = by_cat.get(r["category"], 0.0) - r["amount"]
+    daily_spend = sum(by_cat.values()) / 30
+
+    schedule: Dict[date, List[Tuple[str, Dict[str, Any]]]] = {}
+    for r in recurring:
+        for d in _occurrences(r, today, end):
+            schedule.setdefault(d, []).append(("recurring", r))
+    for t in unpaid:
+        due = date.fromisoformat(t["due"])
+        if today < due <= end and t["id"] not in covered:
+            schedule.setdefault(due, []).append(("tuition", t))
+
+    series = [round(bal[spend_id], 2)]
+    myr_series = [bal[wallet["id"]] if wallet else 0.0]
+    tuition_out: List[Dict[str, Any]] = []
+    for i in range(1, n_days + 1):
+        d = today + timedelta(days=i)
+        bal[spend_id] -= daily_spend
+        for what, x in schedule.get(d, []):
+            if what == "recurring":
+                bal[x["account_id"]] += x["amount"]
+                kind = "bill" if x["amount"] < 0 else ("allowance" if x["category"] == "allowance" else "income")
+                events.append({"date": d.isoformat(), "label": x["counterparty"], "amount": x["amount"],
+                               "currency": x["currency"], "account": labels[x["account_id"]], "kind": kind})
+                continue
+            before = bal[tuition_acc]
+            gap = round(max(0.0, x["amount"] - max(before, 0.0)), 2)
+            bal[tuition_acc] = before - x["amount"] + gap   # a payment the balance cannot cover is not taken out
+            tuition_out.append({"term": x["term"], "due": x["due"], "amount": x["amount"],
+                                "account": labels[tuition_acc], "balance_before": round(before, 2), "gap": gap})
+            events.append({"date": d.isoformat(), "label": f"Tuition: {x['term']}", "amount": -x["amount"],
+                           "currency": x["currency"], "account": labels[tuition_acc], "kind": "tuition"})
+        series.append(round(bal[spend_id], 2))
+        myr_series.append(bal[wallet["id"]] if wallet else 0.0)
+
+    low_i = min(range(len(series)), key=lambda k: (series[k], k))
+    short_i = next((k for k, v in enumerate(series) if v < 0), None)
+    gaps = [t for t in tuition_out if t["gap"] > 0]
+    verdict = ("both" if short_i is not None and gaps else "spending_shortfall" if short_i is not None
+               else "tuition_gap" if gaps else "on_track")
+    day = lambda k: today + timedelta(days=k)  # noqa: E731
+
+    def convert_tip(cad: float, by: date, dest_label: str, dest: str, why: str) -> Dict[str, Any]:
+        opts = _myr_to_receive(ctx, cad)
+        best = opts[0]
+        bank_tt = next((o for o in opts if o["provider_key"] == "bank"), opts[-1])
+        have = myr_series[(by - today).days]
+        text = (f"Convert about MYR {best['myr']:,.0f} into your {dest_label} by {_short_date(by)} to {why}. "
+                f"Cheapest: {best['provider']} (true cost {best['true_cost_pct']}%, about CAD "
+                f"{best['true_cost_cad']:,.2f}); a bank telegraphic transfer would lose about CAD "
+                f"{bank_tt['true_cost_cad']:,.2f}.")
+        if have < best["myr"]:
+            text += f" Your MYR Wallet will hold only about MYR {max(have, 0):,.0f} by then, so ask your sponsor."
+        elif cad > ctx.policy.limits.single_cad:
+            text += f" That is more than CAD {ctx.policy.limits.single_cad:,.0f} of sponsor money, so your sponsor approves it too."
+        return {"kind": "convert", "text": text, "amount": best["myr"], "currency": "MYR",
+                "receive_cad": round(cad, 2), "by_date": by.isoformat(), "destination": dest,
+                "provider": best["provider"], "true_cost_pct": best["true_cost_pct"],
+                "saving_vs_bank_cad": round(bank_tt["true_cost_cad"] - best["true_cost_cad"], 2)}
+
+    suggestions: List[Dict[str, Any]] = []
+    if gaps:
+        g = gaps[0]
+        by = max(today, date.fromisoformat(g["due"]) - timedelta(days=5))
+        dest = ("Tuition Fund", "tuition") if fund else ("CAD Everyday", "everyday")
+        suggestions.append(convert_tip(g["gap"], by, dest[0], dest[1], f"cover the CAD {g['gap']:,.2f} tuition gap"))
+    if short_i is not None:
+        # Smallest steady weekly cut that keeps every day at or above zero (offered first, as it costs
+        # nothing). Not possible if the balance is already short today.
+        if short_i > 0:
+            need = max(-v / k for k, v in enumerate(series) if k and v < 0) * 7
+            dining = by_cat.get("dining", 0.0) / 30 * 7
+            if need <= dining:
+                suggestions.append({"kind": "cut_spending", "category": "dining", "weekly_cut_cad": round(need, 2),
+                                    "text": f"Cut dining by about CAD {math.ceil(need)} a week (you average "
+                                            f"CAD {dining:,.0f}); that alone keeps you above zero."})
+            elif need <= daily_spend * 7:
+                suggestions.append({"kind": "cut_spending", "category": "all", "weekly_cut_cad": round(need, 2),
+                                    "text": f"Cut day-to-day spending by about CAD {math.ceil(need)} a week "
+                                            f"(you average CAD {daily_spend * 7:,.0f}); that alone keeps you above zero."})
+        suggestions.append(convert_tip(round(-series[low_i] + 50, 2), max(today, day(short_i - 1)), "CAD Everyday",
+                                       "everyday", f"stay above zero (lowest CAD {series[low_i]:,.2f} on "
+                                       f"{_short_date(day(low_i))})"))
+        suggestions.append({"kind": "ask_sponsor", "text": "Ask your sponsor for a top-up before "
+                            f"{_short_date(day(short_i))}."})
+    elif series[low_i] < LOW_BUFFER_CAD:
+        suggestions.append({"kind": "buffer", "text": f"Your spending money stays above zero, but only just: CAD "
+                            f"{series[low_i]:,.2f} on {_short_date(day(low_i))}. Keeping dining near its budget "
+                            "leaves more room."})
+    if not suggestions:
+        suggestions.append({"kind": "on_track", "text": f"You're on track: the lowest point is CAD "
+                            f"{series[low_i]:,.2f} on {_short_date(day(low_i))}."})
+
+    events.sort(key=lambda e: e["date"])
+    return {
+        "account": everyday["label"], "currency": "CAD",
+        "start_date": today.isoformat(), "end_date": end.isoformat(), "horizon_days": n_days,
+        "horizon": horizon_why, "starting_balance": series[0], "ending_balance": series[-1],
+        "series": series,
+        "lowest": {"date": day(low_i).isoformat(), "balance": series[low_i]},
+        "first_shortfall_date": day(short_i).isoformat() if short_i is not None else None,
+        "shortfall_days": sum(1 for v in series if v < 0),
+        "tuition": tuition_out, "verdict": verdict,
+        "weekly_spending_cad": round(daily_spend * 7, 2),
+        "weekly_by_category_cad": {c: round(v / 30 * 7, 2) for c, v in sorted(by_cat.items(), key=lambda kv: -kv[1])},
+        "myr_wallet_now": round(myr_series[0], 2), "myr_wallet_at_end": round(myr_series[-1], 2),
+        "events": events[:40], "pending_included": included, "not_counted": not_counted,
+        "suggestions": suggestions[:3],
+        "assumptions": ["Day-to-day spending continues at the last 30 days' average.",
+                        "Recurring pay, allowance, rent and bills follow your schedule.",
+                        "Pending drafts count as if confirmed today; sponsor top-up requests do not.",
+                        "The sponsor allowance arrives in MYR and stays in the MYR Wallet unless converted."],
+        "disclosure": "An estimate, not a guarantee or financial advice. This forecast does not move money.",
+    }

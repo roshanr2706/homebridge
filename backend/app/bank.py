@@ -64,6 +64,16 @@ CREATE TABLE IF NOT EXISTS draft_log (owner TEXT, ts REAL);
 """
 SCHEMA += POLICY_SCHEMA
 
+# Known recurring money in and out (payday, allowance, rent, bills), used by the cash-flow forecast.
+# `next_due` is the next expected date; cadence is weekly, biweekly, monthly or bimonthly.
+RECURRING_SCHEMA = """
+CREATE TABLE IF NOT EXISTS recurring (
+  id TEXT PRIMARY KEY, owner TEXT, account_id TEXT, counterparty TEXT, category TEXT,
+  amount INTEGER, currency TEXT, cadence TEXT, next_due TEXT
+);
+"""
+SCHEMA += RECURRING_SCHEMA
+
 
 class Bank:
     def __init__(self, db_path: str = ":memory:") -> None:
@@ -208,6 +218,26 @@ class Bank:
             r["category"]: {"monthly": to_major(r["monthly"]), "currency": r["currency"]}
             for r in self._q("SELECT * FROM budgets WHERE owner=?", (owner,))
         }
+
+    def recurring(self, owner: str) -> List[Dict[str, Any]]:
+        """Recurring items in major units. A database seeded before this table existed has none."""
+        try:
+            rows = self._q("SELECT * FROM recurring WHERE owner=? ORDER BY next_due, id", (owner,))
+        except sqlite3.OperationalError:
+            return []
+        return [
+            {
+                "id": r["id"],
+                "account_id": r["account_id"],
+                "counterparty": r["counterparty"],
+                "category": r["category"],
+                "amount": to_major(r["amount"]),
+                "currency": r["currency"],
+                "cadence": r["cadence"],
+                "next_due": r["next_due"],
+            }
+            for r in rows
+        ]
 
     def reminders(self, owner: str) -> List[Dict[str, Any]]:
         return [dict(r) for r in self._q("SELECT * FROM reminders WHERE owner=? ORDER BY due", (owner,))]

@@ -98,6 +98,14 @@ TASKS: List[Task] = [
     Task("T29", "tuition", ["pay my tuition", "ok cover the tuition shortfall from my MYR wallet"],
          ["get_tuition_schedule", "prepare_conversion"], ["CAD Tuition Fund"], [("conversion", "T2")],
          confirm=True, expect_status="executed"),
+    # Cash-flow forecast (advice only: nothing is drafted)
+    Task("T37", "forecast", ["Will I run out of money before tuition is due?"], ["forecast_cashflow"],
+         ["below zero", "CAD 1,250.00 short", "cut dining", "haven't moved any money"]),
+    Task("T38", "forecast", ["duit cukup tak sampai hujung sem?"], ["forecast_cashflow"],
+         ["below zero", "tuition fund", "Convert about MYR"]),
+    Task("T39", "forecast", ["我的钱够用到学期末吗？"], ["forecast_cashflow"], ["below zero", "tuition fund"]),
+    Task("T40", "forecast", ["Can I survive until January?"], ["forecast_cashflow"],
+         ["Not quite", "Jan 15", "covers the installment"], setup="fund_tuition"),
 ]
 
 
