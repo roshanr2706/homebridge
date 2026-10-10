@@ -123,6 +123,7 @@ All endpoints take `Authorization: Bearer <token>`. Demo tokens: `demo-student`,
 |---|---|---|---|
 | POST | `/chat` | student | `{"message", "session_id"}` → reply, cards, drafted actions, safety flags, tool trace |
 | GET | `/overview` | student | Wallet screen: balances, tuition, budget, payees, pending items, limits |
+| GET | `/forecast` | student | Cash-flow runway card (`?until=next_tuition`, `end_of_term`, a month or a date) |
 | GET | `/accounts` | student | Balances (masked), payees, tuition schedule |
 | GET | `/actions` | student | Drafts and their status (includes the confirm token for drafts awaiting the student) |
 | POST | `/actions/{id}/confirm` | student | `{"token"}`: single-use token from the draft |

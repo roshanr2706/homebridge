@@ -126,6 +126,7 @@ Anthropic and OpenAI endpoints are not defaults because they are not reachable f
 | `credit_building_plan` | T0 | General steps to build Canadian credit, with disclosure |
 | `check_message_for_scam` | T0 | Scam shield: rule matches, classifier label, keywords that drove it, advice |
 | `get_pending_actions` | T0 | Drafts and their status |
+| `forecast_cashflow` | T0 | Day-by-day runway of the spending account to the next tuition date, end of term, a month or a date: low point, first shortfall, tuition-fund gaps and suggestions (cheapest conversion, spending cut). Advice only; never drafts |
 | `set_budget`, `create_reminder` | T1 | Reversible personal settings |
 | `request_sponsor_topup` | T1 | Ask the sponsor for money; the sponsor decides |
 | `cancel_pending_action` | T1 | Withdraw a draft |
@@ -200,6 +201,19 @@ Text the user did not type is recorded as untrusted, and stays recorded while th
 ### 5.5 Hash-chained audit log
 
 Each entry is `{seq, ts, event, actor, data, prev, hash}` where `hash = SHA-256(canonical JSON of the entry without hash)` and `prev` is the previous entry's hash. `verify()` walks the chain and reports the first broken link. `GET /audit/verify?tamper_seq=N` verifies a copy with entry N edited, so the Ledger tab can show detection live without touching the real log. The log records user messages (length and guard flags, not content), every tool call with masked and size-capped arguments (text sent to the scam checker is stored as its length only), drafts with tier, risk and provenance, confirmations, denials, sponsor decisions, limit changes, rate-limit hits, LLM errors and executions.
+
+### 5.6 Cash-flow forecast ("runway")
+
+`forecast_cashflow` answers "will I have enough until tuition / January / the end of term?". It is deterministic for a given `today` and read-only: it reads balances, the schedule and drafts, and returns numbers and advice, never a draft.
+
+- **Inputs.** Account balances; a recurring schedule (`recurring` table: biweekly pay, the monthly MYR allowance, rent, phone, transit, a subscription, the bi-monthly hydro bill), seeded to match the transaction history; unpaid tuition installments; and pending drafts, counted as if confirmed today (a pending tuition payment is not taken again on the due date; sponsor top-up requests are listed but not counted).
+- **Day-to-day spending** is the last 30 days of spending-account outflows that are not recurring items (groceries and dining in the demo), divided by 30 and taken out every day.
+- **Projection.** Day 0 is today's balance plus pending drafts. Each day subtracts the daily spend and applies that day's recurring items (monthly items keep their day of the month, clamped to month end) and tuition. Tuition is paid from the Tuition Fund; when the fund cannot cover an installment the gap is recorded and nothing is taken. The MYR allowance builds up in the MYR Wallet, which is tracked as the reserve for conversions.
+- **Outputs.** The daily series of the CAD Everyday balance, the low point, the first day below zero, tuition gaps, and a verdict (`on_track`, `tuition_gap`, `spending_shortfall`, `both`).
+- **Suggestions.** For a tuition gap or a spending dip, the MYR needed so that exactly the missing CAD arrives is computed per provider by inverting the true-cost formula in 5.2 (`myr = ⌈(cad / rate_p + F) / (1 − f%)⌉`), the cheapest provider is named with its true cost and the loss through a bank wire, and a "by" date is set (5 days before the installment, or the day before the dip). If the MYR Wallet will not hold enough by then, it says to ask the sponsor, and above the single limit it says the sponsor approves too. For a dip, it also gives the smallest steady weekly cut that keeps every day at or above zero (`max over short days of −balance(d) / d`, × 7), framed against dining or total day-to-day spending.
+- **Card.** The series is bucketed to at most 92 bars, each its bucket's minimum so a short dip still shows. The app draws bars around a zero line with a red shortfall zone and tuition markers; the wallet shows a compact version from `GET /forecast`.
+
+With the demo data (today 2026-10-08), the Everyday account dips below zero from Dec 16 to Dec 18 (rent, transit and phone land before the next payday; lowest CAD −195.25), which cutting dining by about CAD 20 a week avoids, and the Tuition Fund is CAD 1,250 short on Jan 6, which MYR 3,887 through the in-app conversion covers (true cost 0.6%, against about CAD 62 lost through a bank wire).
 
 ---
 
