@@ -235,7 +235,7 @@ def test_sponsor_cannot_use_student_endpoints(api):
 
 def test_student_cannot_approve_as_sponsor(api):
     client, _ = api
-    a = _draft(client, "pay hydro 4000")
+    a = _draft(client, "pay hydro 2000")  # T3: above the single limit, within the balance
     client.post(f"/actions/{a['action_id']}/confirm", json={"token": a["confirm_token"]}, headers=S)
     assert client.post(f"/sponsor/actions/{a['action_id']}/approve", json={}, headers=S).status_code == 403
 
@@ -332,7 +332,7 @@ def test_vague_payee_reference_does_not_match():
 
 def test_params_changed_after_confirm_fail_at_execution(api):
     client, st = api
-    a = _draft(client, "pay hydro 4000")
+    a = _draft(client, "pay hydro 2000")  # T3: above the single limit, within the balance
     client.post(f"/actions/{a['action_id']}/confirm", json={"token": a["confirm_token"]}, headers=S)
     st.policy.actions[a["action_id"]].params["amount"] = 40.0  # e.g. an edited database row
     before = st.bank.accounts(STUDENT)

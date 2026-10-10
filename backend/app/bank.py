@@ -342,10 +342,13 @@ class Bank:
             credited = int(round((amount_minor - fee_minor) * rate))
             self._adjust(from_id, -amount_minor)
             self._adjust(to_id, credited)
+            same = src["currency"] == dst["currency"]   # a move between own accounts
             self.add_transaction(from_id, -amount_minor, src["currency"], "conversion",
-                                 f"Convert to {dst['currency']}", f"rate {rate:.5f}")
+                                 f"Move to {dst['label']}" if same else f"Convert to {dst['currency']}",
+                                 "" if same else f"rate {rate:.5f}")
             self.add_transaction(to_id, credited, dst["currency"], "conversion",
-                                 f"Convert from {src['currency']}", f"rate {rate:.5f}")
+                                 f"Move from {src['label']}" if same else f"Convert from {src['currency']}",
+                                 "" if same else f"rate {rate:.5f}")
             return {"debited": to_major(amount_minor), "credited": to_major(credited),
                     "from_currency": src["currency"], "to_currency": dst["currency"]}
 
