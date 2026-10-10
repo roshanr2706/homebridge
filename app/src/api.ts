@@ -69,6 +69,37 @@ export type Quote = {
 
 export type BudgetCategory = { category: string; spent_cad: number; budget_cad: number | null; over_budget: boolean };
 
+// Credit Builder: the sandbox secured card. "health" is a simulated band, never a credit score.
+export type CreditStatus = 'on_time' | 'late' | 'due';
+export type CreditHealth = { key: 'needs_attention' | 'fair' | 'on_track' | 'strong'; label: string; basis: string };
+export type CreditCardData = {
+  type: 'credit';
+  card: { label: string; number: string; currency: string; credit_limit: number; balance: number; available: number; deposit: number };
+  utilization_pct: number;
+  utilization_reported_pct: number;
+  utilization_projected_at_close_pct: number;
+  target_pct: number;
+  next_statement_date: string;
+  days_until_statement: number;
+  statement: { balance: number; minimum_due: number; remaining: number; due_date: string; days_until_due: number; status: CreditStatus } | null;
+  on_time_streak: number;
+  months_of_history: number;
+  payment_history: CreditStatus[];
+  health: CreditHealth;
+  recommended_payment: { amount: number; balance_after: number; utilization_after_pct: number };
+  next_actions: { key: string; text: string; amount?: number | null }[];
+  footnote: string;
+};
+export type CreditProfile =
+  | { has_card: false }
+  | (Omit<CreditCardData, 'type' | 'health' | 'payment_history' | 'footnote' | 'card'> & {
+      has_card: true;
+      card: CreditCardData['card'];
+      credit_health: CreditHealth;
+      payment_history: { closed: string; status: CreditStatus }[];
+      disclosure: string;
+    });
+
 export type Card =
   | { type: 'balances'; total: number; total_currency: string; accounts: Omit<Account, 'id'>[] }
   | {
@@ -108,7 +139,8 @@ export type Card =
       advice: string[];
     }
   | { type: 'transactions'; count: number; rows: { date: string; counterparty: string; amount: number; currency: string; category: string }[] }
-  | { type: 'checklist'; title: string; items: string[]; footnote: string };
+  | { type: 'checklist'; title: string; items: string[]; footnote: string }
+  | CreditCardData;
 
 export type ChatResponse = {
   reply: string;
@@ -128,6 +160,7 @@ export type Overview = {
   reminders: { id: string; due: string; text: string }[];
   payees: { id: string; name: string; kind: string; currency: string; number: string; status: string; usable_from: number | null }[];
   pending: Action[];
+  credit?: CreditProfile;
   limits: { single_cad: number; daily_cad: number };
   rates: Record<string, number>;
 };

@@ -3,7 +3,7 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { api, type Overview } from '../api';
 import { usePoll } from '../hooks';
-import { BudgetCard, TuitionCard } from '../components/ResultCards';
+import { BudgetCard, CreditCard, TuitionCard, creditCardFromProfile } from '../components/ResultCards';
 import { amount, fonts, money, useTheme } from '../theme';
 import { Body, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
@@ -41,6 +41,7 @@ export function WalletScreen({ active }: { active: boolean }) {
 
   const myr = o.accounts.filter((a) => a.currency === 'MYR').reduce((s, a) => s + a.balance, 0);
   const spendable = o.accounts.filter((a) => !a.sponsor_funded).reduce((s, a) => s + a.balance, 0);
+  const credit = creditCardFromProfile(o.credit);
 
   return (
     <ScrollView
@@ -99,6 +100,8 @@ export function WalletScreen({ active }: { active: boolean }) {
       <Surface>
         <BudgetCard c={{ ...o.budget, type: 'budget' }} bare />
       </Surface>
+
+      {credit && <CreditCard c={credit} compact />}
 
       {o.reminders.length > 0 && (
         <Surface>
