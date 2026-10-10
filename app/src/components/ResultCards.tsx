@@ -2,7 +2,7 @@
 // sandbox bank and FX engine, not from the language model's text.
 import { View } from 'react-native';
 
-import type { Card } from '../api';
+import type { Card, CreditCardData, CreditProfile } from '../api';
 import { amount, fonts, money, useTheme } from '../theme';
 import { Bar, Body, Divider, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
@@ -388,6 +388,141 @@ export function RunwayCard({ c, bare, compact }: { c: Extract<Card, { type: 'for
   return bare ? <View>{inner}</View> : <Surface tone={short ? 'danger' : gaps.length ? 'warn' : 'plain'}>{inner}</Surface>;
 }
 
+// ---------------------------------------------------------------- Credit Builder
+const HEALTH_TONE = { needs_attention: 'danger', fair: 'warn', on_track: 'ok', strong: 'ok' } as const;
+
+/** The wallet overview carries the full get_credit_profile result; this narrows it to the card shape. */
+export function creditCardFromProfile(p: CreditProfile | undefined): CreditCardData | null {
+  if (!p || !p.has_card) return null;
+  return {
+    type: 'credit',
+    card: p.card,
+    utilization_pct: p.utilization_pct,
+    utilization_reported_pct: p.utilization_reported_pct,
+    utilization_projected_at_close_pct: p.utilization_projected_at_close_pct,
+    target_pct: p.target_pct,
+    next_statement_date: p.next_statement_date,
+    days_until_statement: p.days_until_statement,
+    statement: p.statement,
+    on_time_streak: p.on_time_streak,
+    months_of_history: p.months_of_history,
+    payment_history: p.payment_history.map((h) => h.status),
+    health: p.credit_health,
+    recommended_payment: p.recommended_payment,
+    next_actions: p.next_actions,
+    footnote: p.disclosure,
+  };
+}
+
+function UtilizationGauge({ pct, target }: { pct: number; target: number }) {
+  const t = useTheme();
+  const color = pct < 10 ? t.ok : pct < target ? t.accent : pct < 50 ? t.gold : t.danger;
+  return (
+    <View>
+      <Bar value={Math.min(pct, 100)} max={100} color={color} marker={target} height={12} />
+      <View style={{ height: 16, marginTop: 3 }}>
+        <Mono style={{ position: 'absolute', left: 0, fontSize: 10, color: t.faint }}>0%</Mono>
+        <Mono style={{ position: 'absolute', left: `${target}%`, marginLeft: -14, fontSize: 10, color: t.text }}>{target}% ▲</Mono>
+        <Mono style={{ position: 'absolute', right: 0, fontSize: 10, color: t.faint }}>100%</Mono>
+      </View>
+    </View>
+  );
+}
+
+function StreakDots({ history }: { history: CreditCardData['payment_history'] }) {
+  const t = useTheme();
+  return (
+    <Row style={{ gap: 6 }}>
+      {history.map((s, i) => (
+        <View
+          key={i}
+          style={{
+            width: 14,
+            height: 14,
+            borderRadius: 7,
+            borderWidth: 2,
+            borderColor: s === 'on_time' ? t.ok : s === 'late' ? t.danger : t.gold,
+            backgroundColor: s === 'on_time' ? t.ok : s === 'late' ? t.danger : 'transparent',
+          }}
+        />
+      ))}
+    </Row>
+  );
+}
+
+export function CreditCard({ c, compact }: { c: CreditCardData; compact?: boolean }) {
+  const t = useTheme();
+  const st = c.statement;
+  const steps = c.next_actions.slice(0, compact ? 1 : 4);
+  return (
+    <Surface>
+      <Row style={{ justifyContent: 'space-between', gap: 8 }}>
+        <Eyebrow style={{ flex: 1 }}>Credit builder · {c.card.label}</Eyebrow>
+        <Pill label={`${c.health.label.toUpperCase()} · SIMULATED`} tone={HEALTH_TONE[c.health.key]} />
+      </Row>
+      <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 6 }}>
+        <View>
+          <Mono style={{ fontFamily: fonts.monoBold, fontSize: 30, letterSpacing: -1, color: c.utilization_pct >= c.target_pct ? t.danger : t.text }}>
+            {c.utilization_pct}%
+          </Mono>
+          <Body style={{ fontSize: 12, color: t.muted }}>of your limit used now</Body>
+        </View>
+        <View style={{ alignItems: 'flex-end' }}>
+          <Mono style={{ fontSize: 14 }}>{money(c.card.balance, c.card.currency)}</Mono>
+          <Mono style={{ fontSize: 11, color: t.faint }}>
+            of {money(c.card.credit_limit, c.card.currency, 0)} · {c.card.number}
+          </Mono>
+        </View>
+      </Row>
+      <View style={{ marginTop: 10 }}>
+        <UtilizationGauge pct={c.utilization_pct} target={c.target_pct} />
+      </View>
+      <Body style={{ fontSize: 12, color: t.muted, marginTop: 4 }}>
+        Last statement reported {c.utilization_reported_pct}%. Next one closes {c.next_statement_date} ({c.days_until_statement} days)
+        {c.utilization_projected_at_close_pct > c.utilization_pct ? `; at this pace it would report ${c.utilization_projected_at_close_pct}%` : ''}.
+      </Body>
+      <Divider />
+      <Row style={{ justifyContent: 'space-between', gap: 10 }}>
+        <View style={{ flex: 1, gap: 6 }}>
+          <StreakDots history={c.payment_history} />
+          <Body style={{ fontSize: 12, color: t.muted }}>
+            {c.on_time_streak} on time in a row · {c.months_of_history} months of history
+          </Body>
+        </View>
+        {st && st.status === 'due' && st.remaining > 0 ? (
+          <View style={{ alignItems: 'flex-end' }}>
+            <Mono style={{ fontSize: 13, fontFamily: fonts.monoBold, color: st.days_until_due <= 7 ? t.danger : t.text }}>
+              {money(st.remaining, c.card.currency)}
+            </Mono>
+            <Body style={{ fontSize: 11, color: t.muted }}>
+              due {st.due_date} · min {money(st.minimum_due, c.card.currency)}
+            </Body>
+          </View>
+        ) : st ? (
+          <Pill label="STATEMENT PAID" tone="ok" />
+        ) : null}
+      </Row>
+      {steps.length > 0 && (
+        <View style={{ gap: 8, marginTop: 12 }}>
+          {!compact && <Body style={{ fontSize: 12, color: t.muted }}>Next steps</Body>}
+          {steps.map((s, i) => (
+            <Row key={s.key} style={{ alignItems: 'flex-start', gap: 10 }}>
+              <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: t.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+                <Mono style={{ fontSize: 11, color: t.accent, fontFamily: fonts.monoBold }}>{i + 1}</Mono>
+              </View>
+              <Body style={{ flex: 1, fontSize: 13, lineHeight: 19 }}>{s.text}</Body>
+            </Row>
+          ))}
+        </View>
+      )}
+      <Body style={{ fontSize: 11, color: t.faint, marginTop: 10 }}>
+        {compact ? 'Simulated from your sandbox card. Not a credit score, not financial advice.' : c.footnote}
+      </Body>
+      {!compact && <Provenance />}
+    </Surface>
+  );
+}
+
 export function ResultCard({ card }: { card: Card }) {
   switch (card.type) {
     case 'fx_quotes':
@@ -408,6 +543,8 @@ export function ResultCard({ card }: { card: Card }) {
       return <Checklist c={card} />;
     case 'forecast':
       return <RunwayCard c={card} />;
+    case 'credit':
+      return <CreditCard c={card} />;
     default:
       return null;
   }

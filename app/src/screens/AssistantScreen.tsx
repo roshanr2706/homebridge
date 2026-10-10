@@ -32,6 +32,8 @@ const SUGGESTIONS: { label: string; text: string; fill?: boolean }[] = [
   { label: 'Ask Dad for money', text: 'Ask my dad for 800 for textbooks' },
   { label: 'Where did my money go?', text: 'Where did my money go this month?' },
   { label: 'Build credit', text: 'How do I build credit in Canada? I have nothing' },
+  { label: "How's my credit?", text: "How's my credit?" },
+  { label: 'Card under 30%', text: 'Pay my card down to under 30%' },
 ];
 
 const FLAG_LABEL: Record<string, string> = {
@@ -50,6 +52,8 @@ const TOOL_LABEL: Record<string, string> = {
   get_tuition_schedule: 'tuition',
   budget_summary: 'budget',
   credit_building_plan: 'credit guide',
+  get_credit_profile: 'credit profile',
+  prepare_card_payment: 'draft card payment',
   check_message_for_scam: 'scam shield',
   get_pending_actions: 'drafts',
   set_budget: 'set budget',

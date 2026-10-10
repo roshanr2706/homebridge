@@ -283,6 +283,12 @@ class PolicyEngine:
                 raise PolicyError(f"No {currency} account to pay from. Convert money into {currency} first.")
         if acc["currency"] != currency:
             raise PolicyError(f"{acc['label']} holds {acc['currency']} but this payee is paid in {currency}.")
+        if payee["kind"] == "credit_card":  # Credit Builder: never pay a card above what is owed
+            card = self.bank.card_for_payee(payee_id)
+            owed = card["balance"] if card else 0
+            if to_minor(amount) > owed:
+                raise PolicyError(f"That is more than the card balance ({currency} {owed / 100:,.2f}). "
+                                  "Card payments can't go above what you owe.")
 
         self._rate_limit(owner)
         amount_cad = self.cad(amount, currency)

@@ -114,6 +114,25 @@ def forecast_card(args: Dict[str, Any], r: Dict[str, Any]) -> Optional[Dict[str,
             "pending_included": r.get("pending_included", []),
             "suggestions": [s["text"] for s in r.get("suggestions", [])],
             "disclosure": r.get("disclosure", "")}
+def _credit_profile(args: Dict[str, Any], r: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Credit Builder card: utilization gauge with the 30% marker, on-time dots, next steps."""
+    if not r.get("has_card"):
+        return None
+    st = r.get("statement") or {}
+    return {"type": "credit", "card": {k: r["card"][k] for k in ("label", "number", "currency", "credit_limit",
+                                                                   "balance", "available", "deposit")},
+            "utilization_pct": r["utilization_pct"], "utilization_reported_pct": r["utilization_reported_pct"],
+            "utilization_projected_at_close_pct": r["utilization_projected_at_close_pct"],
+            "target_pct": r["target_pct"], "next_statement_date": r["next_statement_date"],
+            "days_until_statement": r["days_until_statement"],
+            "statement": {k: st.get(k) for k in ("balance", "minimum_due", "remaining", "due_date", "days_until_due",
+                                                  "status")} if st else None,
+            "on_time_streak": r["on_time_streak"], "months_of_history": r["months_of_history"],
+            "payment_history": [h["status"] for h in r["payment_history"]],
+            "health": r["credit_health"], "recommended_payment": r["recommended_payment"],
+            "next_actions": [{"text": x["text"], "amount": x.get("amount"), "key": x["key"]}
+                             for x in r["next_actions"][:5]],
+            "footnote": r["disclosure"]}
 
 
 BUILDERS: Dict[str, Builder] = {
@@ -126,6 +145,7 @@ BUILDERS: Dict[str, Builder] = {
     "list_transactions": _transactions,
     "credit_building_plan": _credit,
     "forecast_cashflow": forecast_card,
+    "get_credit_profile": _credit_profile,
 }
 
 # A transfer is drafted with a confirmation card already; showing the rent

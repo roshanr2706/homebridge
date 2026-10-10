@@ -48,6 +48,9 @@ def seed(bank: "Bank", today: date) -> None:
              "0004-2210-9988", "active", long_ago, long_ago, "seed"),
             ("py_phone", STUDENT, "Northline Mobile", "phone", "CAD",
              "0077-3101-5521", "active", long_ago, long_ago, "seed"),
+            # Internal payee for the secured card below (seed-only kind; add_payee cannot create it).
+            ("py_card", STUDENT, "HomeBridge Secured Card", "credit_card", "CAD",
+             "4520-0193-7765", "active", long_ago, long_ago, "seed"),
         ],
     )
     db.executemany(
@@ -122,6 +125,7 @@ def seed(bank: "Bank", today: date) -> None:
             ("rc_stream", STUDENT, "acc_cad", "StreamBox", "entertainment", -2299, "CAD", "monthly", after(8, 1)),
         ],
     )
+    seed_credit_card(bank, today)
 
 
 def add_months(d: date, months: int) -> date:
@@ -130,3 +134,32 @@ def add_months(d: date, months: int) -> date:
     y, m = d.year + y, m + 1
     nxt = date(y + (m == 12), m % 12 + 1, 1)
     return date(y, m, min(d.day, (nxt - timedelta(days=1)).day))
+
+
+def seed_credit_card(bank: "Bank", today: date) -> None:
+    """Credit Builder: a secured card opened about five months ago (CAD 500 limit backed by a CAD 500
+    deposit). Four statements paid on time; the latest one is due in six days and its minimum is unpaid.
+    Purchases since it closed push utilization to about 56%, so the next statement would report high."""
+    db = bank.db
+    last_close = today - timedelta(days=15)
+    db.execute(
+        "INSERT INTO credit_cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        ("card_sec", STUDENT, "HomeBridge Secured Card", "CAD", 50000, 28085, 50000, "4520-0193-7765",
+         "py_card", (today - timedelta(days=155)).isoformat(), (today + timedelta(days=15)).isoformat(),
+         19.99, "off", 1),
+    )
+    statements = []
+    for i, (days_ago, bal) in enumerate([(136, 4250), (106, 9610), (76, 12135), (45, 16890)]):
+        close = today - timedelta(days=days_ago)
+        due = close + timedelta(days=21)
+        statements.append((f"cs_{i + 1}", "card_sec", close.isoformat(), due.isoformat(), bal, 1000, bal,
+                           (due - timedelta(days=3)).isoformat()))
+    statements.append(("cs_5", "card_sec", last_close.isoformat(), (last_close + timedelta(days=21)).isoformat(),
+                       18460, 1000, 0, None))
+    db.executemany("INSERT INTO card_statements VALUES (?,?,?,?,?,?,?,?)", statements)
+    activity = [(12, 5430, "Campus Bookstore"), (7, 2450, "Granville Cinemas"), (3, 1745, "Save Mart")]
+    db.executemany(
+        "INSERT INTO card_activity VALUES (?,?,?,?,?)",
+        [(f"ca_seed{i}", "card_sec", _ts(today - timedelta(days=d)), amt, desc)
+         for i, (d, amt, desc) in enumerate(activity)],
+    )
