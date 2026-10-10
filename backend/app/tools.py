@@ -526,8 +526,9 @@ def forecast_cashflow(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
             events.append({"date": today.isoformat(), "label": f"Pending: {act.summary}",
                            "amount": p["expected_receive"], "currency": p["to_currency"],
                            "account": labels.get(p["to_account_id"], ""), "kind": "pending"})
-        else:
-            not_counted.append(act.summary)
+        else:  # sponsor top-up requests: money only if the sponsor says yes. Payee requests move no money.
+            if act.kind == "topup":
+                not_counted.append(act.summary)
             continue
         included.append(act.summary)
 
