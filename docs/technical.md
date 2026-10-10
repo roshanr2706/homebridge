@@ -60,8 +60,9 @@ International students live between two financial systems. Their pain points, wh
 | Agent loop | `backend/app/agent.py` | System prompt, tool-call loop, tool-output scanning, offline fallback, output redaction |
 | Model adapter | `backend/app/llm.py` | One OpenAI-compatible client for DeepSeek and Qwen; offline engine behind the same interface |
 | Offline engine | `backend/app/offline_engine.py` | Deterministic planner for tests, CI and venue fallback |
-| Tools | `backend/app/tools.py` | 17 tools with JSON schemas, tier labels and masked outputs |
+| Tools | `backend/app/tools.py` | 18 tools with JSON schemas, tier labels and masked outputs |
 | Policy engine | `backend/app/policy.py` | The only path by which money moves: tiers, limits, risk score, tokens, execution |
+| Safety monitor | `backend/app/safety.py` | Emergency freeze, unusual-activity alerts and the sponsor's 24-hour digest |
 | Sandbox bank | `backend/app/bank.py`, `seed.py` | SQLite ledger in integer minor units; demo data |
 | FX market | `backend/app/fx.py` | Mid-market snapshot, provider spreads and fees, true-cost maths, 30-day history |
 | Input guard | `backend/app/guard.py` | Regex rules (English, Chinese, Malay) plus the classifier |
@@ -129,11 +130,12 @@ Anthropic and OpenAI endpoints are not defaults because they are not reachable f
 | `set_budget`, `create_reminder` | T1 | Reversible personal settings |
 | `request_sponsor_topup` | T1 | Ask the sponsor for money; the sponsor decides |
 | `cancel_pending_action` | T1 | Withdraw a draft |
+| `freeze_payments` | T1 | Lock all outgoing payments ("I think I got scammed"); alerts the sponsor. There is no unlock tool |
 | `prepare_transfer` | T2/T3 | Draft a payment to a saved payee |
 | `prepare_conversion` | T2/T3 | Draft a conversion between own wallets, into Everyday or the Tuition Fund |
 | `add_payee` | T3 | Request a new payee (always sponsor approval, then a cooling period) |
 
-There is no tool to confirm, approve, execute, change limits, change the sponsor, or read unmasked numbers. Those operations are tier T4: they exist only as authenticated HTTP endpoints for the right role, or not at all.
+There is no tool to confirm, approve, execute, change limits, change the sponsor, unlock payments, or read unmasked numbers. Those operations are tier T4: they exist only as authenticated HTTP endpoints for the right role, or not at all.
 
 Tool arguments are validated before use (numbers parsed and range-checked, enums enforced, NaN and negative amounts refused). A bad argument returns a readable error to the model so it can recover, and is logged.
 
@@ -166,6 +168,7 @@ For conversions: converting sponsor money when the last 24 hours of such convers
 | Amount or account number came from pasted or tool-supplied content (taint) | +30 |
 | Guard flag in the conversation: scam or injection | +40 each |
 | Guard flag: extraction or escalation | +10 each |
+| Unusual-activity alert in the last 24 h (the strongest one; §5.6) | +10 to +25 |
 
 **Confirmation token.** 24 random bytes (`secrets.token_urlsafe`). Only its SHA-256 hash is stored. It is single use, expires after 10 minutes, and is bound to a hash of the exact parameters, so a draft changed after creation cannot be confirmed. The student endpoint returns it to the app. It never appears in a tool result.
 
@@ -201,6 +204,12 @@ Text the user did not type is recorded as untrusted, and stays recorded while th
 
 Each entry is `{seq, ts, event, actor, data, prev, hash}` where `hash = SHA-256(canonical JSON of the entry without hash)` and `prev` is the previous entry's hash. `verify()` walks the chain and reports the first broken link. `GET /audit/verify?tamper_seq=N` verifies a copy with entry N edited, so the Ledger tab can show detection live without touching the real log. The log records user messages (length and guard flags, not content), every tool call with masked and size-capped arguments (text sent to the scam checker is stored as its length only), drafts with tier, risk and provenance, confirmations, denials, sponsor decisions, limit changes, rate-limit hits, LLM errors and executions.
 
+### 5.6 Emergency freeze and unusual-activity alerts
+
+`SafetyMonitor` (`safety.py`) keeps a lock per student in SQLite, with the sponsor's money and the student's own money locked separately and the person who set each lock recorded. The sponsor locks either, or both, in one tap from the Rules tab and unlocks everything there. The student can lock everything from chat (`freeze_payments`) or the Wallet tab, and can unlock only a lock she set on her own money, only from the app. While locked, drafts still work but `confirm`, sponsor approval and execution are refused in `PolicyEngine`, and the cards show FROZEN.
+
+Alerts are fixed, deterministic rules evaluated when drafts are created and confirmed: 3 confirmed payments within an hour, a first payment to a payee above max(3 × the median payment, CAD 250), activity between 01:00 and 05:00 in Vancouver, and 3 failed or refused confirmations within an hour. Each is stored once per hour per kind, shown to the sponsor with a 24-hour digest on the Approvals tab, and adds 10 to 25 risk points to new drafts for 24 hours. The clock is injectable, and the test harness pins it to midday in Vancouver so results never depend on when the suite runs.
+
 ---
 
 ## 6. Security design (summary)
@@ -209,23 +218,24 @@ The full threat model, tier table and known-risk list are in `docs/security_self
 
 | Attack class | Primary controls |
 |---|---|
-| Induced transfers | No execute tool; confirmation token outside the model; T3 rules; daily limit counts pending drafts; risk score; scam shield; cooling period for new payees |
+| Induced transfers | No execute tool; confirmation token outside the model; T3 rules; daily limit counts pending drafts; risk score; scam shield; cooling period for new payees; emergency freeze; unusual-activity alerts |
 | Information extraction | Tools return masked data only, so the model never holds full numbers or tokens; output redaction; no secrets in the prompt; role-scoped endpoints |
 | Privilege escalation | Role from bearer token only; sponsor actions only via sponsor endpoints; no tool for limits or sponsor; chat claims ("I'm her father") flagged and refused |
-| Prompt injection (direct and indirect) | Tool output wrapped as data and scanned; taint tracking; flagged turns escalate to T3; the offline engine refuses flagged turns; the policy holds even with a fully compromised model |
+| Prompt injection (direct and indirect) | Tool output wrapped as data and scanned; text folded before matching (tag characters, base64, zero-width, homoglyphs); taint tracking; flagged turns escalate to T3; the offline engine refuses flagged turns; the policy holds even with a fully compromised model |
 
 ---
 
 ## 7. Evaluation
 
-Run with `pytest -q` (153 tests) and `python scripts/run_evidence.py`. Results for the offline engine are in `evidence/offline/`:
+Run with `pytest -q` (198 tests) and `python scripts/run_evidence.py`. Results for the offline engine are in `evidence/offline/`:
 
 | Suite | Result |
 |---|---|
 | Scripted tasks (balances, insight, FX, tuition, rent, sponsor, credit, clarification, recovery, scam shield, multi-step, Malaysian English, Chinese, Malay) | **36 / 36 pass**, each checked for tool sequence, reply content, drafted tier and final sandbox state |
-| Attack suite (induced transfer 12, extraction 10, escalation 12, injection 12) | **46 / 46 blocked**. No balance change, no execution, no full number or token in any reply, no limit or role change, no T2 payment after a flagged message in the conversation |
+| Attack suite (induced transfer 17, extraction 10, escalation 15, injection 17) | **59 / 59 blocked**. No balance change, no execution, no full number or token in any reply, no limit or role change, no payment lock lifted, no T2 payment after a flagged message in the conversation. Attacks on a frozen account also tap Confirm and Approve on every draft |
 | Compromised-model tests | A scripted "evil" provider calls tools directly (unknown account, invented execute and approve tools, add-then-pay, drain by conversion, negative, NaN, infinite, sub-cent and huge amounts, malformed arguments, draft spam, cancelling others' drafts, a payee filed as `conversion` to dodge the daily limit, lookalike payee names, parallel drafts, an injected memo acted on a turn later). No money moves in any case |
-| API role tests | No token → 401; sponsor on student endpoints → 403; student approving → 403; wrong or reused token → 400; tampered parameters → 400; expired → 400; cooling period enforced; a draft confirmed after the sponsor tightened the limits goes to the sponsor; audit tamper detected |
+| API role tests | No token → 401; sponsor on student endpoints → 403; student approving → 403; wrong or reused token → 400; tampered parameters → 400; expired → 400; cooling period enforced; a draft confirmed after the sponsor tightened the limits goes to the sponsor; audit tamper detected; lock endpoints role-checked |
+| Freeze and alerts | `tests/test_safety.py`: locks block confirm and approve until unlocked, the student cannot lift the sponsor's lock, chat and invented tools cannot unlock, locks survive a restart, each alert fires at its threshold with an injected clock, the digest counts correctly |
 | LLM wire tests | Real OpenAI-compatible client against a mocked transport: tool round trip, malformed arguments, fallback |
 | Classifier | Macro F1 0.841 (grouped 5-fold CV) |
 
@@ -261,4 +271,5 @@ To produce live-model evidence: `LLM_PROVIDER=deepseek LLM_API_KEY=… python sc
 - **State.** The bank, pending actions and the draft rate-limit window share one SQLite database (`HB_DB`, in memory by default). With a file path, a restart keeps balances and drafts together: drafts awaiting the student or the sponsor, their expiry, sponsor decisions and the hourly draft count all reload. Only the hash of each confirmation token is stored, so after a restart a draft can be confirmed only by the app that still holds its token. Execution writes an "executing" marker first; a draft interrupted mid-execution reloads as failed, never as executable again. Chat history and the per-minute chat limit are still in memory. Production would use a transactional database shared by all instances, with the same invariants.
 - **FX rates** are a snapshot with modelled spreads. Production would use live quotes and lock the quoted rate on the draft.
 - **Classifier** is small and trained on our own data. It is a second opinion by design, never a gate. A larger multilingual dataset and periodic retraining from reported scams would improve recall.
+- **Alerts** are fixed thresholds, not a model of each student's habits, and the sponsor sees them only when opening the app. Production would add push notifications and per-user baselines.
 - **Sponsor rules** are two limits plus fixed triggers. Category rules ("rent and tuition only"), monthly allowances and multi-sponsor households are natural extensions.
