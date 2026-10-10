@@ -93,6 +93,62 @@ def _action_text(a: Dict[str, Any]) -> str:
     return s
 
 
+# Cash-flow forecast intent, in English, Malay ("cukup" = enough) and Chinese ("够用" = enough to live on).
+FORECAST_WORDS = (r"run(ning)? out of (money|cash|funds)|cash ?flow|forecast|runway|\bsurvive\b|"
+                  r"\blast (me )?(until|till|til|through)\b|how long .{0,25}\blast\b|"
+                  r"enough (money|cash|funds)? ?(until|till|to last|for the rest|to get through)|"
+                  r"make it (to|until|till|through)\b|\bcukup\b|够用|够不够|撑到|撑得|现金流")
+
+
+def _forecast_horizon(low: str) -> Dict[str, Any]:
+    if re.search(r"end of (the |this )?(term|semester|sem)\b|(hujung|akhir) sem|学期末|期末|this (term|semester)", low):
+        return {"until": "end_of_term"}
+    # English and Malay month names ("may" is left out: it usually reads as a verb)
+    m = re.search(r"\b(january|januari|jan|february|februari|feb|march|mac|mar|april|apr|june|jun|july|julai|jul|"
+                  r"august|ogos|aug|september|sept|sep|october|oktober|oct|november|nov|december|disember|dec)\b", low)
+    if not m:
+        return {}
+    month = {"mac": "march", "ogos": "august", "oktober": "october", "disember": "december"}.get(m.group(1), m.group(1))
+    return {"until": month}
+
+
+def _forecast_reply(r: Dict[str, Any]) -> str:
+    def d(iso: str) -> str:
+        y, mo, day = iso.split("-")
+        return f"{['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][int(mo) - 1]} {int(day)}"
+
+    lo = r["lowest"]
+    gaps = [t for t in r["tuition"] if t["gap"] > 0]
+    if r["first_shortfall_date"]:
+        msg = (f"Not quite. On your usual spending, {r['account']} dips below zero on {d(r['first_shortfall_date'])} "
+               f"(lowest CAD {lo['balance']:,.2f} on {d(lo['date'])})")
+    else:
+        msg = (f"{'Mostly' if gaps else 'Yes'}. Your spending money lasts to {d(r['end_date'])}: the lowest point is "
+               f"CAD {lo['balance']:,.2f} on {d(lo['date'])}")
+    if gaps:
+        msg += (f", {'and' if r['first_shortfall_date'] else 'but'} your tuition fund will be CAD {gaps[0]['gap']:,.2f} "
+                f"short when {gaps[0]['term']} is due on {d(gaps[0]['due'])}")
+        msg += f" (and {gaps[1]['term']} on {d(gaps[1]['due'])} is not funded yet)." if len(gaps) > 1 else "."
+    elif r["tuition"]:
+        msg += f", and your tuition fund covers the installment due {d(r['tuition'][0]['due'])}."
+    else:
+        msg += "."
+    tips = r["suggestions"]
+    # One tip for the tuition gap, and the cheapest fix for the dip (a spending cut if one is enough).
+    picks = tips[:1] if gaps else []   # the tool lists the tuition-gap tip first
+    if r["first_shortfall_date"]:
+        picks += [s for s in tips[len(picks):] if s["kind"] in ("cut_spending", "convert")][:1]
+    for s in picks or tips[:1]:
+        msg += " " + s["text"]
+    if any(s["kind"] == "convert" for s in picks):
+        msg += (" I haven't moved any money. Say 'cover the tuition shortfall from my MYR wallet' and I'll draft "
+                "that conversion for you to confirm." if gaps else
+                " I haven't moved any money; ask me if you want that conversion drafted for you to confirm.")
+    else:
+        msg += " This is an estimate from your schedule and recent spending; I haven't moved any money."
+    return msg
+
+
 class OfflineEngine:
     name = "offline"
 
@@ -163,6 +219,12 @@ class OfflineEngine:
                     return _say("There's nothing pending to cancel.")
                 return _call("cancel_pending_action", action_id=acts[-1]["action_id"])
             return _say(f"Cancelled: {last['action']['summary']}.")
+
+        # 3b. Cash-flow forecast: "will I run out of money before tuition?" (advice only, drafts nothing)
+        if re.search(FORECAST_WORDS, low) and not re.search(r"\b(pay|convert|transfer|send|bayar|tukar)\b", low):
+            if "forecast_cashflow" not in done:
+                return _call("forecast_cashflow", **_forecast_horizon(low))
+            return _say(_forecast_reply(last))
 
         # 4. Multi-step: convert enough then pay rent
         if re.search(r"convert enough|enough .* (to|for) (cover|pay)", low) and "rent" in low:

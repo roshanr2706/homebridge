@@ -108,7 +108,31 @@ export type Card =
       advice: string[];
     }
   | { type: 'transactions'; count: number; rows: { date: string; counterparty: string; amount: number; currency: string; category: string }[] }
-  | { type: 'checklist'; title: string; items: string[]; footnote: string };
+  | { type: 'checklist'; title: string; items: string[]; footnote: string }
+  | ForecastCard;
+
+// Cash-flow forecast ("runway"). `series` is one bar per `step_days` days from start_date; the indexes
+// below point into it.
+export type ForecastCard = {
+  type: 'forecast';
+  account: string;
+  start_date: string;
+  end_date: string;
+  horizon: string;
+  verdict: 'on_track' | 'tuition_gap' | 'spending_shortfall' | 'both';
+  series: number[];
+  step_days: number;
+  starting_balance: number;
+  ending_balance: number;
+  lowest: { date: string; balance: number; index: number };
+  first_shortfall_date: string | null;
+  shortfall_index: number | null;
+  tuition: { term: string; due: string; amount: number; gap: number; index: number }[];
+  weekly_spending_cad: number;
+  pending_included: string[];
+  suggestions: string[];
+  disclosure: string;
+};
 
 export type ChatResponse = {
   reply: string;
@@ -155,6 +179,7 @@ export const api = {
   health: () => call<{ ok: boolean; provider: string; demo_mode: boolean }>('student', '/health'),
   chat: (message: string, session_id = 'app') => call<ChatResponse>('student', '/chat', 'POST', { message, session_id }),
   overview: () => call<Overview>('student', '/overview'),
+  forecast: () => call<ForecastCard>('student', '/forecast'),
   accounts: () => call<{ accounts: Account[] }>('student', '/accounts'),
   actions: () => call<{ actions: Action[] }>('student', '/actions'),
   confirm: (id: string, token: string) => call<Action>('student', `/actions/${id}/confirm`, 'POST', { token }),

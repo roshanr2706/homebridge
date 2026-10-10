@@ -27,6 +27,8 @@ from .fx import FxMarket
 from .policy import PolicyEngine, PolicyError
 from .seed import SPONSOR, STUDENT
 from .tools import ToolContext, budget_summary, get_tuition_schedule
+from .tools import forecast_cashflow
+from .cards import forecast_card
 
 WEB_DIR = Path(os.getenv("HB_WEB_DIR", Path(__file__).resolve().parents[2] / "app" / "dist"))
 CHATS_PER_MINUTE = int(os.getenv("HB_CHATS_PER_MINUTE", "30"))
@@ -157,6 +159,19 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
                 "payees": st.bank.payees(user_id), "pending": pending,
                 "limits": {"single_cad": st.settings.limits.single_cad, "daily_cad": st.settings.limits.daily_cad},
                 "rates": {"MYR/CAD": st.fx.mid("MYR", "CAD"), "CAD/MYR": round(st.fx.mid("CAD", "MYR"), 4)}}
+
+    @app.get("/forecast")
+    def forecast(until: str = "next_tuition", user_id: str = Depends(student)):
+        """Wallet runway: the agent's read-only forecast tool, returned as the same card the chat shows."""
+        ctx = ToolContext(user_id=user_id, role="student", session_id="forecast", bank=st.bank, fx=st.fx,
+                          policy=st.policy, audit=st.audit, today=st.agent.today)
+        try:
+            r = forecast_cashflow(ctx, {"until": until[:20]})
+        except ValueError:
+            raise HTTPException(400, "until must be next_tuition, end_of_term, a month name or a date")
+        if "error" in r:
+            raise HTTPException(404, r["error"])
+        return forecast_card({}, r)
 
     @app.get("/actions")
     def actions(user_id: str = Depends(student)):

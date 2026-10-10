@@ -11,6 +11,7 @@ their own confirmation card.
 """
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 Builder = Callable[[Dict[str, Any], Dict[str, Any]], Optional[Dict[str, Any]]]
@@ -86,6 +87,35 @@ def _credit(args: Dict[str, Any], r: Dict[str, Any]) -> Optional[Dict[str, Any]]
             "footnote": r.get("disclosure", "")}
 
 
+FORECAST_POINTS = 92  # enough bars for a phone-width chart
+
+
+def forecast_card(args: Dict[str, Any], r: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Runway chart: the daily series bucketed to at most FORECAST_POINTS bars, each bar its bucket's minimum
+    so a short dip below zero still shows. Marker positions are bar indexes."""
+    series = r.get("series")
+    if not series:
+        return None
+    step = max(1, -(-len(series) // FORECAST_POINTS))
+    bars = [min(series[i:i + step]) for i in range(0, len(series), step)]
+    start = date.fromisoformat(r["start_date"])
+
+    def bar(iso: Optional[str]) -> Optional[int]:
+        return None if not iso else min(len(bars) - 1, (date.fromisoformat(iso) - start).days // step)
+
+    return {"type": "forecast", "account": r["account"], "start_date": r["start_date"], "end_date": r["end_date"],
+            "horizon": r["horizon"], "verdict": r["verdict"], "series": bars, "step_days": step,
+            "starting_balance": r["starting_balance"], "ending_balance": r["ending_balance"],
+            "lowest": {**r["lowest"], "index": bar(r["lowest"]["date"])},
+            "first_shortfall_date": r["first_shortfall_date"], "shortfall_index": bar(r["first_shortfall_date"]),
+            "tuition": [{**{k: t[k] for k in ("term", "due", "amount", "gap")}, "index": bar(t["due"])}
+                        for t in r.get("tuition", [])],
+            "weekly_spending_cad": r["weekly_spending_cad"],
+            "pending_included": r.get("pending_included", []),
+            "suggestions": [s["text"] for s in r.get("suggestions", [])],
+            "disclosure": r.get("disclosure", "")}
+
+
 BUILDERS: Dict[str, Builder] = {
     "get_balances": _balances,
     "get_fx_quotes": _fx_quotes,
@@ -95,6 +125,7 @@ BUILDERS: Dict[str, Builder] = {
     "check_message_for_scam": _scam,
     "list_transactions": _transactions,
     "credit_building_plan": _credit,
+    "forecast_cashflow": forecast_card,
 }
 
 # A transfer is drafted with a confirmation card already; showing the rent
