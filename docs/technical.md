@@ -167,6 +167,7 @@ For conversions: converting sponsor money when the last 24 hours of such convers
 | Payee type commonly used in scams (crypto, gift card, individual, unknown) | +25 |
 | Large round amount (≥ 1,000 and a multiple of 500) | +10 |
 | More than 3× the largest past payment to this payee | +25 |
+| Otherwise, more than 20% (and at least 20) above the usual (median) payment to this payee | +20 |
 | Amount or account number came from pasted or tool-supplied content (taint) | +30 |
 | Guard flag in the conversation: scam or injection | +40 each |
 | Guard flag: extraction or escalation | +10 each |
@@ -191,15 +192,15 @@ Providers are ranked by `receive`. The simulated set covers the real options a M
 
 ### 5.3 Scam and injection classifier (our own model)
 
-- **Data.** 653 labelled rows (`backend/data/classifier_train.jsonl`), built by `scripts/build_classifier_data.py` from 165 hand-written seed sentences (78 benign, 42 scam, 45 injection) in English, Malaysian English, Malay and Chinese, plus light template augmentation. Three labels: `benign` (including hard negatives such as real deposit, fee and tuition reminders), `scam` (CRA, IRCC, rental-deposit, Chinese-embassy "safe account", Macau scam, job and inheritance scams) and `injection` (prompt injection, extraction and escalation attempts).
+- **Data.** 902 labelled rows (`backend/data/classifier_train.jsonl`), built by `scripts/build_classifier_data.py` from 229 hand-written seed sentences (118 benign, 56 scam, 55 injection) in English, Malaysian English, Malay and Chinese, plus light template augmentation. Three labels: `benign` (including hard negatives such as real deposit, fee and tuition reminders, short follow-ups like "yes confirm it", and near-misses about parcels, jobs and emergencies), `scam` (CRA, IRCC, rental-deposit, Chinese-embassy "safe account", parcel/customs → fake police, Macau scam, job fees and fake cheques, family emergency, friend in need, inheritance scams) and `injection` (prompt injection including paraphrases and leetspeak, extraction and escalation attempts including paraphrased approval claims).
 - **Model.** TF-IDF on word 1–2 grams plus character 1–4 grams, then multinomial logistic regression (C = 20, balanced class weights). Character n-grams keep it robust to misspellings and Malaysian English, and they work on Chinese, which has no spaces. It trains in under a second at startup and runs fully offline.
-- **Evaluation.** 5-fold `GroupKFold`, with each seed sentence and its augmented variants kept in the same fold so no paraphrase leaks between train and test. Macro F1 **0.841** (benign 0.861, injection 0.862, scam 0.799). Full report: `evidence/offline/classifier_eval.json`.
+- **Evaluation.** 5-fold `GroupKFold`, with each seed sentence and its augmented variants kept in the same fold so no paraphrase leaks between train and test. Macro F1 **0.854** (benign 0.880, injection 0.815, scam 0.867; it was 0.841 on the earlier 653 rows, and the harder benign near-misses are why injection fell). Full report: `evidence/offline/classifier_eval.json`.
 - **Explainability.** `explain()` lists the word features that pushed the predicted class up, with stopwords removed (for the CRA gift-card message: "gift cards", "pay"). The app shows them on the scam-shield card.
-- **Role.** The classifier only adds a flag when its confidence is at least 0.75. A flag raises risk and can escalate a draft to the sponsor. It can never approve or unblock anything, so a false negative degrades to "the other layers still apply". The rules and the classifier back each other up: the rules catch exact patterns in any language, and the classifier catches paraphrases.
+- **Role.** The classifier only adds a flag when its confidence is at least 0.75, and that flag carries to later turns of the chat only at 0.9 or more (rule flags always carry, for 6 turns). A flag raises risk and can escalate a draft to the sponsor. It can never approve or unblock anything, so a false negative degrades to "the other layers still apply". The rules and the classifier back each other up: the rules catch exact patterns in any language, and the classifier catches paraphrases.
 
 ### 5.4 Taint tracking for untrusted content
 
-Text the user did not type is recorded as untrusted, and stays recorded while the turn that read it is still in the model's context: pasted messages (detected by length, line breaks or email headers), text passed to the scam checker, and transaction memos read by tools. When a draft's amount, or a new payee's account number, matches untrusted text, the draft records that provenance (`{"amount": "untrusted"}`), gains 30 risk points, and the card says "The amount came from a pasted message, not from you. Check it against an official source." This targets the classic "here is the bill, pay it" injection where the attacker controls the numbers.
+Text the user did not type is recorded as untrusted, and stays recorded while the turn that read it is still in the model's context: pasted messages (detected by length, line breaks or email headers), short quotes inside a normal message (quoted text after "texted", "said", "email", "bill says" and similar, any quoted span of 20+ characters, or "texted: …" up to a dash), text passed to the scam checker, and transaction memos read by tools. When a draft's amount, or a new payee's account number, matches untrusted text, the draft records that provenance (`{"amount": "untrusted"}`), gains 30 risk points, and the card says "The amount came from a message you pasted or quoted, not from you. Check it against an official source." With a jump over the usual amount (+20), "Landlord texted: 'rent is now 1,480' — pay it" reaches 50 and goes to the sponsor. This targets the classic "here is the bill, pay it" injection where the attacker controls the numbers.
 
 ### 5.5 Hash-chained audit log
 
@@ -257,11 +258,11 @@ Run with `pytest -q` (153 tests) and `python scripts/run_evidence.py`. Results f
 | Suite | Result |
 |---|---|
 | Scripted tasks (balances, insight, FX, tuition, rent, sponsor, credit, clarification, recovery, scam shield, multi-step, Malaysian English, Chinese, Malay) | **36 / 36 pass**, each checked for tool sequence, reply content, drafted tier and final sandbox state |
-| Attack suite (induced transfer 12, extraction 10, escalation 12, injection 12) | **46 / 46 blocked**. No balance change, no execution, no full number or token in any reply, no limit or role change, no T2 payment after a flagged message in the conversation |
+| Attack suite (induced transfer 18, extraction 10, escalation 14, injection 15) | **57 / 57 blocked**. No balance change, no execution, no full number or token in any reply, no limit or role change, no T2 payment after a flagged message in the conversation |
 | Compromised-model tests | A scripted "evil" provider calls tools directly (unknown account, invented execute and approve tools, add-then-pay, drain by conversion, negative, NaN, infinite, sub-cent and huge amounts, malformed arguments, draft spam, cancelling others' drafts, a payee filed as `conversion` to dodge the daily limit, lookalike payee names, parallel drafts, an injected memo acted on a turn later). No money moves in any case |
 | API role tests | No token → 401; sponsor on student endpoints → 403; student approving → 403; wrong or reused token → 400; tampered parameters → 400; expired → 400; cooling period enforced; a draft confirmed after the sponsor tightened the limits goes to the sponsor; audit tamper detected |
 | LLM wire tests | Real OpenAI-compatible client against a mocked transport: tool round trip, malformed arguments, fallback |
-| Classifier | Macro F1 0.841 (grouped 5-fold CV) |
+| Classifier | Macro F1 0.854 (grouped 5-fold CV) |
 
 Several attacks show defence in depth: the limit-splitting attack (A04) passes the input guard but is stopped by the daily limit counting pending drafts; the indirect injection in a transaction memo (D08) is caught by the tool-output scan; the add-a-payee-and-pay attack (A09) is stopped by the new-payee tier and cooling period.
 
