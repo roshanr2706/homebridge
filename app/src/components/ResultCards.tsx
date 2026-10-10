@@ -205,7 +205,8 @@ function Scam({ c }: { c: Extract<Card, { type: 'scam_check' }> }) {
     suspicious: { label: 'Suspicious', tone: 'warn' as const, color: t.warn, bg: t.warnBg },
     no_known_pattern: { label: 'No known scam pattern', tone: 'ok' as const, color: t.ok, bg: t.okBg },
   }[c.verdict];
-  const signals = Object.entries(c.signals ?? {});
+  // Named warning signs from the backend ("Asks for gift cards"), never raw rule matches.
+  const signals = Array.isArray(c.signals) ? c.signals : [];
   return (
     <Surface tone={verdict.tone} style={{ padding: 0, overflow: 'hidden' }}>
       <View style={{ backgroundColor: verdict.bg, padding: 14 }}>
@@ -215,10 +216,17 @@ function Scam({ c }: { c: Extract<Card, { type: 'scam_check' }> }) {
       <View style={{ padding: 14, gap: 8 }}>
         {signals.length > 0 && (
           <View style={{ gap: 6 }}>
-            <Body style={{ fontSize: 12, color: t.muted }}>Rule matches</Body>
+            <Body style={{ fontSize: 12, color: t.muted }}>Warning signs</Body>
             <Row style={{ flexWrap: 'wrap', gap: 6 }}>
-              {signals.flatMap(([cat, hits]) => hits.map((h) => <Pill key={cat + h} label={`${cat}: ${h}`} tone={cat === 'scam' ? 'danger' : 'warn'} />))}
+              {signals.map((s) => (
+                <Pill key={s.category + s.name} label={s.name} tone={s.category === 'scam' ? 'danger' : 'warn'} />
+              ))}
             </Row>
+            {c.quote ? (
+              <Body style={{ fontSize: 13, color: t.muted, fontStyle: 'italic' }} numberOfLines={2}>
+                “{c.quote}”
+              </Body>
+            ) : null}
           </View>
         )}
         {c.model_label && (

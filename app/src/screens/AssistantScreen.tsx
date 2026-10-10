@@ -126,16 +126,20 @@ function Snapshot({ o }: { o: Overview }) {
   );
 }
 
+const HELLO: Msg = {
+  id: 'hello',
+  from: 'bot',
+  text: "Hi Aisha! I can check balances, compare transfer costs, plan tuition and draft payments. I can't move money on my own: you confirm every payment, and big ones also go to your dad.",
+};
+
 export function AssistantScreen({ active }: { active: boolean }) {
   const t = useTheme();
   const toast = useToast();
-  const [messages, setMessages] = useState<Msg[]>([
-    {
-      id: 'hello',
-      from: 'bot',
-      text: "Hi Aisha! I can check balances, compare transfer costs, plan tuition and draft payments. I can't move money on my own: you confirm every payment, and big ones also go to your dad.",
-    },
-  ]);
+  const [messages, setMessages] = useState<Msg[]>([HELLO]);
+  // One server-side chat per id. "New chat" starts a fresh one, which also drops any safety flag the old chat
+  // carried; the limits, sponsor approval and cooling periods never depended on that flag.
+  const [sessionId, setSessionId] = useState(api.newSessionId);
+  const [chatFlags, setChatFlags] = useState<string[]>([]);
   const [actions, setActions] = useState<Record<string, Action>>({});
   const [snap, setSnap] = useState<Overview | null>(null);
   const loadSnap = useCallback(() => {
@@ -192,8 +196,9 @@ export function AssistantScreen({ active }: { active: boolean }) {
     setMessages((m) => [...m, { id: `u${Date.now()}`, from: 'user', text: msg }]);
     setSending(true);
     try {
-      const r = await api.chat(msg);
+      const r = await api.chat(msg, sessionId);
       merge(r.actions, false);
+      setChatFlags(r.guard.session_flags ?? []);
       setMessages((m) => [
         ...m,
         {
@@ -237,6 +242,14 @@ export function AssistantScreen({ active }: { active: boolean }) {
     } catch (e) {
       toast("Couldn't cancel", (e as Error).message, 'danger');
     }
+  };
+
+  const newChat = () => {
+    if (sending) return;
+    setSessionId(api.newSessionId());
+    setMessages([HELLO]);
+    setChatFlags([]);
+    setInput('');
   };
 
   const pick = (s: (typeof SUGGESTIONS)[number]) => {
@@ -305,6 +318,19 @@ export function AssistantScreen({ active }: { active: boolean }) {
           }
         />
 
+        {chatFlags.length > 0 && (
+          <View style={[styles.flagBar, { backgroundColor: t.warnBg }]}>
+            <Body style={{ flex: 1, fontSize: 12, color: t.warn }}>
+              This chat was flagged ({chatFlags.map((f) => FLAG_LABEL[f] ?? f).join(', ')}) — payments here go to Dad.
+            </Body>
+            <Pressable accessibilityRole="button" onPress={newChat} disabled={sending} hitSlop={8}>
+              <Body style={{ fontSize: 12, color: t.warn, fontFamily: fonts.bodyBold, textDecorationLine: 'underline' }}>
+                Start a new chat
+              </Body>
+            </Pressable>
+          </View>
+        )}
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -312,6 +338,17 @@ export function AssistantScreen({ active }: { active: boolean }) {
           style={{ flexGrow: 0, flexShrink: 0 }}
           contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 8 }}
         >
+          {messages.length > 1 && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="New chat"
+              onPress={newChat}
+              disabled={sending}
+              style={({ pressed }) => [styles.chip, { borderColor: t.accent, backgroundColor: pressed ? t.sunken : t.surface }]}
+            >
+              <Body style={{ fontSize: 13, color: t.accent, fontFamily: fonts.bodyMedium }}>＋ New chat</Body>
+            </Pressable>
+          )}
           {SUGGESTIONS.map((s) => (
             <Pressable
               key={s.label}
@@ -367,6 +404,7 @@ export function AssistantScreen({ active }: { active: boolean }) {
 const styles = StyleSheet.create({
   tile: { flex: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 10 },
   offline: { paddingHorizontal: 16, paddingVertical: 6 },
+  flagBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 7 },
   userBubble: { maxWidth: '86%', borderRadius: 18, borderBottomRightRadius: 4, paddingVertical: 9, paddingHorizontal: 14 },
   botBubble: { paddingLeft: 12, borderLeftWidth: 2 },
   chip: { borderWidth: 1, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 13 },

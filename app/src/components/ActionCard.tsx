@@ -224,7 +224,7 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
         {untrusted.length > 0 && (
           <View style={[styles.box, { backgroundColor: t.dangerBg }]}>
             <Body style={{ fontSize: 13, color: t.danger, fontFamily: fonts.bodyBold }}>
-              The {untrusted.join(' and ')} came from a pasted message, not from you.
+              The {untrusted.join(' and ')} came from a message you pasted or quoted, not from you.
             </Body>
             <Body style={{ fontSize: 12, color: t.danger }}>Check it against an official source before you confirm.</Body>
           </View>
