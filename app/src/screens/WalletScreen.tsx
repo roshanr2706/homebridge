@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
-import { api, type Overview } from '../api';
+import { api, type ForecastCard, type Overview } from '../api';
 import { usePoll } from '../hooks';
-import { BudgetCard, TuitionCard } from '../components/ResultCards';
+import { BudgetCard, RunwayCard, TuitionCard } from '../components/ResultCards';
 import { amount, fonts, money, useTheme } from '../theme';
 import { Body, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
@@ -12,6 +12,7 @@ const STATUS: Record<string, string> = { awaiting_user: 'needs your confirmation
 export function WalletScreen({ active }: { active: boolean }) {
   const t = useTheme();
   const [o, setO] = useState<Overview | null>(null);
+  const [runway, setRunway] = useState<ForecastCard | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -19,7 +20,10 @@ export function WalletScreen({ active }: { active: boolean }) {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setO(await api.overview());
+      // The runway is a nice-to-have: if it fails, the wallet still shows everything else.
+      const [ov, fc] = await Promise.all([api.overview(), api.forecast().catch(() => null)]);
+      setO(ov);
+      setRunway(fc);
       setNow(Date.now());
       setError('');
     } catch {
@@ -95,6 +99,13 @@ export function WalletScreen({ active }: { active: boolean }) {
       <Surface>
         <TuitionCard c={{ type: 'tuition', ...o.tuition }} bare />
       </Surface>
+
+      {runway && (
+        <Surface>
+          <RunwayCard c={runway} bare compact />
+          <Body style={{ fontSize: 12, color: t.muted, marginTop: 8 }}>Ask the assistant “will I run out of money before tuition?” for what would help.</Body>
+        </Surface>
+      )}
 
       <Surface>
         <BudgetCard c={{ ...o.budget, type: 'budget' }} bare />

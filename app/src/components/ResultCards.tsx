@@ -284,6 +284,110 @@ function Checklist({ c }: { c: Extract<Card, { type: 'checklist' }> }) {
   );
 }
 
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const shortDate = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
+
+// Runway: the spending balance over time as bars around a zero line. Days below zero sit in a red
+// "shortfall zone"; gold lines mark tuition due dates; the first bar is today and the gold bar the low point.
+export function RunwayCard({ c, bare, compact }: { c: Extract<Card, { type: 'forecast' }>; bare?: boolean; compact?: boolean }) {
+  const t = useTheme();
+  const H = compact ? 64 : 96;
+  const n = c.series.length;
+  const hi = Math.max(0, ...c.series);
+  const lo = Math.min(0, ...c.series);
+  const range = hi - lo || 1;
+  const zero = (-lo / range) * H;
+  const gaps = c.tuition.filter((x) => x.gap > 0);
+  const short = c.first_shortfall_date !== null;
+  const verdict = short
+    ? { label: 'RUNS SHORT', tone: 'danger' as const }
+    : gaps.length
+      ? { label: 'TUITION GAP', tone: 'warn' as const }
+      : { label: 'ON TRACK', tone: 'ok' as const };
+  const inner = (
+    <>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Eyebrow>Runway · to {shortDate(c.end_date)}</Eyebrow>
+        <Pill label={verdict.label} tone={verdict.tone} />
+      </Row>
+      <Body style={{ fontFamily: fonts.bodyBold, marginTop: 4, color: short ? t.danger : t.text }}>
+        {short ? `Runs short on ${shortDate(c.first_shortfall_date as string)}` : `Lasts to ${shortDate(c.end_date)}`}
+      </Body>
+      <Body style={{ fontSize: 12, color: t.muted }}>
+        {c.account} · lowest {money(c.lowest.balance, 'CAD')} on {shortDate(c.lowest.date)}
+      </Body>
+      <View style={{ height: H, marginTop: 10 }}>
+        {lo < 0 && (
+          <>
+            <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: zero, backgroundColor: t.dangerBg, borderRadius: 3 }} />
+            <View style={{ position: 'absolute', left: 0, right: 0, bottom: zero, height: 1, backgroundColor: t.danger, opacity: 0.5 }} />
+          </>
+        )}
+        <Row style={{ height: H, alignItems: 'stretch', gap: n > 60 ? 1 : 2 }}>
+          {c.series.map((v, i) => {
+            const h = Math.max(1, (Math.abs(v) / range) * H);
+            const color = v < 0 ? t.danger : i === c.lowest.index ? t.gold : i === 0 ? t.accent : t.accentSoft;
+            return (
+              <View key={i} style={{ flex: 1 }}>
+                <View style={{ position: 'absolute', left: 0, right: 0, bottom: v >= 0 ? zero : zero - h, height: h, backgroundColor: color, borderRadius: 1 }} />
+              </View>
+            );
+          })}
+        </Row>
+        {c.tuition.map((x) => (
+          <View
+            key={x.due}
+            style={{ position: 'absolute', top: 0, bottom: 0, left: `${((x.index + 0.5) / n) * 100}%`, width: 2, marginLeft: -1, backgroundColor: x.gap > 0 ? t.danger : t.gold }}
+          />
+        ))}
+      </View>
+      <Row style={{ justifyContent: 'space-between', marginTop: 4 }}>
+        <Mono style={{ fontSize: 11, color: t.muted }}>today {amount(c.starting_balance, 0)}</Mono>
+        <Mono style={{ fontSize: 11, color: c.ending_balance < 0 ? t.danger : t.muted }}>
+          {shortDate(c.end_date)} {amount(c.ending_balance, 0)}
+        </Mono>
+      </Row>
+      {c.tuition.map((x) => (
+        <Row key={x.due} style={{ gap: 8, marginTop: 6 }}>
+          <View style={{ width: 10, height: 2, backgroundColor: x.gap > 0 ? t.danger : t.gold }} />
+          <Body style={{ fontSize: 12, flex: 1 }}>
+            Tuition due {shortDate(x.due)} ({money(x.amount, 'CAD', 0)}):{' '}
+            {x.gap > 0 ? (
+              <Mono style={{ fontSize: 12, color: t.danger, fontFamily: fonts.monoBold }}>fund short {money(x.gap, 'CAD')}</Mono>
+            ) : (
+              <Body style={{ fontSize: 12, color: t.ok }}>covered</Body>
+            )}
+          </Body>
+        </Row>
+      ))}
+      {!compact && c.suggestions.length > 0 && (
+        <>
+          <Divider />
+          <Eyebrow>What would help</Eyebrow>
+          <View style={{ gap: 6, marginTop: 6 }}>
+            {c.suggestions.map((s, i) => (
+              <Row key={i} style={{ alignItems: 'flex-start', gap: 10 }}>
+                <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: t.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
+                  <Mono style={{ fontSize: 11, color: t.accent, fontFamily: fonts.monoBold }}>{i + 1}</Mono>
+                </View>
+                <Body style={{ flex: 1, fontSize: 13, lineHeight: 19 }}>{s}</Body>
+              </Row>
+            ))}
+          </View>
+        </>
+      )}
+      {!compact && (
+        <Body style={{ fontSize: 11, color: t.faint, marginTop: 10 }}>
+          Assumes spending of about {money(c.weekly_spending_cad, 'CAD', 0)} a week
+          {c.pending_included.length > 0 ? ` and counts ${c.pending_included.length} pending draft(s) as confirmed` : ''}. {c.disclosure}
+        </Body>
+      )}
+      {!bare && <Provenance />}
+    </>
+  );
+  return bare ? <View>{inner}</View> : <Surface tone={short ? 'danger' : gaps.length ? 'warn' : 'plain'}>{inner}</Surface>;
+}
+
 export function ResultCard({ card }: { card: Card }) {
   switch (card.type) {
     case 'fx_quotes':
@@ -302,6 +406,8 @@ export function ResultCard({ card }: { card: Card }) {
       return <Transactions c={card} />;
     case 'checklist':
       return <Checklist c={card} />;
+    case 'forecast':
+      return <RunwayCard c={card} />;
     default:
       return null;
   }
