@@ -1,0 +1,139 @@
+{
+ "student": {
+  "id": "aisha",
+  "name": "Aisha Rahman",
+  "role": "student",
+  "sponsor_id": "rahman"
+ },
+ "accounts": [
+  {
+   "id": "acc_cad",
+   "label": "CAD Everyday",
+   "currency": "CAD",
+   "balance": 2340.55,
+   "number": "••••2290",
+   "sponsor_funded": false
+  },
+  {
+   "id": "acc_myr",
+   "label": "MYR Wallet",
+   "currency": "MYR",
+   "balance": 18200.0,
+   "number": "••••3341",
+   "sponsor_funded": true
+  },
+  {
+   "id": "acc_tui",
+   "label": "CAD Tuition Fund",
+   "currency": "CAD",
+   "balance": 6000.0,
+   "number": "••••8812",
+   "sponsor_funded": true
+  }
+ ],
+ "total_cad": 14230.07,
+ "limits": {
+  "single_cad": 1500.0,
+  "daily_cad": 3000.0,
+  "payee_cooling_seconds": 60,
+  "pending_ttl_seconds": 600,
+  "drafts_per_hour": 20,
+  "sponsor_risk_threshold": 50
+ },
+ "recent": [
+  {
+   "action_id": "act_cebc5a3bca",
+   "kind": "transfer",
+   "summary": "Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday",
+   "tier": "T2",
+   "status": "awaiting_user",
+   "needs_sponsor_approval": false,
+   "risk_score": 0,
+   "warnings": [],
+   "next_step": "The user must review and tap Confirm in the app. You cannot confirm it.",
+   "params": {
+    "payee_id": "py_rent",
+    "payee_name": "Maple Court Rentals",
+    "amount": 1150.0,
+    "currency": "CAD",
+    "from_account_id": "acc_cad",
+    "from_account": "CAD Everyday",
+    "memo": ""
+   },
+   "risk_reasons": [],
+   "sponsor_reasons": [],
+   "risk_signals": [],
+   "created_at": 1791651304.0452964,
+   "expires_at": 1791651904.0452964,
+   "user_confirmed": false,
+   "sponsor_decision": null,
+   "sponsor_note": "",
+   "result": null,
+   "provenance": {
+    "amount": "user"
+   },
+   "frozen": null
+  },
+  {
+   "action_id": "act_afe27b6a19",
+   "kind": "transfer",
+   "summary": "Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund",
+   "tier": "T3",
+   "status": "awaiting_sponsor",
+   "needs_sponsor_approval": true,
+   "risk_score": 0,
+   "warnings": [
+    "Balance in CAD Tuition Fund is lower than this amount right now; it will fail unless topped up first."
+   ],
+   "next_step": "Waiting for the sponsor to approve in their own app.",
+   "params": {
+    "payee_id": "py_ubc",
+    "payee_name": "UBC Student Financial Services",
+    "amount": 7250.0,
+    "currency": "CAD",
+    "from_account_id": "acc_tui",
+    "from_account": "CAD Tuition Fund",
+    "memo": "Winter Term 2, installment 1"
+   },
+   "risk_reasons": [
+    "Amount above the single-payment limit of CAD 1,500",
+    "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+    "Paid from a sponsor-funded account (CAD Tuition Fund)"
+   ],
+   "sponsor_reasons": [
+    "Amount above the single-payment limit of CAD 1,500",
+    "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+    "Paid from a sponsor-funded account (CAD Tuition Fund)"
+   ],
+   "risk_signals": [],
+   "created_at": 1791651304.0616999,
+   "expires_at": 1791737704.1421115,
+   "user_confirmed": true,
+   "sponsor_decision": null,
+   "sponsor_note": "",
+   "result": null,
+   "provenance": {
+    "amount": "user"
+   },
+   "frozen": null
+  }
+ ],
+ "freeze": {
+  "frozen": false,
+  "own": null,
+  "sponsor_funded": null,
+  "since": null
+ },
+ "alerts": [],
+ "digest": {
+  "window_hours": 24,
+  "drafted": 2,
+  "executed": 0,
+  "awaiting_sponsor": 1,
+  "stopped": 0,
+  "money_out_cad": 0,
+  "flagged": [],
+  "alerts": 0,
+  "frozen": false
+ }
+}

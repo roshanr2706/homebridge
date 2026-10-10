@@ -1,0 +1,62 @@
+{
+ "type": "transactions",
+ "count": 22,
+ "rows": [
+  {
+   "date": "2026-10-06",
+   "counterparty": "Late Night Pizza",
+   "amount": -35.8,
+   "currency": "CAD",
+   "category": "dining"
+  },
+  {
+   "date": "2026-10-05",
+   "counterparty": "StreamBox",
+   "amount": -22.99,
+   "currency": "CAD",
+   "category": "entertainment"
+  },
+  {
+   "date": "2026-10-04",
+   "counterparty": "Save Mart",
+   "amount": -102.2,
+   "currency": "CAD",
+   "category": "groceries"
+  },
+  {
+   "date": "2026-10-03",
+   "counterparty": "Mamak Corner",
+   "amount": -15.0,
+   "currency": "CAD",
+   "category": "dining"
+  },
+  {
+   "date": "2026-10-02",
+   "counterparty": "Bubble Tea Co",
+   "amount": -16.4,
+   "currency": "CAD",
+   "category": "dining"
+  },
+  {
+   "date": "2026-09-30",
+   "counterparty": "StreamBox",
+   "amount": -22.99,
+   "currency": "CAD",
+   "category": "entertainment"
+  },
+  {
+   "date": "2026-09-29",
+   "counterparty": "Hotpot House",
+   "amount": -41.15,
+   "currency": "CAD",
+   "category": "dining"
+  },
+  {
+   "date": "2026-09-27",
+   "counterparty": "T&T Market",
+   "amount": -93.1,
+   "currency": "CAD",
+   "category": "groceries"
+  }
+ ]
+}

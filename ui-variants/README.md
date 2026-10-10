@@ -1,0 +1,1 @@
+- [playful](playful/README.md): warm, Gen-Z friendly bento UI (Mantine v9, coral/sun palette, streaks, Dad mascot, PIN-pad approvals), port 5184

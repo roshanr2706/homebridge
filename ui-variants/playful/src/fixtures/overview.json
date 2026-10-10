@@ -1,0 +1,331 @@
+{
+ "accounts": [
+  {
+   "id": "acc_cad",
+   "label": "CAD Everyday",
+   "currency": "CAD",
+   "balance": 2340.55,
+   "number": "••••2290",
+   "sponsor_funded": false
+  },
+  {
+   "id": "acc_myr",
+   "label": "MYR Wallet",
+   "currency": "MYR",
+   "balance": 18200.0,
+   "number": "••••3341",
+   "sponsor_funded": true
+  },
+  {
+   "id": "acc_tui",
+   "label": "CAD Tuition Fund",
+   "currency": "CAD",
+   "balance": 6000.0,
+   "number": "••••8812",
+   "sponsor_funded": true
+  }
+ ],
+ "total_cad": 14230.07,
+ "tuition": {
+  "installments": [
+   {
+    "id": "tu_1",
+    "term": "Winter Term 2, installment 1",
+    "due": "2027-01-06",
+    "amount": 7250.0,
+    "currency": "CAD",
+    "paid": false,
+    "payee_id": "py_ubc",
+    "days_until_due": 90
+   },
+   {
+    "id": "tu_2",
+    "term": "Winter Term 2, installment 2",
+    "due": "2027-03-07",
+    "amount": 7250.0,
+    "currency": "CAD",
+    "paid": false,
+    "payee_id": "py_ubc",
+    "days_until_due": 150
+   }
+  ],
+  "tuition_fund_cad": 6000.0,
+  "next_shortfall_cad": 1250.0,
+  "myr_wallet_value_cad": 5889.52,
+  "hint": "Cover a shortfall with prepare_conversion(MYR to CAD, destination='tuition') or by asking the sponsor with request_sponsor_topup."
+ },
+ "budget": {
+  "period_days": 30,
+  "categories": [
+   {
+    "category": "rent",
+    "spent_cad": 1150.0,
+    "budget_cad": null,
+    "over_budget": false
+   },
+   {
+    "category": "groceries",
+    "spent_cad": 395.35,
+    "budget_cad": 400.0,
+    "over_budget": false
+   },
+   {
+    "category": "dining",
+    "spent_cad": 214.1,
+    "budget_cad": 150.0,
+    "over_budget": true
+   },
+   {
+    "category": "family",
+    "spent_cad": 145.62,
+    "budget_cad": null,
+    "over_budget": false
+   },
+   {
+    "category": "transport",
+    "spent_cad": 131.0,
+    "budget_cad": 130.0,
+    "over_budget": true
+   },
+   {
+    "category": "phone",
+    "spent_cad": 55.0,
+    "budget_cad": null,
+    "over_budget": false
+   },
+   {
+    "category": "entertainment",
+    "spent_cad": 45.98,
+    "budget_cad": 80.0,
+    "over_budget": false
+   },
+   {
+    "category": "utilities",
+    "spent_cad": 41.2,
+    "budget_cad": null,
+    "over_budget": false
+   }
+  ],
+  "total_spent_cad": 2178.25,
+  "income_cad": 2171.5,
+  "possible_duplicate_charges": [
+   "StreamBox"
+  ]
+ },
+ "reminders": [],
+ "payees": [
+  {
+   "id": "py_hydro",
+   "name": "BC Hydro",
+   "kind": "utilities",
+   "currency": "CAD",
+   "number": "••••9988",
+   "status": "active",
+   "usable_from": 1600000000.0
+  },
+  {
+   "id": "py_card",
+   "name": "HomeBridge Secured Card",
+   "kind": "credit_card",
+   "currency": "CAD",
+   "number": "••••7765",
+   "status": "active",
+   "usable_from": 1600000000.0
+  },
+  {
+   "id": "py_rent",
+   "name": "Maple Court Rentals",
+   "kind": "rent",
+   "currency": "CAD",
+   "number": "••••7716",
+   "status": "active",
+   "usable_from": 1600000000.0
+  },
+  {
+   "id": "py_phone",
+   "name": "Northline Mobile",
+   "kind": "phone",
+   "currency": "CAD",
+   "number": "••••5521",
+   "status": "active",
+   "usable_from": 1600000000.0
+  },
+  {
+   "id": "py_ubc",
+   "name": "UBC Student Financial Services",
+   "kind": "tuition",
+   "currency": "CAD",
+   "number": "••••4471",
+   "status": "active",
+   "usable_from": 1600000000.0
+  }
+ ],
+ "pending": [],
+ "credit": {
+  "has_card": true,
+  "card": {
+   "label": "HomeBridge Secured Card",
+   "number": "••••7765",
+   "currency": "CAD",
+   "secured": true,
+   "credit_limit": 500.0,
+   "balance": 280.85,
+   "available": 219.15,
+   "deposit": 500.0,
+   "opened": "2026-05-06",
+   "apr": 19.99,
+   "autopay": "off"
+  },
+  "utilization_pct": 56.1,
+  "utilization_reported_pct": 36.9,
+  "utilization_projected_at_close_pct": 75.4,
+  "projected_balance_at_close": 377.1,
+  "projection_basis": "At this cycle's pace of purchases, with no payment before the statement closes.",
+  "target_pct": 30,
+  "next_statement_date": "2026-10-23",
+  "days_until_statement": 15,
+  "statement": {
+   "closed": "2026-09-23",
+   "balance": 184.6,
+   "minimum_due": 10.0,
+   "paid": 0.0,
+   "remaining": 184.6,
+   "due_date": "2026-10-14",
+   "days_until_due": 6,
+   "status": "due"
+  },
+  "on_time_streak": 4,
+  "late_payments": 0,
+  "months_of_history": 5,
+  "payment_history": [
+   {
+    "closed": "2026-05-25",
+    "status": "on_time"
+   },
+   {
+    "closed": "2026-06-24",
+    "status": "on_time"
+   },
+   {
+    "closed": "2026-07-24",
+    "status": "on_time"
+   },
+   {
+    "closed": "2026-08-24",
+    "status": "on_time"
+   },
+   {
+    "closed": "2026-09-23",
+    "status": "due"
+   }
+  ],
+  "pay_to_report_under_30": 131.0,
+  "pay_to_report_under_10": 231.0,
+  "recommended_payment": {
+   "amount": 184.6,
+   "balance_after": 96.25,
+   "utilization_after_pct": 19.2
+  },
+  "factors": [
+   {
+    "key": "payment_history",
+    "label": "Payment history",
+    "approx_weight_pct": 35,
+    "status": "good",
+    "detail": "4 of 4 statements paid on time.",
+    "tip": "Never miss the minimum. One late payment can stay on a Canadian report for years."
+   },
+   {
+    "key": "utilization",
+    "label": "Credit utilization",
+    "approx_weight_pct": 30,
+    "status": "attention",
+    "detail": "56.1% of your limit used now; your last statement reported 36.9%.",
+    "tip": "What counts is the balance on the statement date, so pay down before it closes."
+   },
+   {
+    "key": "history_length",
+    "label": "Length of credit history",
+    "approx_weight_pct": 15,
+    "status": "building",
+    "detail": "5 months since the card was opened on 2026-05-06.",
+    "tip": "Only time fixes this. Keeping the card open lets it grow."
+   },
+   {
+    "key": "new_credit",
+    "label": "New credit and inquiries",
+    "approx_weight_pct": 10,
+    "status": "good",
+    "detail": "1 hard inquiry (the card application).",
+    "tip": "Avoid applying for several cards or loans close together."
+   },
+   {
+    "key": "credit_mix",
+    "label": "Credit mix",
+    "approx_weight_pct": 10,
+    "status": "building",
+    "detail": "One credit card. That is normal for a student.",
+    "tip": "Don't borrow just to change your mix."
+   }
+  ],
+  "credit_health": {
+   "key": "needs_attention",
+   "label": "Needs attention",
+   "basis": "Simulated from on-time payments, utilization and card age on your sandbox card. Not a credit score."
+  },
+  "next_actions": [
+   {
+    "key": "minimum",
+    "amount": 10.0,
+    "by": "2026-10-14",
+    "text": "Pay at least the minimum, CAD 10.00, by 2026-10-14 (6 days away). Paying on time is the biggest factor, and keeps your 4-payment on-time streak."
+   },
+   {
+    "key": "statement_balance",
+    "amount": 184.6,
+    "by": "2026-10-14",
+    "text": "Pay the full statement balance, CAD 184.60, by 2026-10-14 to avoid interest (19.99% a year; about CAD 2.91 for a month if you pay only the minimum)."
+   },
+   {
+    "key": "under_30",
+    "amount": 131.0,
+    "by": "2026-10-23",
+    "text": "Pay CAD 131 before your statement closes on 2026-10-23 so the balance reported to the bureaus is under 30% of your limit (CAD 149.85 of CAD 500)."
+   },
+   {
+    "key": "one_payment",
+    "amount": 184.6,
+    "by": "2026-10-14",
+    "text": "One payment of CAD 184.60 now covers all of that and leaves CAD 96.25 (19.2% of your limit)."
+   },
+   {
+    "key": "autopay",
+    "text": "Set up autopay for at least the minimum payment with the card issuer, so one busy week never costs you your on-time record."
+   },
+   {
+    "key": "keep_open",
+    "text": "Keep this card open, even after you move to an unsecured card. Closing your oldest account shortens your credit history and cuts your available credit."
+   },
+   {
+    "key": "graduate",
+    "text": "After about 12 months of on-time payments (you're at 5), ask the issuer about moving to an unsecured card and getting your CAD 500 deposit back."
+   }
+  ],
+  "not_a_credit_score": true,
+  "disclosure": "General information, not personalised financial advice. HomeBridge is not a licensed adviser. This is not a credit score: HomeBridge cannot see your Equifax or TransUnion file, and the indicator is simulated from your sandbox card only."
+ },
+ "freeze": {
+  "frozen": false,
+  "own": null,
+  "sponsor_funded": null,
+  "since": null
+ },
+ "limits": {
+  "single_cad": 1500.0,
+  "daily_cad": 3000.0
+ },
+ "rates": {
+  "MYR/CAD": 0.3236,
+  "CAD/MYR": 3.0902
+ }
+}
