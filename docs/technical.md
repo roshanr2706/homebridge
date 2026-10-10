@@ -245,6 +245,20 @@ Card payments go through `PolicyEngine.draft_transfer`: T2 within the student's 
 
 Alerts are fixed, deterministic rules evaluated when drafts are created and confirmed: 3 confirmed payments within an hour, a first payment to a payee above max(3 × the median payment, CAD 250), activity between 01:00 and 05:00 in Vancouver, and 3 failed or refused confirmations within an hour. Each is stored once per hour per kind, shown to the sponsor with a 24-hour digest on the Approvals tab, and adds 10 to 25 risk points to new drafts for 24 hours. The clock is injectable, and the test harness pins it to midday in Vancouver so results never depend on when the suite runs.
 
+### 5.9 Compliance layer
+
+`Compliance.assess()` (`compliance.py`) runs in `PolicyEngine._new` for every draft, before the tier is set, and returns a list of checks, each `pass`, `flag`, `block` or `report`:
+
+- **Sanctions screening** of payee names on add and on every payment. `normalise_name` folds homoglyphs and invisible characters (the same folding as the input guard), strips accents, case and punctuation, drops legal-form words (LLC, Sdn Bhd…) and sorts the tokens; `difflib.SequenceMatcher` scores it against each entry and alias of a 12-name **sample** watchlist (fictional, labelled as such). ≥ 0.90 blocks the draft (status `blocked`, payee `blocked`, no token); 0.80 to 0.90 adds 25 risk points and a manual-review flag.
+- **KYC**: a `kyc` table (student `verified_basic`, sponsor `verified_full`). `confirm` and `sponsor_decide` refuse money movement for an unverified person; the level caps the limits the sponsor can set (CAD 5,000 / 10,000 for basic, 20,000 / 50,000 for full).
+- **Cross-border record and FINTRAC EFTR**: a draft is cross-border when the source and destination countries differ (CAD accounts are Canadian, the MYR account is a linked Malaysian account; the sponsor is in Malaysia). It stores originator, beneficiary (masked accounts), purpose and source of funds, and flags an EFTR at ≥ CAD 10,000, alone or with the person's other cross-border drafts in 24 h.
+- **BNM purpose code** on money leaving ringgit: ED01 (tuition fund or a tuition top-up) or ED02 (living expenses), from a code table modelled on BNM's categories.
+- **Structuring**: 2+ payments to one payee, or conversions of sponsor money, in 24 h totalling more than the single limit are flagged by name ("Possible structuring: 3 payments to BC Hydro totalling CAD 4,350 in 24h"); the 24 h limit itself does the enforcing.
+
+The result is stored on the action (shown on the card on both phones; the model sees only the outcome and flag notes), audited as `compliance_check` (plus `sanctions_hit`, `sanctions_review`, `kyc_denied`), and summarised per role by `GET /compliance/report`.
+
+**Around it:** the sponsor's Approve, Unlock and limit changes need a 6-digit PIN checked on the server (`authn.py`: PBKDF2-HMAC-SHA256, random salt, 600,000 iterations, constant-time compare, 15-minute lockout after 5 wrong tries); `/sponsor/overview` and `/audit` are scoped by role (the sponsor sees only the accounts he funds and the decisions sent to him; the chain is still verified over the full log); `/demo/reset` needs demo mode plus the operator token; CORS is an allow-list; demo mode pins "today" to `HB_DEMO_TODAY` (2026-10-08).
+
 ---
 
 ## 6. Security design (summary)
@@ -256,21 +270,23 @@ The full threat model, tier table and known-risk list are in `docs/security_self
 | Induced transfers | No execute tool; confirmation token outside the model; T3 rules; daily limit counts pending drafts; risk score; scam shield; cooling period for new payees; emergency freeze; unusual-activity alerts |
 | Information extraction | Tools return masked data only, so the model never holds full numbers or tokens; output redaction; no secrets in the prompt; role-scoped endpoints |
 | Privilege escalation | Role from bearer token only; sponsor actions only via sponsor endpoints; no tool for limits or sponsor; chat claims ("I'm her father") flagged and refused |
+| Compliance (sanctions, KYC, AML) | Payee screening against a sample watchlist on add and on every payment; KYC level gates confirm and approve; FINTRAC EFTR flag and cross-border records; BNM purpose codes; structuring flag; all audited and reported (`/compliance/report`) |
 | Prompt injection (direct and indirect) | Tool output wrapped as data and scanned; text folded before matching (tag characters, base64, zero-width, homoglyphs); taint tracking; flagged turns escalate to T3; the offline engine refuses flagged turns; the policy holds even with a fully compromised model |
 
 ---
 
 ## 7. Evaluation
 
-Run with `pytest -q` (198 tests) and `python scripts/run_evidence.py`. Results for the offline engine are in `evidence/offline/`:
+Run with `pytest -q` (313 tests) and `python scripts/run_evidence.py`. Results for the offline engine are in `evidence/offline/`:
 
 | Suite | Result |
 |---|---|
-| Scripted tasks (balances, insight, FX, tuition, rent, sponsor, credit, clarification, recovery, scam shield, multi-step, Malaysian English, Chinese, Malay) | **36 / 36 pass**, each checked for tool sequence, reply content, drafted tier and final sandbox state |
-| Attack suite (induced transfer 17, extraction 10, escalation 15, injection 17) | **59 / 59 blocked**. No balance change, no execution, no full number or token in any reply, no limit or role change, no payment lock lifted, no T2 payment after a flagged message in the conversation. Attacks on a frozen account also tap Confirm and Approve on every draft |
+| Scripted tasks (balances, insight, FX, tuition, rent, sponsor, credit, clarification, recovery, scam shield, multi-step, Malaysian English, Chinese, Malay) | **45 / 45 pass**, each checked for tool sequence, reply content, drafted tier and final sandbox state |
+| Attack suite (induced transfer 20, extraction 11, escalation 18, injection 17) | **66 / 66 blocked**. No balance change, no execution, no full number or token in any reply, no limit or role change, no payment lock lifted, no T2 payment after a flagged message in the conversation. Attacks on a frozen account also tap Confirm and Approve on every draft |
 | Compromised-model tests | A scripted "evil" provider calls tools directly (unknown account, invented execute and approve tools, add-then-pay, drain by conversion, negative, NaN, infinite, sub-cent and huge amounts, malformed arguments, draft spam, cancelling others' drafts, a payee filed as `conversion` to dodge the daily limit, lookalike payee names, parallel drafts, an injected memo acted on a turn later). No money moves in any case |
 | API role tests | No token → 401; sponsor on student endpoints → 403; student approving → 403; wrong or reused token → 400; tampered parameters → 400; expired → 400; cooling period enforced; a draft confirmed after the sponsor tightened the limits goes to the sponsor; audit tamper detected; lock endpoints role-checked |
 | Freeze and alerts | `tests/test_safety.py`: locks block confirm and approve until unlocked, the student cannot lift the sponsor's lock, chat and invented tools cannot unlock, locks survive a restart, each alert fires at its threshold with an injected clock, the digest counts correctly |
+| Compliance and server-side controls | `tests/test_compliance.py` (39) and `tests/test_security_controls.py` (13): sanctions hits, near misses and clears, blocked drafts, KYC refusals and ceilings, EFTR and the 24-hour rule, records and purpose codes, structuring, the report; the sponsor PIN (hash, lockout, audit), operator-gated reset, scoped audit and sponsor views, CORS, the pinned demo date |
 | LLM wire tests | Real OpenAI-compatible client against a mocked transport: tool round trip, malformed arguments, fallback |
 | Classifier | Macro F1 0.841 (grouped 5-fold CV) |
 
@@ -295,14 +311,15 @@ To produce live-model evidence: `LLM_PROVIDER=deepseek LLM_API_KEY=… python sc
 - Android: an APK built with EAS for sideloading (Google Play is unavailable in China). The web build runs in any browser.
 - The offline engine is the venue backup if the network fails during the defence.
 
-**Configuration.** `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_THINKING`, `HB_DEMO_MODE` (60-second cooling period, reset endpoint), `HB_STUDENT_TOKEN`, `HB_SPONSOR_TOKEN`, `HB_CHATS_PER_MINUTE`, `HB_DB` (SQLite path; default `:memory:`), `HB_AUDIT`, `HB_WEB_DIR`.
+**Configuration.** `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_THINKING`, `HB_DEMO_MODE` (60-second cooling period, reset endpoint), `HB_STUDENT_TOKEN`, `HB_SPONSOR_TOKEN`, `HB_CHATS_PER_MINUTE`, `HB_DB` (SQLite path; default `:memory:`), `HB_AUDIT`, `HB_WEB_DIR`, `HB_DEMO_TODAY` (the pinned demo date, default 2026-10-08), `HB_OPERATOR_TOKEN` (needed for `/demo/reset`, default `demo-operator`), `HB_SPONSOR_PIN` (6 digits, default `246810`, stored hashed), `HB_PIN_ITERATIONS`, `HB_CORS_ORIGINS`.
 
 ---
 
 ## 9. Limitations and future work
 
 - **Sandbox only.** A real deployment needs a licensed partner bank or money-services business (FINTRAC registration in Canada; Bank Negara Malaysia rules on outward remittance), KYC, and real payment rails.
-- **Authentication** is static bearer tokens for the demo. On Android and iOS the app already asks for Face ID, a fingerprint or the device passcode before Confirm and Approve (`app/src/stepUp.ts`, using `expo-local-authentication`); this is a client-side check. Production would bind it to the server with per-device keys, and add push notifications to the sponsor.
+- **Authentication** is static bearer tokens for the demo. On Android and iOS the app already asks for Face ID, a fingerprint or the device passcode before Confirm and Approve (`app/src/stepUp.ts`, using `expo-local-authentication`); this is a client-side check. The sponsor's Approve, Unlock and limit changes also need a PIN checked on the server; the student's Confirm does not yet. Production would use passkeys verified on the server for both, and push notifications to the sponsor.
+- **Compliance** is modelled, not licensed: the watchlist is a fictional sample, KYC levels are seeded, and EFTR or structuring flags are shown and audited but not filed (see §10 of the security self-assessment).
 - **State.** The bank, pending actions and the draft rate-limit window share one SQLite database (`HB_DB`, in memory by default). With a file path, a restart keeps balances and drafts together: drafts awaiting the student or the sponsor, their expiry, sponsor decisions and the hourly draft count all reload. Only the hash of each confirmation token is stored, so after a restart a draft can be confirmed only by the app that still holds its token. Execution writes an "executing" marker first; a draft interrupted mid-execution reloads as failed, never as executable again. Chat history and the per-minute chat limit are still in memory. Production would use a transactional database shared by all instances, with the same invariants.
 - **FX rates** are a snapshot with modelled spreads. Production would use live quotes and lock the quoted rate on the draft.
 - **Classifier** is small and trained on our own data. It is a second opinion by design, never a gate. A larger multilingual dataset and periodic retraining from reported scams would improve recall.
