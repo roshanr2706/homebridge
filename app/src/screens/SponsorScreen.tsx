@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
-import { api, type Account, type Action, type Alert, type Digest, type FreezeState } from '../api';
+import { accountNote, api, type Account, type Action, type Alert, type Digest, type FreezeState } from '../api';
 import { usePoll } from '../hooks';
 import { ActionCard } from '../components/ActionCard';
 import { cityTime, fonts, money, useTheme } from '../theme';
@@ -12,6 +12,7 @@ const STATUS_TONE: Record<string, 'ok' | 'danger' | 'plain' | 'gold'> = {
   executed: 'ok',
   rejected: 'danger',
   failed: 'danger',
+  blocked: 'danger',
   cancelled: 'plain',
   expired: 'plain',
   awaiting_user: 'gold',
@@ -52,6 +53,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
   const [digest, setDigest] = useState<Digest | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [freeze, setFreeze] = useState<FreezeState | null>(null);
+  const [sharing, setSharing] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -70,6 +72,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
       setDigest(o.digest);
       setAlerts(o.alerts);
       setFreeze(o.freeze);
+      setSharing(o.sharing?.summary ?? '');
       setError('');
     } catch {
       setError(api.unreachable);
@@ -80,9 +83,9 @@ export function SponsorScreen({ active }: { active: boolean }) {
 
   usePoll(refresh, active ? 3000 : 15000);
 
-  const decide = (approve: boolean) => async (a: Action, note: string) => {
+  const decide = (approve: boolean) => async (a: Action, note: string, pin = '') => {
     try {
-      const r = await (approve ? api.approve(a.action_id, note) : api.reject(a.action_id, note));
+      const r = await (approve ? api.approve(a.action_id, note, pin) : api.reject(a.action_id, note));
       if (r.status === 'failed') toast('Approved, but the bank refused it', String(r.result?.error ?? ''), 'danger');
       else toast(approve ? 'Approved' : 'Rejected', a.summary, approve ? 'ok' : 'danger');
     } catch (e) {
@@ -139,7 +142,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
               <Stat label="drafted" value={String(digest.drafted)} />
               <Stat label="completed" value={String(digest.executed)} tone={t.ok} />
               <Stat label="stopped" value={String(digest.stopped)} tone={digest.stopped ? t.danger : undefined} />
-              <Stat label="money out" value={money(digest.money_out_cad, 'CAD', 0)} />
+              <Stat label={digest.money_out_scope === 'sponsor_funded' ? 'out of your funds' : 'money out'} value={money(digest.money_out_cad, 'CAD', 0)} />
             </Row>
             {digest.flagged.length > 0 && (
               <View style={{ marginTop: 12, gap: 4 }}>
@@ -179,7 +182,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
         </Surface>
       )}
 
-      <Display style={{ fontSize: 18, marginTop: 10 }}>Aisha’s accounts</Display>
+      <Display style={{ fontSize: 18, marginTop: 10 }}>Accounts you fund</Display>
       <Surface>
         <Row style={{ justifyContent: 'space-between', marginBottom: 6 }}>
           <Eyebrow>Total, about</Eyebrow>
@@ -190,6 +193,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
             <View style={{ flex: 1 }}>
               <Body style={{ fontSize: 14 }}>{a.label}</Body>
               <Mono style={{ fontSize: 11, color: t.faint }}>
+                {accountNote(a) ? `${accountNote(a)} · ` : ''}
                 {a.number}
                 {a.sponsor_funded ? ' · funded by you' : ''}
               </Mono>
@@ -197,6 +201,12 @@ export function SponsorScreen({ active }: { active: boolean }) {
             <Mono style={{ fontSize: 14 }}>{money(a.balance, a.currency)}</Mono>
           </Row>
         ))}
+        {sharing ? (
+          <Body style={{ fontSize: 11.5, color: t.muted, marginTop: 6, lineHeight: 16 }}>
+            Aisha agreed to share the accounts you fund, requests sent to you, safety alerts and a daily activity count. Her own CAD
+            Everyday account, wages, spending and chat stay private.
+          </Body>
+        ) : null}
       </Surface>
 
       <Display style={{ fontSize: 18, marginTop: 10 }}>Recent activity</Display>

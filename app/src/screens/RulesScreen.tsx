@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { api, type FreezeState } from '../api';
+import { PinEntry } from '../components/PinEntry';
 import { stepUp } from '../stepUp';
 import { fonts, money, useTheme } from '../theme';
 import { useToast } from '../toast';
@@ -23,6 +24,7 @@ function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onCha
   const t = useTheme();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
+  const [askPin, setAskPin] = useState(false);
   if (!freeze) return null;
 
   const lock = (scope: 'sponsor_funded' | 'all') => async () => {
@@ -40,16 +42,21 @@ function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onCha
       setBusy(null);
     }
   };
-  // Unlocking lets money move again, so it asks for the device owner first, like Approve does.
+  // Unlocking lets money move again, so it asks for the device owner first, then the sponsor's PIN (checked on
+  // the server), like Approve does.
   const unlock = async () => {
+    const check = await stepUp('Unlock Aisha’s payments');
+    if (!check.ok) {
+      toast('Still locked', `${check.reason} Nothing changed.`, 'danger');
+      return;
+    }
+    setAskPin(true);
+  };
+  const unlockWithPin = async (pin: string) => {
+    setAskPin(false);
     setBusy('unlock');
     try {
-      const check = await stepUp('Unlock Aisha’s payments');
-      if (!check.ok) {
-        toast('Still locked', `${check.reason} Nothing changed.`, 'danger');
-        return;
-      }
-      onChange((await api.sponsorUnfreeze()).freeze);
+      onChange((await api.sponsorUnfreeze(pin)).freeze);
       toast('Payments unlocked', 'Aisha can confirm payments again, within your limits.', 'ok');
     } catch (e) {
       toast("Couldn't unlock", (e as Error).message, 'danger');
@@ -89,8 +96,9 @@ function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onCha
         {freeze.own !== 'sponsor' && (
           <Button label="Lock everything" kind="danger" busy={busy === 'all'} onPress={lock('all')} style={{ flex: 1 }} />
         )}
-        {freeze.frozen && <Button label="Unlock" busy={busy === 'unlock'} onPress={unlock} style={{ flex: 1 }} />}
+        {freeze.frozen && !askPin && <Button label="Unlock" busy={busy === 'unlock'} onPress={unlock} style={{ flex: 1 }} />}
       </Row>
+      {askPin && <PinEntry title="Enter your approval PIN to unlock" submitLabel="Unlock" onSubmit={unlockWithPin} onCancel={() => setAskPin(false)} />}
     </Surface>
   );
 }
@@ -137,6 +145,13 @@ export function RulesScreen({ active }: { active: boolean }) {
   const [cooling, setCooling] = useState(0);
   const [busy, setBusy] = useState(false);
   const [freeze, setFreeze] = useState<FreezeState | null>(null);
+  const [askPin, setAskPin] = useState(false);
+  // The most the sponsor may allow, set by Aisha's identity-check (KYC) level on the server.
+  const [ceiling, setCeiling] = useState<{ single_cad: number; daily_cad: number; label: string }>({
+    single_cad: 20000,
+    daily_cad: 50000,
+    label: '',
+  });
 
   const load = useCallback(async () => {
     try {
@@ -146,6 +161,7 @@ export function RulesScreen({ active }: { active: boolean }) {
       setSaved({ single: o.limits.single_cad, daily: o.limits.daily_cad });
       setCooling(o.limits.payee_cooling_seconds);
       setFreeze(o.freeze);
+      if (o.kyc) setCeiling({ ...o.kyc.limit_ceiling, label: o.kyc.student.label });
     } catch {
       /* the approvals screen already shows connection errors */
     }
@@ -158,10 +174,11 @@ export function RulesScreen({ active }: { active: boolean }) {
   }, [active, load]);
 
   const dirty = saved && (saved.single !== single || saved.daily !== daily);
-  const save = async () => {
+  const save = async (pin: string) => {
+    setAskPin(false);
     setBusy(true);
     try {
-      const r = await api.setLimits(single, daily);
+      const r = await api.setLimits(single, daily, pin);
       setSaved({ single: r.limits.single_cad, daily: r.limits.daily_cad });
       toast('Limits updated', `Aisha can now confirm up to ${money(single, 'CAD', 0)} per payment and ${money(daily, 'CAD', 0)} a day alone.`, 'ok');
     } catch (e) {
@@ -185,13 +202,23 @@ export function RulesScreen({ active }: { active: boolean }) {
 
       <Surface>
         <Eyebrow>Aisha can confirm alone</Eyebrow>
-        <Stepper label="Per payment" value={single} onChange={setSingle} step={100} min={100} max={Math.min(daily, 20000)} />
-        <Stepper label="Per 24 hours" value={daily} onChange={setDaily} step={250} min={Math.max(single, 250)} max={50000} />
+        <Stepper label="Per payment" value={single} onChange={setSingle} step={100} min={100} max={Math.min(daily, ceiling.single_cad)} />
+        <Stepper label="Per 24 hours" value={daily} onChange={setDaily} step={250} min={Math.max(single, 250)} max={ceiling.daily_cad} />
         <Body style={{ fontSize: 12, color: t.muted, marginTop: 4 }}>
           Anything above these goes to you. New payees always come to you and then wait {cooling >= 3600 ? `${Math.round(cooling / 3600)} h` : `${cooling} s (demo)`} before
           first use.
         </Body>
-        <Button label={dirty ? 'Save limits' : 'Saved'} onPress={save} busy={busy} disabled={!dirty} style={{ marginTop: 12 }} />
+        {ceiling.label ? (
+          <Body style={{ fontSize: 12, color: t.muted, marginTop: 4 }}>
+            Aisha’s identity check ({ceiling.label.toLowerCase()}) allows at most {money(ceiling.single_cad, 'CAD', 0)} per payment and{' '}
+            {money(ceiling.daily_cad, 'CAD', 0)} a day.
+          </Body>
+        ) : null}
+        {askPin ? (
+          <PinEntry title="Enter your approval PIN to save the new limits" submitLabel="Save limits" busy={busy} onSubmit={save} onCancel={() => setAskPin(false)} />
+        ) : (
+          <Button label={dirty ? 'Save limits' : 'Saved'} onPress={() => setAskPin(true)} busy={busy} disabled={!dirty} style={{ marginTop: 12 }} />
+        )}
       </Surface>
 
       <Display style={{ fontSize: 18, marginTop: 8 }}>Permission tiers</Display>

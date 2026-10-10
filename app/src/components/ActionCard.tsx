@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 
-import type { Action } from '../api';
+import type { Action, Compliance, ComplianceCheck } from '../api';
 import { stepUp, useStepUpNote } from '../stepUp';
+import { PinEntry } from './PinEntry';
 import { amount, cityTime, fonts, klHour, money, useTheme } from '../theme';
 import { useToast } from '../toast';
 import { Bar, Body, Button, DashedRule, Eyebrow, Mono, Pill, Row } from '../ui';
@@ -12,7 +13,8 @@ type Props = {
   mode: 'student' | 'sponsor';
   onConfirm?: (a: Action) => Promise<void>;
   onCancel?: (a: Action) => Promise<void>;
-  onApprove?: (a: Action, note: string) => Promise<void>;
+  // Called after the device check and the sponsor's PIN; the server checks the PIN.
+  onApprove?: (a: Action, note: string, pin: string) => Promise<void>;
   onReject?: (a: Action, note: string) => Promise<void>;
 };
 
@@ -70,7 +72,7 @@ function details(a: Action): [string, string][] {
 type Step = { label: string; state: 'done' | 'current' | 'todo' | 'bad' };
 
 function steps(a: Action, mode: Props['mode']): Step[] {
-  const bad = ['rejected', 'cancelled', 'expired', 'failed'].includes(a.status);
+  const bad = ['rejected', 'cancelled', 'expired', 'failed', 'blocked'].includes(a.status);
   const out: Step[] = [{ label: 'Drafted', state: 'done' }];
   if (a.kind !== 'topup') {
     out.push({
@@ -145,7 +147,49 @@ const STATUS_TEXT: Record<string, string> = {
   cancelled: 'Cancelled',
   expired: 'Expired: draft again if you still need it',
   failed: 'Failed',
+  blocked: 'Blocked by compliance screening',
 };
+
+// Compliance checks run on the server for every draft (backend/app/compliance.py): sanctions screening, KYC,
+// structuring, FINTRAC EFTR and cross-border records, BNM purpose codes.
+const CHECK_MARK: Record<ComplianceCheck['status'], string> = { pass: '✓', flag: '!', block: '✕', report: '◆', na: '–' };
+const OUTCOME: Record<Compliance['outcome'], { label: string; tone: 'ok' | 'warn' | 'danger' }> = {
+  clear: { label: 'CLEAR', tone: 'ok' },
+  review: { label: 'REVIEW', tone: 'warn' },
+  blocked: { label: 'BLOCKED', tone: 'danger' },
+};
+
+function ComplianceBlock({ c }: { c: Compliance }) {
+  const t = useTheme();
+  const color = (s: ComplianceCheck['status']) =>
+    s === 'pass' ? t.ok : s === 'flag' ? t.warn : s === 'block' ? t.danger : s === 'report' ? t.gold : t.faint;
+  const rec = c.record;
+  const party = (x?: Record<string, string>) => (x ? `${x.name.split(' ')[0]} (${x.country}${x.account ? ` ${x.account}` : ''})` : '?');
+  const o = OUTCOME[c.outcome] ?? OUTCOME.clear;
+  return (
+    <View style={[styles.box, { backgroundColor: t.sunken }]}>
+      <Row style={{ justifyContent: 'space-between', marginBottom: 4 }}>
+        <Body style={{ fontSize: 12, fontFamily: fonts.bodyBold, color: t.text }}>Compliance checks</Body>
+        <Pill label={o.label} tone={o.tone} />
+      </Row>
+      {c.checks.map((ch) => (
+        <Row key={ch.id + ch.label} style={{ gap: 6, alignItems: 'flex-start', paddingVertical: 1.5 }}>
+          <Mono style={{ fontSize: 12, width: 12, color: color(ch.status), fontFamily: fonts.monoBold }}>{CHECK_MARK[ch.status]}</Mono>
+          <Body style={{ flex: 1, fontSize: 11.5, lineHeight: 16, color: ch.status === 'pass' ? t.muted : color(ch.status) }} numberOfLines={3}>
+            <Body style={{ fontSize: 11.5, fontFamily: fonts.bodyBold, color: ch.status === 'pass' ? t.text : color(ch.status) }}>{ch.label}</Body>
+            {' · '}
+            {ch.detail}
+          </Body>
+        </Row>
+      ))}
+      {rec ? (
+        <Mono style={{ fontSize: 10, color: t.faint, marginTop: 4 }} numberOfLines={2}>
+          record: {party(rec.originator)} → {party(rec.beneficiary)} · source: {rec.source_of_funds}
+        </Mono>
+      ) : null}
+    </View>
+  );
+}
 
 export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, onReject }: Props) {
   const t = useTheme();
@@ -153,6 +197,8 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
   const stepUpNote = useStepUpNote();
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  // After the device check, the sponsor enters their PIN, which the server checks.
+  const [askPin, setAskPin] = useState(false);
   const now = useNow(a.status === 'awaiting_user');
   const risky = a.risk_score >= 40;
   const untrusted = Object.entries(a.provenance ?? {}).filter(([, v]) => v === 'untrusted').map(([k]) => k);
@@ -273,6 +319,7 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
             </Body>
           </View>
         )}
+        {a.compliance && a.compliance.checks?.length > 0 && <ComplianceBlock c={a.compliance} />}
         {warnings.map((w) => (
           <Body key={w} style={{ fontSize: 12.5, color: t.warn, marginTop: 8, lineHeight: 18 }}>
             {w}
@@ -333,16 +380,29 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
               maxLength={200}
               style={[styles.note, { color: t.text, borderColor: t.border, backgroundColor: t.bg, fontFamily: fonts.body }]}
             />
-            <Row style={{ gap: 10 }}>
-              <Button label="Reject" kind="danger" busy={busy === 'reject'} onPress={run('reject', onReject && (() => onReject(a, note)))} style={{ flex: 1 }} />
-              <Button
-                label={frozen ? 'Locked' : 'Approve'}
+            {askPin && onApprove ? (
+              <PinEntry
+                title={`Enter your approval PIN to approve ${what}`}
+                submitLabel="Approve"
                 busy={busy === 'approve'}
-                disabled={!!frozen}
-                onPress={guarded('approve', `Approve ${what}`, onApprove && (() => onApprove(a, note)))}
-                style={{ flex: 2 }}
+                onCancel={() => setAskPin(false)}
+                onSubmit={(pin) => {
+                  setAskPin(false);
+                  run('approve', () => onApprove(a, note, pin))();
+                }}
               />
-            </Row>
+            ) : (
+              <Row style={{ gap: 10 }}>
+                <Button label="Reject" kind="danger" busy={busy === 'reject'} onPress={run('reject', onReject && (() => onReject(a, note)))} style={{ flex: 1 }} />
+                <Button
+                  label={frozen ? 'Locked' : 'Approve'}
+                  busy={busy === 'approve'}
+                  disabled={!!frozen}
+                  onPress={guarded('approve', `Approve ${what}`, onApprove && (async () => setAskPin(true)))}
+                  style={{ flex: 2 }}
+                />
+              </Row>
+            )}
             {deviceNote}
           </View>
         )}

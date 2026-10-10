@@ -23,6 +23,13 @@ const EVENT_TONE: Record<string, 'ok' | 'danger' | 'warn' | 'accent' | 'plain' |
   payments_unfrozen: 'warn',
   unfreeze_denied: 'danger',
   alert_raised: 'warn',
+  compliance_check: 'accent',
+  sanctions_hit: 'danger',
+  sanctions_review: 'warn',
+  kyc_denied: 'danger',
+  sponsor_pin_failed: 'danger',
+  sponsor_pin_locked: 'danger',
+  reset_denied: 'danger',
 };
 
 function summary(e: AuditEntry): string {
@@ -35,6 +42,10 @@ function summary(e: AuditEntry): string {
   if (e.event === 'payments_frozen') return `by ${d.by} · ${d.scope === 'all' ? 'everything' : 'sponsor-funded money'}`;
   if (e.event === 'payments_unfrozen') return `by ${d.by} · still locked: ${d.still_locked?.length ? d.still_locked.join(', ') : 'nothing'}`;
   if (e.event === 'alert_raised') return d.kind + (d.count ? ` · ${d.count}` : '');
+  if (e.event === 'compliance_check')
+    return `${d.kind} · ${d.outcome}${d.reports?.length ? ` · ${d.reports.join(', ')}` : ''}${d.purpose_code ? ` · ${d.purpose_code}` : ''}`;
+  if (e.event === 'sanctions_hit' || e.event === 'sanctions_review') return `${d.match} (${d.list}, ${Math.round(d.score * 100)}%)`;
+  if (e.event === 'sponsor_pin_failed') return `${d.purpose} · ${d.reason}${d.attempts ? ` · attempt ${d.attempts}` : ''}`;
   if (d.action_id) return d.action_id + (d.reason ? ` · ${d.reason}` : '') + (d.note ? ` · “${d.note}”` : '');
   return '';
 }
@@ -45,11 +56,13 @@ export function LedgerScreen({ active, role }: { active: boolean; role: Role }) 
   const [verify, setVerify] = useState<Verify | null>(null);
   const [tamper, setTamper] = useState<Verify | null>(null);
   const [error, setError] = useState('');
+  const [scope, setScope] = useState<{ visible: number; total: number } | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       const [a, v] = await Promise.all([api.audit(role), api.auditVerify(role)]);
       setEntries(a.entries.slice().reverse());
+      setScope({ visible: a.visible, total: a.total });
       setVerify(v);
       setError('');
     } catch {
@@ -72,9 +85,17 @@ export function LedgerScreen({ active, role }: { active: boolean; role: Role }) 
       <View style={{ paddingVertical: 6 }}>
         <Display style={{ fontSize: 24 }}>Audit ledger</Display>
         <Body style={{ color: t.muted, fontSize: 13, marginTop: 2 }}>
-          Every message, tool call, draft, confirmation and approval is written here. Each entry includes the hash of the one before it,
-          so editing or deleting any line breaks the chain.
+          Every message, tool call, draft, compliance check, confirmation and approval is written here. Each entry includes the hash of
+          the one before it, so editing or deleting any line breaks the chain.
         </Body>
+        {scope ? (
+          <Body style={{ color: t.muted, fontSize: 12, marginTop: 4 }}>
+            {role === 'sponsor'
+              ? `You see ${scope.visible} of ${scope.total} entries: decisions and events about the money you fund. Aisha’s chat and her own payments stay private.`
+              : `You see ${scope.visible} of ${scope.total} entries: your own activity.`}{' '}
+            The server checks the chain over all {scope.total}.
+          </Body>
+        ) : null}
       </View>
       {error ? <Body style={{ color: t.danger }}>{error}</Body> : null}
       {verify && (
