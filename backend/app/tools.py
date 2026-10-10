@@ -13,8 +13,9 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
+from . import credit
 from .audit import AuditLog
-from .bank import Bank
+from .bank import Bank, to_minor
 from .fx import FxMarket, FxUnavailable
 from .guard import check as guard_check
 from .classifier import shared as shared_classifier
@@ -218,7 +219,7 @@ def budget_summary(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     income = 0.0
     for r in rows:
         cad = r["amount"] * ctx.fx.mid(r["currency"], "CAD")
-        if r["category"] == "conversion":
+        if r["category"] in ("conversion", "credit_card"):  # moving own money / paying down the card
             continue
         if cad < 0:
             spend[r["category"]] = spend.get(r["category"], 0.0) + -cad
@@ -260,6 +261,78 @@ def credit_building_plan(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     ]
     return {"steps": steps, "disclosure": "General information, not personalised financial advice. "
             "HomeBridge is not a licensed adviser."}
+
+
+# ------------------------------------------------------------ Credit Builder
+CARD_TARGETS = ["statement_balance", "minimum", "under_30", "under_10", "full_balance", "recommended"]
+
+
+def _credit_profile(ctx: ToolContext) -> Optional[Dict[str, Any]]:
+    cards = ctx.bank.credit_cards(ctx.user_id)
+    if not cards:
+        return None
+    card = cards[0]
+    stmts = ctx.bank.card_statements(card["id"])
+    since = stmts[0]["closed"] if stmts else card["opened"]
+    out = credit.profile(card, stmts, ctx.bank.card_purchases_since(card["id"], since), ctx.today)
+    out["_payee_id"] = card["payee_id"]
+    return out
+
+
+@tool("get_credit_profile",
+      "The student's credit-building progress on their HomeBridge Secured Card: utilization now, last reported "
+      "and projected at the next statement, on-time payment streak, months of history, the factors that matter "
+      "in Canada, a simulated credit-health band, and specific next steps with amounts and dates. This is NOT a "
+      "credit score; never quote or invent a bureau score.", {})
+def get_credit_profile(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
+    prof = _credit_profile(ctx)
+    if prof is None:
+        return {"has_card": False, "next_actions": [], "disclosure": credit.DISCLOSURE,
+                "note": "No credit card yet. Use credit_building_plan for how to start."}
+    prof.pop("_payee_id")
+    return {"has_card": True, **prof}
+
+
+@tool("prepare_card_payment",
+      "Draft a payment from CAD Everyday to the student's HomeBridge Secured Card. Give a target and the amount "
+      "is worked out from the card: 'statement_balance' (avoids interest), 'minimum' (keeps the on-time record), "
+      "'under_30' or 'under_10' (the balance reported at the next statement is under 30% / 10% of the limit), "
+      "'full_balance' (pays it to zero), 'recommended' (one payment covering the due statement and the 30% "
+      "target); or give an exact amount. Like every payment it is only a draft the user confirms in the app.",
+      {"target": {"type": "string", "enum": CARD_TARGETS},
+       "amount": {"type": "number", "description": "Exact CAD amount, instead of a target"}},
+      [], tier="T2/T3")
+def prepare_card_payment(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
+    prof = _credit_profile(ctx)
+    if prof is None:
+        return {"error": "There is no credit card to pay."}
+    target = str(a.get("target") or "").lower()
+    if a.get("amount") not in (None, ""):
+        amount = _num(a["amount"])
+        target = "amount"
+        prov = {"amount": "untrusted" if _amount_from_untrusted(ctx, amount) else "user"}
+    else:
+        if target not in CARD_TARGETS:
+            return {"error": "Say how much to pay, or pick a target: " + ", ".join(CARD_TARGETS) + "."}
+        amount = credit.payment_amount(target, prof) or 0.0
+        prov = {"amount": "computed"}
+    if amount <= 0:
+        return {"nothing_to_pay": True, "target": target, "card_balance": prof["card"]["balance"],
+                "utilization_pct": prof["utilization_pct"],
+                "note": "Nothing to pay for that target: " + ("the card balance is already zero."
+                                                             if prof["card"]["balance"] <= 0 else
+                                                             "you are already there.")}
+    act = ctx.policy.draft_transfer(ctx.user_id, ctx.session_id, prof["_payee_id"], amount, f"Card payment ({target})",
+                                    "", ctx.flags(), prov)
+    ctx.created_actions.append(act)
+    limit_minor = to_minor(prof["card"]["credit_limit"])
+    after = to_minor(prof["card"]["balance"]) - to_minor(amount)
+    return {"action": act.for_model(), "target": target,
+            "card_after": {"balance": round(after / 100, 2),
+                           "utilization_pct": credit.utilization_pct(after, limit_minor)},
+            "utilization_now_pct": prof["utilization_pct"],
+            "next_statement_date": prof["next_statement_date"],
+            "statement_due_date": (prof.get("statement") or {}).get("due_date")}
 
 
 @tool("check_message_for_scam",

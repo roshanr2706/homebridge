@@ -64,12 +64,34 @@ CREATE TABLE IF NOT EXISTS draft_log (owner TEXT, ts REAL);
 """
 SCHEMA += POLICY_SCHEMA
 
+# Credit Builder: a sandbox secured credit card. It is a liability, kept out of `accounts` so balances and
+# totals stay what they were; it is paid like a saved payee (kind 'credit_card') through the policy engine.
+CARD_SCHEMA = """
+CREATE TABLE IF NOT EXISTS credit_cards (
+  id TEXT PRIMARY KEY, owner TEXT, label TEXT, currency TEXT, credit_limit INTEGER, balance INTEGER,
+  deposit INTEGER, number TEXT, payee_id TEXT, opened TEXT, next_close TEXT, apr REAL,
+  autopay TEXT DEFAULT 'off', hard_inquiries INTEGER DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS card_statements (
+  id TEXT PRIMARY KEY, card_id TEXT, closed TEXT, due TEXT, balance INTEGER, min_due INTEGER,
+  paid INTEGER DEFAULT 0, paid_on TEXT
+);
+CREATE TABLE IF NOT EXISTS card_activity (
+  id TEXT PRIMARY KEY, card_id TEXT, ts TEXT, amount INTEGER, description TEXT
+);
+"""
+SCHEMA += CARD_SCHEMA
+
 
 class Bank:
     def __init__(self, db_path: str = ":memory:") -> None:
         self._lock = threading.RLock()
         self.db = sqlite3.connect(db_path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        self.today: Optional[date] = None  # the sandbox's "today", set by reset(); card payments use it
+        with self._lock:  # a file database from before the Credit Builder gets empty card tables
+            self.db.executescript(CARD_SCHEMA)
+            self.db.commit()
 
     # ------------------------------------------------------------------ setup
     def reset(self, today: Optional[date] = None) -> None:
@@ -82,7 +104,8 @@ class Bank:
             ).fetchall():
                 cur.execute(f"DROP TABLE IF EXISTS {name}")
             cur.executescript(SCHEMA)
-            seed(self, today or date.today())
+            self.today = today or date.today()
+            seed(self, self.today)
             self.db.commit()
 
     def is_seeded(self) -> bool:
@@ -265,8 +288,13 @@ class Bank:
                 raise BankError("Payee is still in its cooling period")
             if acc["currency"] != payee["currency"]:
                 raise BankError("Currency mismatch between account and payee")
+            card = self.card_for_payee(payee_id) if payee["kind"] == "credit_card" else None
+            if card and amount_minor > card["balance"]:
+                raise BankError(f"Payment is more than the card balance ({to_major(card['balance'])} {card['currency']})")
             self._adjust(account_id, -amount_minor)
             tid = self.add_transaction(account_id, -amount_minor, acc["currency"], category, payee["name"], memo)
+            if card:
+                self._apply_card_payment(card, amount_minor, acc["label"])
             if category == "tuition":
                 self._x(
                     "UPDATE tuition SET paid=1 WHERE id = (SELECT id FROM tuition WHERE owner=? AND paid=0 "
@@ -319,6 +347,45 @@ class Bank:
         rid = "rm_" + uuid.uuid4().hex[:8]
         self._x("INSERT INTO reminders VALUES (?,?,?,?)", (rid, owner, due, text))
         return rid
+
+    # ------------------------------------------------------- credit cards
+    def credit_cards(self, owner: str) -> List[Dict[str, Any]]:
+        """Raw card rows (minor units) with a masked number; the full number never leaves the bank."""
+        out = []
+        for r in self._q("SELECT * FROM credit_cards WHERE owner=? ORDER BY id", (owner,)):
+            d = dict(r)
+            d["number_masked"] = mask(d.pop("number"))
+            out.append(d)
+        return out
+
+    def card_for_payee(self, payee_id: str) -> Optional[Dict[str, Any]]:
+        rows = self._q("SELECT * FROM credit_cards WHERE payee_id=?", (payee_id,))
+        return dict(rows[0]) if rows else None
+
+    def card_statements(self, card_id: str) -> List[Dict[str, Any]]:
+        """Newest first."""
+        return [dict(r) for r in self._q("SELECT * FROM card_statements WHERE card_id=? ORDER BY closed DESC",
+                                         (card_id,))]
+
+    def card_purchases_since(self, card_id: str, since: str) -> int:
+        rows = self._q("SELECT SUM(amount) AS s FROM card_activity WHERE card_id=? AND amount>0 AND ts>=?",
+                       (card_id, since))
+        return int(rows[0]["s"] or 0)
+
+    def _apply_card_payment(self, card: Dict[str, Any], amount_minor: int, from_label: str) -> None:
+        """Called inside transfer_out, under the lock, after the debit."""
+        today = self.today or date.today()
+        self._x("UPDATE credit_cards SET balance=balance-? WHERE id=?", (amount_minor, card["id"]))
+        self._x("INSERT INTO card_activity VALUES (?,?,?,?,?)",
+                ("ca_" + uuid.uuid4().hex[:10], card["id"], datetime.combine(today, datetime.now().time())
+                 .isoformat(timespec="seconds"), -amount_minor, f"Payment from {from_label}"))
+        st = self.card_statements(card["id"])
+        if st and st[0]["paid"] < st[0]["balance"]:
+            s = st[0]
+            paid = s["paid"] + min(amount_minor, s["balance"] - s["paid"])
+            # The date the minimum was first covered decides whether this statement was paid on time.
+            paid_on = s["paid_on"] or (today.isoformat() if paid >= s["min_due"] else None)
+            self._x("UPDATE card_statements SET paid=?, paid_on=? WHERE id=?", (paid, paid_on, s["id"]))
 
     # ------------------------------------------------------- policy state
     # Storage for PolicyEngine, which keeps a working copy in memory and writes through here.

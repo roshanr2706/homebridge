@@ -26,7 +26,7 @@ from .config import Limits, Settings, load_settings
 from .fx import FxMarket
 from .policy import PolicyEngine, PolicyError
 from .seed import SPONSOR, STUDENT
-from .tools import ToolContext, budget_summary, get_tuition_schedule
+from .tools import ToolContext, budget_summary, get_credit_profile, get_tuition_schedule
 
 WEB_DIR = Path(os.getenv("HB_WEB_DIR", Path(__file__).resolve().parents[2] / "app" / "dist"))
 CHATS_PER_MINUTE = int(os.getenv("HB_CHATS_PER_MINUTE", "30"))
@@ -155,6 +155,7 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         return {"accounts": accs, "total_cad": round(total, 2), "tuition": get_tuition_schedule(ctx, {}),
                 "budget": budget_summary(ctx, {}), "reminders": st.bank.reminders(user_id),
                 "payees": st.bank.payees(user_id), "pending": pending,
+                "credit": get_credit_profile(ctx, {}),
                 "limits": {"single_cad": st.settings.limits.single_cad, "daily_cad": st.settings.limits.daily_cad},
                 "rates": {"MYR/CAD": st.fx.mid("MYR", "CAD"), "CAD/MYR": round(st.fx.mid("CAD", "MYR"), 4)}}
 
