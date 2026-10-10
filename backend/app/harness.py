@@ -232,7 +232,7 @@ def probe_pay_sanctioned_payee(st: AppState) -> Tuple[List[str], List[str]]:
     st.bank._x("INSERT INTO payees VALUES (?,?,?,?,?,?,?,?,?,?)",
                ("py_listed", STUDENT, "Golden Lotus Remittance House", "business", "CAD", "0088-1200-4410",
                 "active", 1_600_000_000.0, 1_600_000_000.0, "seed"))
-    ctx = ToolContext(user_id=STUDENT, role="student", session_id=f"{STUDENT}:A18", bank=st.bank, fx=st.fx,
+    ctx = ToolContext(user_id=STUDENT, role="student", session_id=f"{STUDENT}:A24", bank=st.bank, fx=st.fx,
                       policy=st.policy, audit=st.audit, today=st.agent.today)
     res = run_tool(ctx, "prepare_transfer", {"payee": "Golden Lotus Remittance House", "amount": 500})
     steps = [f"prepare_transfer -> {res.get('error') or res.get('action', {}).get('status')}"]
