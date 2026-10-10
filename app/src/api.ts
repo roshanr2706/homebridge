@@ -42,6 +42,40 @@ export type Action = {
   confirm_token?: string;
   result?: Record<string, any> | null;
   provenance?: Record<string, string>;
+  // Why it can't be confirmed or approved right now (payments are locked), or null.
+  frozen?: string | null;
+};
+
+// Who locked each kind of money: the sponsor's own funds, and the student's own money.
+export type FreezeState = {
+  frozen: boolean;
+  own: 'student' | 'sponsor' | null;
+  sponsor_funded: 'student' | 'sponsor' | null;
+  since: number | null;
+};
+
+export type Alert = { id: string; ts: number; kind: string; message: string; weight: number };
+
+export type Digest = {
+  window_hours: number;
+  drafted: number;
+  executed: number;
+  awaiting_sponsor: number;
+  stopped: number;
+  money_out_cad: number;
+  flagged: { action_id: string; summary: string; risk_score: number; status: string }[];
+  alerts: number;
+  frozen: boolean;
+};
+
+export type SponsorOverview = {
+  accounts: Account[];
+  total_cad: number;
+  limits: Record<string, number>;
+  recent: Action[];
+  freeze: FreezeState;
+  alerts: Alert[];
+  digest: Digest;
 };
 
 export type Account = {
@@ -128,6 +162,7 @@ export type Overview = {
   reminders: { id: string; due: string; text: string }[];
   payees: { id: string; name: string; kind: string; currency: string; number: string; status: string; usable_from: number | null }[];
   pending: Action[];
+  freeze: FreezeState;
   limits: { single_cad: number; daily_cad: number };
   rates: Record<string, number>;
 };
@@ -160,8 +195,12 @@ export const api = {
   confirm: (id: string, token: string) => call<Action>('student', `/actions/${id}/confirm`, 'POST', { token }),
   cancel: (id: string) => call<Action>('student', `/actions/${id}/cancel`, 'POST'),
   sponsorQueue: () => call<{ actions: Action[] }>('sponsor', '/sponsor/queue'),
-  sponsorOverview: () =>
-    call<{ accounts: Account[]; total_cad: number; limits: Record<string, number>; recent: Action[] }>('sponsor', '/sponsor/overview'),
+  sponsorOverview: () => call<SponsorOverview>('sponsor', '/sponsor/overview'),
+  // Emergency lock. There is no unlock in the chat: the student unlocks her own money here, the sponsor the rest.
+  freeze: () => call<{ freeze: FreezeState }>('student', '/freeze', 'POST'),
+  unfreeze: () => call<{ freeze: FreezeState; note: string }>('student', '/unfreeze', 'POST'),
+  sponsorFreeze: (scope: 'sponsor_funded' | 'all') => call<{ freeze: FreezeState }>('sponsor', '/sponsor/freeze', 'POST', { scope }),
+  sponsorUnfreeze: () => call<{ freeze: FreezeState }>('sponsor', '/sponsor/unfreeze', 'POST'),
   approve: (id: string, note = '') => call<Action>('sponsor', `/sponsor/actions/${id}/approve`, 'POST', { note }),
   reject: (id: string, note = '') => call<Action>('sponsor', `/sponsor/actions/${id}/reject`, 'POST', { note }),
   setLimits: (single_cad: number, daily_cad: number) =>

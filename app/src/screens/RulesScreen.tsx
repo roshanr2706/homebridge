@@ -1,18 +1,99 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
-import { api } from '../api';
+import { api, type FreezeState } from '../api';
+import { stepUp } from '../stepUp';
 import { fonts, money, useTheme } from '../theme';
 import { useToast } from '../toast';
-import { Body, Button, Display, Eyebrow, Mono, Row, Surface } from '../ui';
+import { Body, Button, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
 const TIERS: { tier: string; name: string; gate: string; examples: string }[] = [
   { tier: 'T0', name: 'Read', gate: 'No gate, logged', examples: 'Balances, masked transactions, FX quotes, tuition schedule' },
-  { tier: 'T1', name: 'Low-risk write', gate: 'No gate, logged, reversible', examples: 'Budgets, reminders, asking you for money' },
+  { tier: 'T1', name: 'Low-risk write', gate: 'No gate, logged, reversible', examples: 'Budgets, reminders, asking you for money, locking payments' },
   { tier: 'T2', name: 'Ordinary payment', gate: 'Aisha confirms in the app', examples: 'Saved payee, under both limits; own-wallet conversions' },
   { tier: 'T3', name: 'Elevated payment', gate: 'Aisha confirms, then you approve', examples: 'Over a limit, new payee, from money you fund, flagged as risky' },
-  { tier: 'T4', name: 'Forbidden to the AI', gate: 'Not a tool at all', examples: 'Changing limits or sponsor, full account numbers, disabling checks' },
+  { tier: 'T4', name: 'Forbidden to the AI', gate: 'Not a tool at all', examples: 'Changing limits or sponsor, unlocking payments, full account numbers, disabling checks' },
 ];
+
+const LOCKED_BY: Record<string, string> = { sponsor: 'locked by you', student: 'locked by Aisha' };
+
+// One tap stops money leaving Aisha's accounts. The server refuses Confirm and Approve while locked; the
+// AI can lock (if Aisha asks) but has no way to unlock, and only the sponsor can unlock the money they fund.
+function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onChange: (f: FreezeState) => void }) {
+  const t = useTheme();
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  if (!freeze) return null;
+
+  const lock = (scope: 'sponsor_funded' | 'all') => async () => {
+    setBusy(scope);
+    try {
+      onChange((await api.sponsorFreeze(scope)).freeze);
+      toast(
+        'Payments locked',
+        scope === 'all' ? 'Nothing can leave Aisha’s accounts until you unlock them.' : 'Nothing can leave the accounts you fund. Her own money still works.',
+        'danger',
+      );
+    } catch (e) {
+      toast("Couldn't lock", (e as Error).message, 'danger');
+    } finally {
+      setBusy(null);
+    }
+  };
+  // Unlocking lets money move again, so it asks for the device owner first, like Approve does.
+  const unlock = async () => {
+    setBusy('unlock');
+    try {
+      const check = await stepUp('Unlock Aisha’s payments');
+      if (!check.ok) {
+        toast('Still locked', `${check.reason} Nothing changed.`, 'danger');
+        return;
+      }
+      onChange((await api.sponsorUnfreeze()).freeze);
+      toast('Payments unlocked', 'Aisha can confirm payments again, within your limits.', 'ok');
+    } catch (e) {
+      toast("Couldn't unlock", (e as Error).message, 'danger');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const row = (label: string, by: string | null) => (
+    <Row style={{ justifyContent: 'space-between', paddingVertical: 4 }}>
+      <Body style={{ fontSize: 14 }}>{label}</Body>
+      <Mono style={{ fontSize: 12, color: by ? t.danger : t.muted, fontFamily: by ? fonts.monoBold : fonts.mono }}>
+        {by ? LOCKED_BY[by] : 'open'}
+      </Mono>
+    </Row>
+  );
+
+  return (
+    <Surface tone={freeze.frozen ? 'danger' : 'plain'}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Eyebrow style={freeze.frozen ? { color: t.danger } : undefined}>Emergency lock</Eyebrow>
+        {freeze.frozen && <Pill label="LOCKED" tone="danger" />}
+      </Row>
+      <Body style={{ fontSize: 13, color: t.muted, marginTop: 4 }}>
+        {freeze.frozen
+          ? 'Aisha can still draft payments, but nothing can be confirmed or approved until it’s unlocked. The AI cannot unlock it.'
+          : 'If you think Aisha is being scammed or has lost her phone, one tap stops money leaving her accounts. Only you can unlock the money you fund.'}
+      </Body>
+      <View style={{ marginTop: 8 }}>
+        {row('Money you fund', freeze.sponsor_funded)}
+        {row('Aisha’s own money', freeze.own)}
+      </View>
+      <Row style={{ gap: 10, marginTop: 12 }}>
+        {!freeze.frozen && (
+          <Button label="Lock money you fund" kind="danger" busy={busy === 'sponsor_funded'} onPress={lock('sponsor_funded')} style={{ flex: 1 }} />
+        )}
+        {freeze.own !== 'sponsor' && (
+          <Button label="Lock everything" kind="danger" busy={busy === 'all'} onPress={lock('all')} style={{ flex: 1 }} />
+        )}
+        {freeze.frozen && <Button label="Unlock" busy={busy === 'unlock'} onPress={unlock} style={{ flex: 1 }} />}
+      </Row>
+    </Surface>
+  );
+}
 
 function Stepper({ label, value, onChange, step, min, max }: { label: string; value: number; onChange: (v: number) => void; step: number; min: number; max: number }) {
   const t = useTheme();
@@ -55,6 +136,7 @@ export function RulesScreen({ active }: { active: boolean }) {
   const [saved, setSaved] = useState<{ single: number; daily: number } | null>(null);
   const [cooling, setCooling] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [freeze, setFreeze] = useState<FreezeState | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -63,6 +145,7 @@ export function RulesScreen({ active }: { active: boolean }) {
       setDaily(o.limits.daily_cad);
       setSaved({ single: o.limits.single_cad, daily: o.limits.daily_cad });
       setCooling(o.limits.payee_cooling_seconds);
+      setFreeze(o.freeze);
     } catch {
       /* the approvals screen already shows connection errors */
     }
@@ -97,6 +180,8 @@ export function RulesScreen({ active }: { active: boolean }) {
           nothing typed into the chat can.
         </Body>
       </View>
+
+      <EmergencyLock freeze={freeze} onChange={setFreeze} />
 
       <Surface>
         <Eyebrow>Aisha can confirm alone</Eyebrow>

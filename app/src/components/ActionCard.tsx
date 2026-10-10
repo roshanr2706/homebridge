@@ -161,6 +161,9 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
   const sponsorWhy = a.sponsor_reasons ?? [];
   const signals = a.risk_signals ?? a.risk_reasons.filter((r) => !sponsorWhy.includes(r));
   const failedMsg = a.status === 'failed' ? (a.result?.error as string | undefined) : undefined;
+  // Payments are locked: the server refuses Confirm and Approve, so the buttons say so up front.
+  const frozen = a.frozen && ['awaiting_user', 'awaiting_sponsor'].includes(a.status) ? a.frozen : null;
+  const warnings = a.warnings.filter((w) => !w.startsWith('Payments are locked'));
 
   const run = (name: string, fn?: () => Promise<void>) => async () => {
     if (!fn) return;
@@ -259,7 +262,18 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
             </View>
           </View>
         )}
-        {a.warnings.map((w) => (
+        {frozen && (
+          <View style={[styles.box, { backgroundColor: t.dangerBg }]}>
+            <Row style={{ justifyContent: 'space-between', marginBottom: 4 }}>
+              <Body style={{ fontSize: 13, color: t.danger, fontFamily: fonts.bodyBold }}>Payments are locked</Body>
+              <Pill label="FROZEN" tone="danger" />
+            </Row>
+            <Body style={{ fontSize: 12.5, lineHeight: 18, color: t.danger }}>
+              {frozen.charAt(0).toUpperCase() + frozen.slice(1)}. Nothing can be confirmed or approved while payments are locked.
+            </Body>
+          </View>
+        )}
+        {warnings.map((w) => (
           <Body key={w} style={{ fontSize: 12.5, color: t.warn, marginTop: 8, lineHeight: 18 }}>
             {w}
           </Body>
@@ -296,8 +310,9 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
             <Row style={{ gap: 10, marginTop: 14 }}>
               <Button label="Cancel" kind="ghost" busy={busy === 'cancel'} onPress={run('cancel', onCancel && (() => onCancel(a)))} style={{ flex: 1 }} />
               <Button
-                label={a.needs_sponsor_approval ? 'Confirm & send to sponsor' : 'Confirm'}
+                label={frozen ? 'Locked' : a.needs_sponsor_approval ? 'Confirm & send to sponsor' : 'Confirm'}
                 busy={busy === 'confirm'}
+                disabled={!!frozen}
                 onPress={guarded('confirm', `Confirm ${what}`, onConfirm && (() => onConfirm(a)))}
                 style={{ flex: 2 }}
               />
@@ -321,8 +336,9 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
             <Row style={{ gap: 10 }}>
               <Button label="Reject" kind="danger" busy={busy === 'reject'} onPress={run('reject', onReject && (() => onReject(a, note)))} style={{ flex: 1 }} />
               <Button
-                label="Approve"
+                label={frozen ? 'Locked' : 'Approve'}
                 busy={busy === 'approve'}
+                disabled={!!frozen}
                 onPress={guarded('approve', `Approve ${what}`, onApprove && (() => onApprove(a, note)))}
                 style={{ flex: 2 }}
               />

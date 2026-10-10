@@ -4,13 +4,17 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { api, type Overview } from '../api';
 import { usePoll } from '../hooks';
 import { BudgetCard, TuitionCard } from '../components/ResultCards';
+import { stepUp } from '../stepUp';
 import { amount, fonts, money, useTheme } from '../theme';
-import { Body, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
+import { useToast } from '../toast';
+import { Body, Button, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
 const STATUS: Record<string, string> = { awaiting_user: 'needs your confirmation', awaiting_sponsor: 'with your sponsor' };
 
 export function WalletScreen({ active }: { active: boolean }) {
   const t = useTheme();
+  const toast = useToast();
+  const [lockBusy, setLockBusy] = useState(false);
   const [o, setO] = useState<Overview | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,6 +34,38 @@ export function WalletScreen({ active }: { active: boolean }) {
   }, []);
 
   usePoll(refresh, 2000, active);
+
+  // Locking is one tap. Unlocking happens only here (never in the chat), asks for the device owner first,
+  // and lifts only a lock Aisha set on her own money: what Dad funds stays locked until he unlocks it.
+  const lock = async () => {
+    setLockBusy(true);
+    try {
+      await api.freeze();
+      toast('Payments locked', 'Nothing can be confirmed until they’re unlocked. Dad has been alerted.', 'danger');
+      refresh();
+    } catch (e) {
+      toast("Couldn't lock", (e as Error).message, 'danger');
+    } finally {
+      setLockBusy(false);
+    }
+  };
+  const unlock = async () => {
+    setLockBusy(true);
+    try {
+      const check = await stepUp('Unlock your own money');
+      if (!check.ok) {
+        toast('Still locked', `${check.reason} Nothing changed.`, 'danger');
+        return;
+      }
+      const r = await api.unfreeze();
+      toast('Your own money is unlocked', r.note || 'You can confirm payments again.', 'ok');
+      refresh();
+    } catch (e) {
+      toast("Couldn't unlock", (e as Error).message, 'danger');
+    } finally {
+      setLockBusy(false);
+    }
+  };
 
   if (!o) {
     return (
@@ -58,6 +94,27 @@ export function WalletScreen({ active }: { active: boolean }) {
           {money(spendable, 'CAD')} is yours to spend · {money(myr, 'MYR', 0)} sits in ringgit · 1 MYR = {o.rates['MYR/CAD']} CAD
         </Body>
       </View>
+
+      {o.freeze.frozen && (
+        <Surface tone="danger">
+          <Row style={{ justifyContent: 'space-between' }}>
+            <Eyebrow style={{ color: t.danger }}>Payments locked</Eyebrow>
+            <Pill label="LOCKED" tone="danger" />
+          </Row>
+          <Body style={{ fontSize: 13, marginTop: 4 }}>
+            {o.freeze.own ? 'Nothing can leave your accounts' : 'Nothing can leave the accounts Dad funds'}. You can still ask me to draft
+            payments, but they can’t be confirmed until they’re unlocked.{' '}
+            {o.freeze.own === 'student'
+              ? 'You can unlock your own money below. Money Dad funds stays locked until he unlocks it.'
+              : o.freeze.own === 'sponsor' || o.freeze.sponsor_funded === 'sponsor'
+                ? 'Dad locked this, so only he can unlock it.'
+                : 'Only Dad can unlock the money he funds.'}
+          </Body>
+          {o.freeze.own === 'student' && (
+            <Button label="Unlock my own money" kind="ghost" busy={lockBusy} onPress={unlock} style={{ marginTop: 10 }} />
+          )}
+        </Surface>
+      )}
 
       <View style={{ gap: 8 }}>
         {o.accounts.map((a) => (
@@ -145,6 +202,15 @@ export function WalletScreen({ active }: { active: boolean }) {
           your own. Anything bigger, any new payee, and any payment straight out of the accounts Dad funds needs his approval too. Only he can change
           these limits, from his own phone.
         </Body>
+        {!o.freeze.frozen && (
+          <Button
+            label="Lost your phone or think you’ve been scammed? Lock payments"
+            kind="danger"
+            busy={lockBusy}
+            onPress={lock}
+            style={{ marginTop: 12 }}
+          />
+        )}
       </Surface>
     </ScrollView>
   );

@@ -19,6 +19,10 @@ const EVENT_TONE: Record<string, 'ok' | 'danger' | 'warn' | 'accent' | 'plain' |
   rate_limited: 'warn',
   limits_changed: 'warn',
   llm_error: 'warn',
+  payments_frozen: 'danger',
+  payments_unfrozen: 'warn',
+  unfreeze_denied: 'danger',
+  alert_raised: 'warn',
 };
 
 function summary(e: AuditEntry): string {
@@ -28,6 +32,9 @@ function summary(e: AuditEntry): string {
   if (e.event === 'assistant_reply') return d.tools?.length ? `used ${d.tools.join(', ')}` : 'no tools';
   if (e.event === 'action_drafted') return `${d.kind} ${d.tier} · risk ${d.risk}`;
   if (e.event === 'limits_changed') return `single ${d.before?.single_cad} → ${d.after?.single_cad}, daily ${d.before?.daily_cad} → ${d.after?.daily_cad}`;
+  if (e.event === 'payments_frozen') return `by ${d.by} · ${d.scope === 'all' ? 'everything' : 'sponsor-funded money'}`;
+  if (e.event === 'payments_unfrozen') return `by ${d.by} · still locked: ${d.still_locked?.length ? d.still_locked.join(', ') : 'nothing'}`;
+  if (e.event === 'alert_raised') return d.kind + (d.count ? ` · ${d.count}` : '');
   if (d.action_id) return d.action_id + (d.reason ? ` · ${d.reason}` : '') + (d.note ? ` · “${d.note}”` : '');
   return '';
 }
