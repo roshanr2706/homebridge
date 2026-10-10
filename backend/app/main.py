@@ -25,6 +25,7 @@ from .bank import Bank
 from .config import Limits, Settings, load_settings
 from .fx import FxMarket
 from .policy import PolicyEngine, PolicyError
+from .safety import SafetyError
 from .seed import SPONSOR, STUDENT
 from .tools import ToolContext, budget_summary, get_tuition_schedule
 
@@ -43,6 +44,10 @@ class ConfirmIn(BaseModel):
 
 class DecisionIn(BaseModel):
     note: str = Field("", max_length=200)
+
+
+class FreezeIn(BaseModel):
+    scope: str = Field("sponsor_funded", pattern="^(sponsor_funded|all)$")
 
 
 class LimitsIn(BaseModel):
@@ -113,6 +118,12 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
     def _err(e: PolicyError):
         raise HTTPException(400, str(e))
 
+    def _my_student(sponsor_id: str) -> str:
+        u = st.bank.user(STUDENT)
+        if not u or u.get("sponsor_id") != sponsor_id:
+            raise HTTPException(403, "You are not the sponsor for this account.")
+        return STUDENT
+
     chat_times: Dict[str, deque] = {}
 
     def _chat_rate_limit(user_id: str) -> None:
@@ -155,6 +166,7 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         return {"accounts": accs, "total_cad": round(total, 2), "tuition": get_tuition_schedule(ctx, {}),
                 "budget": budget_summary(ctx, {}), "reminders": st.bank.reminders(user_id),
                 "payees": st.bank.payees(user_id), "pending": pending,
+                "freeze": st.policy.safety.state(user_id),
                 "limits": {"single_cad": st.settings.limits.single_cad, "daily_cad": st.settings.limits.daily_cad},
                 "rates": {"MYR/CAD": st.fx.mid("MYR", "CAD"), "CAD/MYR": round(st.fx.mid("CAD", "MYR"), 4)}}
 
@@ -176,6 +188,30 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         except PolicyError as e:
             _err(e)
 
+    # Emergency freeze. There is deliberately no agent tool to unlock: only these endpoints, with each
+    # person's own login. The student's unlock lifts only a lock she set on her own money.
+    @app.post("/freeze")
+    def student_freeze(user_id: str = Depends(student)):
+        return {"freeze": st.policy.safety.freeze(user_id, "student", "all", actor=user_id)}
+
+    @app.post("/unfreeze")
+    def student_unfreeze(user_id: str = Depends(student)):
+        try:
+            state = st.policy.safety.unfreeze(user_id, "student", actor=user_id)
+        except SafetyError as e:
+            raise HTTPException(403, str(e))
+        note = ("Money your sponsor funds stays locked until your sponsor unlocks it."
+                if state["sponsor_funded"] else "")
+        return {"freeze": state, "note": note}
+
+    @app.post("/sponsor/freeze")
+    def sponsor_freeze(body: FreezeIn, sponsor_id: str = Depends(sponsor)):
+        return {"freeze": st.policy.safety.freeze(_my_student(sponsor_id), "sponsor", body.scope, actor=sponsor_id)}
+
+    @app.post("/sponsor/unfreeze")
+    def sponsor_unfreeze(sponsor_id: str = Depends(sponsor)):
+        return {"freeze": st.policy.safety.unfreeze(_my_student(sponsor_id), "sponsor", actor=sponsor_id)}
+
     @app.get("/sponsor/queue")
     def queue(sponsor_id: str = Depends(sponsor)):
         return {"actions": [st.policy.present(a) for a in st.policy.sponsor_queue(sponsor_id)]}
@@ -183,10 +219,14 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
     @app.get("/sponsor/overview")
     def overview(sponsor_id: str = Depends(sponsor)):
         accs = st.bank.accounts(STUDENT)
+        actions = st.policy.list_for(STUDENT)
         return {"student": st.bank.user(STUDENT), "accounts": accs,
                 "total_cad": round(sum(a["balance"] * st.fx.mid(a["currency"], "CAD") for a in accs), 2),
                 "limits": st.settings.limits.__dict__,
-                "recent": [st.policy.present(a) for a in st.policy.list_for(STUDENT)][-10:]}
+                "recent": [st.policy.present(a) for a in actions][-10:],
+                "freeze": st.policy.safety.state(STUDENT),
+                "alerts": list(reversed(st.policy.safety.alerts(STUDENT)))[:10],
+                "digest": st.policy.safety.digest(STUDENT, actions)}
 
     @app.post("/sponsor/limits")
     def set_limits(body: LimitsIn, sponsor_id: str = Depends(sponsor)):

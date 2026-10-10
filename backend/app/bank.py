@@ -6,6 +6,7 @@ masking helpers, and money only moves through `PolicyEngine.execute`.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 import time
@@ -61,6 +62,8 @@ CREATE TABLE IF NOT EXISTS pending_actions (
   id TEXT PRIMARY KEY, owner TEXT, status TEXT, created_at REAL, data TEXT
 );
 CREATE TABLE IF NOT EXISTS draft_log (owner TEXT, ts REAL);
+CREATE TABLE IF NOT EXISTS freeze_state (owner TEXT PRIMARY KEY, data TEXT);
+CREATE TABLE IF NOT EXISTS alerts (id TEXT PRIMARY KEY, owner TEXT, ts REAL, kind TEXT, data TEXT);
 """
 SCHEMA += POLICY_SCHEMA
 
@@ -348,7 +351,24 @@ class Bank:
             self.db.executescript(POLICY_SCHEMA)
             self.db.execute("DELETE FROM pending_actions")
             self.db.execute("DELETE FROM draft_log")
+            self.db.execute("DELETE FROM freeze_state")
+            self.db.execute("DELETE FROM alerts")
             self.db.commit()
+
+    # Freeze state and alerts (see safety.py), stored next to the drafts they govern.
+    def save_freeze(self, owner: str, data: str) -> None:
+        self._x("INSERT OR REPLACE INTO freeze_state VALUES (?,?)", (owner, data))
+
+    def load_freeze(self, owner: str) -> Optional[Dict[str, Any]]:
+        rows = self._q("SELECT data FROM freeze_state WHERE owner=?", (owner,))
+        return json.loads(rows[0]["data"]) if rows else None
+
+    def save_alert(self, alert_id: str, owner: str, ts: float, kind: str, data: str) -> None:
+        self._x("INSERT INTO alerts VALUES (?,?,?,?,?)", (alert_id, owner, ts, kind, data))
+
+    def load_alerts(self, owner: str, since: float) -> List[Dict[str, Any]]:
+        return [dict(r) for r in self._q("SELECT * FROM alerts WHERE owner=? AND ts >= ? ORDER BY ts, id",
+                                         (owner, since))]
 
     def credit_sponsor_topup(self, student: str, amount_minor: int, currency: str, memo: str) -> None:
         acc = self.find_account(student, currency)
