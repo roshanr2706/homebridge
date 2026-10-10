@@ -726,3 +726,19 @@ def forecast_cashflow(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
                         "The sponsor allowance arrives in MYR and stays in the MYR Wallet unless converted."],
         "disclosure": "An estimate, not a guarantee or financial advice. This forecast does not move money.",
     }
+
+
+# ------------------------------------------------------------ emergency freeze
+# Locking only adds friction, so it is T1 and allowed even in a flagged conversation. There is deliberately
+# no unlock tool: the student unlocks her own money in the app, and only the sponsor unlocks theirs.
+@tool("freeze_payments",
+      "Lock all outgoing payments right away, e.g. when the user thinks they were scammed, pressured, or lost "
+      "their phone. Drafts stay, but nothing can be confirmed or approved while locked. You cannot unlock: the "
+      "user unlocks their own money in the app, and only the sponsor can unlock money the sponsor funds.",
+      {"reason": {"type": "string", "description": "Short reason in the user's words"}}, tier="T1")
+def freeze_payments(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
+    state = ctx.policy.safety.freeze(ctx.user_id, "student", "all", actor=ctx.user_id)
+    return {"ok": True, "freeze": state,
+            "next_step": "Payments are locked. To unlock their own money the user opens the Wallet tab in the app; "
+                         "money the sponsor funds stays locked until the sponsor unlocks it. The sponsor has "
+                         "been alerted."}

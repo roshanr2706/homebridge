@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
-import { api, type Account, type Action } from '../api';
+import { api, type Account, type Action, type Alert, type Digest, type FreezeState } from '../api';
 import { usePoll } from '../hooks';
 import { ActionCard } from '../components/ActionCard';
 import { cityTime, fonts, money, useTheme } from '../theme';
@@ -17,6 +17,24 @@ const STATUS_TONE: Record<string, 'ok' | 'danger' | 'plain' | 'gold'> = {
   awaiting_user: 'gold',
 };
 
+const ALERT_TITLE: Record<string, string> = {
+  velocity: 'Several payments in an hour',
+  first_large_payment: 'Large first payment to a payee',
+  odd_hours: 'Activity at an unusual hour',
+  failed_confirms: 'Repeated failed confirmations',
+  student_freeze: 'Aisha locked her payments',
+};
+
+function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  const t = useTheme();
+  return (
+    <View style={{ flex: 1, minWidth: 70 }}>
+      <Mono style={{ fontFamily: fonts.monoBold, fontSize: 18, color: tone ?? t.text }}>{value}</Mono>
+      <Body style={{ fontSize: 11.5, color: t.muted, lineHeight: 15 }}>{label}</Body>
+    </View>
+  );
+}
+
 export function SponsorScreen({ active }: { active: boolean }) {
   const t = useTheme();
   const toast = useToast();
@@ -31,6 +49,9 @@ export function SponsorScreen({ active }: { active: boolean }) {
     activeRef.current = active;
   }, [active]);
   const [total, setTotal] = useState(0);
+  const [digest, setDigest] = useState<Digest | null>(null);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [freeze, setFreeze] = useState<FreezeState | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -46,6 +67,9 @@ export function SponsorScreen({ active }: { active: boolean }) {
       setRecent(o.recent.filter((a) => a.status !== 'awaiting_sponsor').reverse());
       setAccounts(o.accounts);
       setTotal(o.total_cad);
+      setDigest(o.digest);
+      setAlerts(o.alerts);
+      setFreeze(o.freeze);
       setError('');
     } catch {
       setError(api.unreachable);
@@ -82,6 +106,19 @@ export function SponsorScreen({ active }: { active: boolean }) {
       </View>
       {error ? <Body style={{ color: t.danger }}>{error}</Body> : null}
 
+      {freeze?.frozen && (
+        <Surface tone="danger">
+          <Row style={{ justifyContent: 'space-between' }}>
+            <Eyebrow style={{ color: t.danger }}>Payments locked</Eyebrow>
+            <Pill label={freeze.sponsor_funded === 'sponsor' || freeze.own === 'sponsor' ? 'BY YOU' : 'BY AISHA'} tone="danger" />
+          </Row>
+          <Body style={{ fontSize: 13, marginTop: 4 }}>
+            Nothing can be confirmed or approved from {freeze.own ? 'any of Aisha’s accounts' : 'the accounts you fund'} until it’s unlocked in
+            Rules. The AI cannot unlock it.
+          </Body>
+        </Surface>
+      )}
+
       <Row style={{ justifyContent: 'space-between', marginTop: 6 }}>
         <Display style={{ fontSize: 18 }}>Waiting for you</Display>
         <Pill label={String(queue.length)} tone={queue.length ? 'gold' : 'plain'} />
@@ -92,6 +129,54 @@ export function SponsorScreen({ active }: { active: boolean }) {
         </Surface>
       ) : (
         queue.map((a) => <ActionCard key={a.action_id} action={a} mode="sponsor" onApprove={decide(true)} onReject={decide(false)} />)
+      )}
+
+      {digest && (
+        <>
+          <Display style={{ fontSize: 18, marginTop: 10 }}>Last 24 hours</Display>
+          <Surface>
+            <Row style={{ gap: 8, alignItems: 'flex-start' }}>
+              <Stat label="drafted" value={String(digest.drafted)} />
+              <Stat label="completed" value={String(digest.executed)} tone={t.ok} />
+              <Stat label="stopped" value={String(digest.stopped)} tone={digest.stopped ? t.danger : undefined} />
+              <Stat label="money out" value={money(digest.money_out_cad, 'CAD', 0)} />
+            </Row>
+            {digest.flagged.length > 0 && (
+              <View style={{ marginTop: 12, gap: 4 }}>
+                <Eyebrow style={{ color: t.danger }}>Flagged as risky</Eyebrow>
+                {digest.flagged.map((f) => (
+                  <Row key={f.action_id} style={{ justifyContent: 'space-between', gap: 10 }}>
+                    <Body style={{ flex: 1, fontSize: 13 }} numberOfLines={2}>
+                      {f.summary}
+                    </Body>
+                    <Mono style={{ fontSize: 11, color: t.danger }}>risk {f.risk_score}</Mono>
+                  </Row>
+                ))}
+              </View>
+            )}
+          </Surface>
+        </>
+      )}
+
+      {alerts.length > 0 && (
+        <Surface tone="warn">
+          <Row style={{ justifyContent: 'space-between' }}>
+            <Eyebrow>Unusual activity</Eyebrow>
+            <Pill label={String(alerts.length)} tone="gold" />
+          </Row>
+          <Body style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>
+            For your information; nothing to approve. For 24 hours, Aisha’s new payments carry extra risk, so more of them come to you.
+          </Body>
+          {alerts.map((a, i) => (
+            <View key={a.id} style={{ paddingVertical: 7, borderTopWidth: i ? 1 : 0, borderColor: t.border, marginTop: i ? 0 : 6 }}>
+              <Row style={{ justifyContent: 'space-between', gap: 10 }}>
+                <Body style={{ fontFamily: fonts.bodyBold, fontSize: 13, flex: 1 }}>{ALERT_TITLE[a.kind] ?? a.kind}</Body>
+                <Mono style={{ fontSize: 11, color: t.faint }}>{cityTime('America/Vancouver', new Date(a.ts * 1000))} Vancouver</Mono>
+              </Row>
+              <Body style={{ fontSize: 12.5, color: t.muted, lineHeight: 18 }}>{a.message}</Body>
+            </View>
+          ))}
+        </Surface>
       )}
 
       <Display style={{ fontSize: 18, marginTop: 10 }}>Aisha’s accounts</Display>

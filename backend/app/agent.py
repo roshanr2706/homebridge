@@ -13,7 +13,7 @@ from .audit import AuditLog
 from .bank import Bank
 from .config import Settings
 from .fx import FxMarket
-from .guard import check as guard_check, COMPILED, normalize
+from .guard import check as guard_check, COMPILED, expand
 from .llm import LLMError, Provider, make_provider
 from .policy import PolicyEngine
 from .tools import ToolContext, run_tool, specs_for
@@ -43,6 +43,7 @@ Tool tips:
 - For "will I run out of money / is it enough until tuition, January or the end of term", call forecast_cashflow (until="next_tuition", "end_of_term", a month name or a date). Give the verdict, the first shortfall or tuition gap, and the top suggestion. It is advice only: draft a conversion or top-up only if the user then asks for it.
 - For "how's my credit" or how to improve it, call get_credit_profile: it has utilization, the on-time streak, the statement due date and next steps with amounts. For "how do I build credit" or "should I get a secured card", call get_credit_profile and then credit_building_plan (has_credit_card from the profile). It is not a credit score: never give, estimate or invent a bureau score, and call the health band simulated.
 - To pay the secured card, use prepare_card_payment with a target ('recommended', 'statement_balance', 'minimum', 'under_30', 'full_balance') instead of working out the amount yourself, or an exact amount if the user gave one. It cannot pay more than the card balance.
+- If the user asks to lock their account or thinks they were scammed, call freeze_payments straight away. You cannot unlock payments: the user unlocks their own money in the app's Wallet tab, and only the sponsor can unlock money the sponsor funds.
 
 Style: short, plain, friendly. Use the user's currency words. The user may write casual Malaysian English or mix in Malay or Mandarin; understand it and reply in clear English. After drafting an action, tell the user what to check on the confirmation card in the app.
 The app shows the results of read tools (balances, FX quotes, rate history, tuition, budget, transactions, scam checks, cash-flow forecasts, credit profile) as cards under your reply, using the tool data directly. So do not list every number again: give the answer and the one or two figures that matter, in 1 to 4 sentences, and let the card carry the detail.
@@ -55,7 +56,7 @@ def _redact(text: str) -> str:
 
 
 def _scan_tool_output(result: Dict[str, Any]) -> Optional[str]:
-    blob = normalize(json.dumps(result, ensure_ascii=False))
+    blob = expand(json.dumps(result, ensure_ascii=False))
     for cat in ("injection", "escalation"):
         for p in COMPILED[cat]:
             m = p.search(blob)

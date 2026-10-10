@@ -180,6 +180,11 @@ class OfflineEngine:
         if last.get("error") and not last.get("saved_payees"):
             return _say(f"I couldn't do that: {last['error']}")
 
+        # 0. Emergency lock and unlock requests (locking only adds friction, so it runs even in a flagged turn)
+        lock = self._lock_request(low, done)
+        if lock:
+            return lock
+
         # 1. Scam check of a pasted or quoted message
         if re.search(r"scam|is this (real|legit)|legit ke|real or not|should i pay this", low) or (
                 len(text) > 120 and "scam" in note.lower()):
@@ -520,6 +525,24 @@ class OfflineEngine:
                           ("electric", "hydro"), ("phone", "phone"), ("mobile", "phone"), ("ubc", "tuition")):
             if word in low:
                 return key
+        return None
+
+    @staticmethod
+    def _lock_request(low: str, done: List[str]) -> Optional[Dict[str, Any]]:
+        """'Lock my account' calls freeze_payments. Unlocking is never done from chat."""
+        if re.search(r"\b(freeze|lock|block)\s+(my|all|everything)\b|(冻结|锁定|锁住)我的|(kunci|bekukan|sekat) akaun", low):
+            if "freeze_payments" not in done:
+                return _call("freeze_payments", reason="user asked to lock payments")
+            return _say("Done: I've locked your payments. Drafts stay, but nothing can be confirmed or approved until "
+                        "they're unlocked, and your dad has been alerted. If you think you've been scammed, don't send "
+                        "anything else, call your bank, and report it to the Canadian Anti-Fraud Centre. You can "
+                        "unlock your own money later in the Wallet tab; money your dad funds stays locked until he "
+                        "unlocks it.")
+        if re.search(r"\b(unfreez\w*|unlock\w*|unblock\w*)\b|\blift (the )?(freeze|lock)\b|解冻|解锁|buka (kunci|semula)",
+                     low) and not re.search(r"scam|is this (real|legit)|legit ke", low):
+            return _say("I can't unlock payments from chat, whoever asks. You can unlock your own money in the Wallet "
+                        "tab of the app, and only your dad can unlock the money he funds, from his own app. If someone "
+                        "is pushing you to unlock and pay quickly, that's a warning sign.")
         return None
 
     @staticmethod

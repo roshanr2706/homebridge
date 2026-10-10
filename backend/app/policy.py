@@ -9,6 +9,8 @@ Design rules (quoted in the security self-assessment):
 4. T3 actions additionally need the sponsor, acting through the sponsor
    endpoint with the sponsor's own credentials.
 5. Execution re-checks everything (hash, expiry, balance, cooling period).
+6. While the sponsor or the student has frozen payments (safety.py), drafts are still
+   allowed, but Confirm, Approve and execution are refused.
 """
 from __future__ import annotations
 
@@ -33,6 +35,7 @@ from .bank import Bank, BankError, to_minor
 from .config import Limits
 from .fx import FxMarket
 from .guard import normalize
+from .safety import FROZEN_PREFIX, SafetyMonitor
 
 RISKY_PAYEE_KINDS = {"crypto", "gift_card", "individual", "unknown"}
 # The kind becomes the transaction category, and the 24h limit skips 'conversion' rows, so it is an allow-list.
@@ -152,7 +155,19 @@ class PolicyEngine:
         self._lock = threading.RLock()
         self.limits_changed_at = 0.0
         self.bank.ensure_policy_tables()
+        self.safety = SafetyMonitor(bank, fx, audit)
         self._load()
+
+    @property
+    def audit(self) -> AuditLog:
+        return self._audit
+
+    @audit.setter
+    def audit(self, log: AuditLog) -> None:
+        # The evidence runner swaps in a shared log; the safety monitor must write to the same one.
+        self._audit = log
+        if hasattr(self, "safety"):
+            self.safety.audit = log
 
     def limits_changed(self) -> None:
         """Called after the sponsor edits the limits. Student-only drafts made earlier then go to the sponsor."""
@@ -226,9 +241,23 @@ class PolicyEngine:
                 total += self.cad(a.params["amount"], a.params["from_currency"])
         return total
 
+    def _alert_risk(self, owner: str, reasons: List[str]) -> int:
+        """Risk added by an unusual-activity alert from the last 24 hours (safety.py)."""
+        alert = self.safety.risk_bump(owner)
+        if not alert:
+            return 0
+        reasons.append(f"Unusual activity on this account in the last 24h: {alert['message']}")
+        return int(alert["weight"])
+
+    def _frozen_check(self, a: PendingAction) -> Optional[str]:
+        return self.safety.frozen_reason(a.owner, a.kind, a.params)
+
     def _new(self, kind: str, owner: str, session_id: str, params: Dict[str, Any], summary: str,
              reasons_t3: List[str], risk: int, risk_reasons: List[str], warnings: List[str],
              provenance: Dict[str, str]) -> PendingAction:
+        lock = self.safety.frozen_reason(owner, kind, params)
+        if lock:  # drafting is still allowed while frozen; confirming is not
+            warnings.append(f"{FROZEN_PREFIX} {lock}. It can't be confirmed or approved until they are unlocked.")
         token = secrets.token_urlsafe(24)
         needs_sponsor = bool(reasons_t3) or risk >= self.limits.sponsor_risk_threshold
         if risk >= self.limits.sponsor_risk_threshold and not reasons_t3:
@@ -249,6 +278,7 @@ class PolicyEngine:
         self.audit.record("action_drafted", owner, action_id=action.id, kind=kind, params=params,
                           tier=action.tier, risk=action.risk_score, reasons=action.risk_reasons,
                           provenance=provenance)
+        self.safety.note_draft(owner, kind, params, action.id)
         return action
 
     # ------------------------------------------------------------- drafts
@@ -333,6 +363,7 @@ class PolicyEngine:
             t3.append("Requested in a conversation the safety check flagged")
         if guard_flags and "scam" in guard_flags:
             warnings.append("This request matches a known scam pattern. Legitimate agencies never demand urgent payment by chat.")
+        risk += self._alert_risk(owner, reasons)
 
         params = {"payee_id": payee_id, "payee_name": payee["name"], "amount": float(amount),
                   "currency": currency, "from_account_id": acc["id"], "from_account": acc["label"],
@@ -380,6 +411,7 @@ class PolicyEngine:
             reasons.append(f"Conversation was flagged by the safety check: {flag}")
         if set(guard_flags or []) & {"scam", "injection", "escalation"}:
             t3.append("Requested in a conversation the safety check flagged")
+        risk += self._alert_risk(owner, reasons)
         params = {"from_account_id": src["id"], "to_account_id": dst["id"], "amount": float(amount),
                   "from_currency": src["currency"], "to_currency": dst["currency"],
                   "rate": q["rate"], "expected_receive": q["you_receive"],
@@ -475,11 +507,17 @@ class PolicyEngine:
                 raise PolicyError(f"Action is {a.status}, not awaiting confirmation.")
             if not token or not hmac.compare_digest(_hash_token(token), a.token_hash):
                 self.audit.record("confirm_denied", user_id, action_id=action_id, reason="bad token")
+                self.safety.note_failed_confirm(a.owner, a.id, "wrong confirmation code")
                 raise PolicyError("Invalid confirmation token.")
             if _hash_params(a.params) != a.params_hash:
                 a.status = "failed"
                 self._save(a)
                 raise PolicyError("Action parameters changed after drafting.")
+            lock = self._frozen_check(a)
+            if lock:  # checked before the token is used up, so it can still be confirmed once unlocked
+                self.audit.record("confirm_denied", user_id, action_id=action_id, reason="payments frozen")
+                self.safety.note_failed_confirm(a.owner, a.id, "payments locked")
+                raise PolicyError(f"{FROZEN_PREFIX} {lock}. Nothing was sent.")
             a.user_confirmed = True
             a._token = None
             self.audit.record("action_confirmed", user_id, action_id=a.id)
@@ -488,6 +526,7 @@ class PolicyEngine:
                 a.needs_sponsor, a.tier = True, "T3"
                 a.sponsor_reasons.append("The sponsor changed the limits after this was drafted")
                 a.risk_reasons.insert(0, a.sponsor_reasons[-1])
+            self.safety.note_confirm(a.owner, a.kind, a.needs_sponsor, a.id)
             if a.needs_sponsor:
                 a.status = "awaiting_sponsor"
                 a.expires_at = time.time() + 24 * 3600
@@ -505,6 +544,10 @@ class PolicyEngine:
                 raise PolicyError("You are not the sponsor for this account.")
             if a.status != "awaiting_sponsor":
                 raise PolicyError(f"Action is {a.status}, not awaiting sponsor approval.")
+            lock = self._frozen_check(a) if approve else None
+            if lock:  # rejecting is always allowed
+                self.audit.record("sponsor_denied", sponsor_id, action_id=action_id, reason="payments frozen")
+                raise PolicyError(f"{FROZEN_PREFIX} {lock}. Unlock payments in Rules before approving, or reject it.")
             a.sponsor_decision = "approved" if approve else "rejected"
             a.sponsor_note = (note or "")[:200]
             self.audit.record("sponsor_" + a.sponsor_decision, sponsor_id, action_id=a.id, note=note[:200])
@@ -540,6 +583,9 @@ class PolicyEngine:
             self.audit.record("action_failed", "system", action_id=a.id, error="params hash mismatch")
             self._save(a)
             return a
+        lock = self._frozen_check(a)
+        if lock:  # confirm() and sponsor_decide() refuse first; this is the last line of defence
+            raise PolicyError(f"{FROZEN_PREFIX} {lock}. Nothing was sent.")
         self._save(a, executing=True)
         try:
             if a.kind == "transfer":
@@ -577,6 +623,12 @@ class PolicyEngine:
             if acc and acc["balance"] < to_minor(a.params["amount"]):
                 d["warnings"].append(f"Balance in {acc['label']} is lower than this amount right now; "
                                      "it will fail unless topped up first.")
+        # The lock is shown as it is now, not as it was when the draft was made.
+        lock = self._frozen_check(a) if a.status in ("awaiting_user", "awaiting_sponsor") else None
+        d["frozen"] = lock
+        d["warnings"] = [w for w in d["warnings"] if not w.startswith(FROZEN_PREFIX)]
+        if lock:
+            d["warnings"].append(f"{FROZEN_PREFIX} {lock}. It can't be confirmed or approved until they are unlocked.")
         return d
 
 
@@ -602,4 +654,5 @@ class PolicyEngine:
         with self._lock:
             self.actions.clear()
             self._drafts.clear()
+            self.safety.reset()
             self.bank.clear_policy_state()
