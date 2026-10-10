@@ -20,7 +20,7 @@ International students live between two financial systems. Their pain points, wh
 | Tuition comes in large installments funded from home, often across a currency gap. | Tracks installments, shows the shortfall, drafts the conversion into the tuition fund and the payment, and routes it to the parent for approval. |
 | Parents send money but have no say in how large sums are spent, and no protection if their child is scammed. | Sponsor approval rules: large payments, new payees and spending from sponsor-funded accounts need the parent's approval on their own device. |
 | Students are the main target of tax-agency, immigration, rental-deposit and "Chinese embassy / Macau" scams. | A scam shield (rules plus our own classifier) explains the warning signs, and payments in a flagged conversation are escalated to the sponsor. |
-| No Canadian credit history. | A plain-language credit-building plan, with a clear "not financial advice" disclosure. |
+| No Canadian credit history. | A Credit Builder on a sandbox secured card: utilization (now, last reported, projected), on-time streak, the factors that matter in Canada, and next steps with exact amounts and dates; card payments are drafted through the same policy engine. Clearly labelled "not a credit score" and "not financial advice". |
 
 **Demo personas.** Aisha Rahman, a Malaysian second-year student at UBC in Vancouver, who writes in casual Malaysian English and sometimes Malay or Mandarin. Her father, Encik Rahman, in Kuala Lumpur, who funds her MYR wallet and tuition fund. Payees: UBC Student Financial Services, Maple Court Rentals (landlord), BC Hydro, Northline Mobile.
 
@@ -60,7 +60,8 @@ International students live between two financial systems. Their pain points, wh
 | Agent loop | `backend/app/agent.py` | System prompt, tool-call loop, tool-output scanning, offline fallback, output redaction |
 | Model adapter | `backend/app/llm.py` | One OpenAI-compatible client for DeepSeek and Qwen; offline engine behind the same interface |
 | Offline engine | `backend/app/offline_engine.py` | Deterministic planner for tests, CI and venue fallback |
-| Tools | `backend/app/tools.py` | 17 tools with JSON schemas, tier labels and masked outputs |
+| Tools | `backend/app/tools.py` | 19 tools with JSON schemas, tier labels and masked outputs |
+| Credit Builder | `backend/app/credit.py` | Pure utilization, streak and next-step maths for the secured card |
 | Policy engine | `backend/app/policy.py` | The only path by which money moves: tiers, limits, risk score, tokens, execution |
 | Sandbox bank | `backend/app/bank.py`, `seed.py` | SQLite ledger in integer minor units; demo data |
 | FX market | `backend/app/fx.py` | Mid-market snapshot, provider spreads and fees, true-cost maths, 30-day history |
@@ -108,7 +109,7 @@ Anthropic and OpenAI endpoints are not defaults because they are not reachable f
 
 **Offline engine.** A rule-based planner that implements the same `chat(messages, tools)` interface and emits the same tool calls a model would. It understands Malaysian English ("can pay landlord or not"), and maps Malay and Chinese phrases (余额, 房租, 学费, bayar, sewa, tukar…) to intents. It refuses any turn the guard flagged as injection, extraction or escalation. It exists so that (a) the test suite and the evidence run need no network, (b) the demo survives venue Wi-Fi failure, and (c) there is a baseline the LLM must beat.
 
-**Result cards.** For read-only tools, the server attaches structured cards to the chat response, built directly from the tool output: FX comparison, balances, rate history, tuition, budget, transactions, scam verdict and credit checklist. The app renders the numbers from the card, labelled "From your HomeBridge ledger, not written by the AI". A model that misreads a number in its prose cannot put a wrong figure in a card. The system prompt tells the model the card exists, so its reply stays short.
+**Result cards.** For read-only tools, the server attaches structured cards to the chat response, built directly from the tool output: FX comparison, balances, rate history, tuition, budget, transactions, scam verdict, credit checklist and credit profile (utilization gauge with the 30% marker, on-time dots, next steps). The app renders the numbers from the card, labelled "From your HomeBridge ledger, not written by the AI". A model that misreads a number in its prose cannot put a wrong figure in a card. The system prompt tells the model the card exists, so its reply stays short.
 
 ---
 
@@ -124,6 +125,7 @@ Anthropic and OpenAI endpoints are not defaults because they are not reachable f
 | `get_tuition_schedule` | T0 | Installments, days until due, tuition-fund balance and shortfall |
 | `budget_summary` | T0 | Spending by category against budgets; flags possible duplicate subscriptions |
 | `credit_building_plan` | T0 | General steps to build Canadian credit, with disclosure |
+| `get_credit_profile` | T0 | Secured-card utilization (now, last reported, projected at statement close), on-time streak, months of history, Canadian credit factors, a simulated health band (not a score), next steps with amounts and dates |
 | `check_message_for_scam` | T0 | Scam shield: rule matches, classifier label, keywords that drove it, advice |
 | `get_pending_actions` | T0 | Drafts and their status |
 | `set_budget`, `create_reminder` | T1 | Reversible personal settings |
@@ -131,6 +133,7 @@ Anthropic and OpenAI endpoints are not defaults because they are not reachable f
 | `cancel_pending_action` | T1 | Withdraw a draft |
 | `prepare_transfer` | T2/T3 | Draft a payment to a saved payee |
 | `prepare_conversion` | T2/T3 | Draft a conversion between own wallets, into Everyday or the Tuition Fund |
+| `prepare_card_payment` | T2/T3 | Draft a payment from CAD Everyday to the secured card, by target (`recommended`, `statement_balance`, `minimum`, `under_30`, `under_10`, `full_balance`) or exact amount; goes through `draft_transfer` like any payment |
 | `add_payee` | T3 | Request a new payee (always sponsor approval, then a cooling period) |
 
 There is no tool to confirm, approve, execute, change limits, change the sponsor, or read unmasked numbers. Those operations are tier T4: they exist only as authenticated HTTP endpoints for the right role, or not at all.
@@ -200,6 +203,24 @@ Text the user did not type is recorded as untrusted, and stays recorded while th
 ### 5.5 Hash-chained audit log
 
 Each entry is `{seq, ts, event, actor, data, prev, hash}` where `hash = SHA-256(canonical JSON of the entry without hash)` and `prev` is the previous entry's hash. `verify()` walks the chain and reports the first broken link. `GET /audit/verify?tamper_seq=N` verifies a copy with entry N edited, so the Ledger tab can show detection live without touching the real log. The log records user messages (length and guard flags, not content), every tool call with masked and size-capped arguments (text sent to the scam checker is stored as its length only), drafts with tier, risk and provenance, confirmations, denials, sponsor decisions, limit changes, rate-limit hits, LLM errors and executions.
+
+### 5.6 Credit Builder: how the utilization advice is computed
+
+The sandbox seeds Aisha with a HomeBridge Secured Card: CAD 500 limit backed by a CAD 500 deposit, opened five months ago, four statements paid on time, the latest statement (CAD 184.60, minimum CAD 10.00) due in six days, and CAD 280.85 owed now. The card is a liability in its own tables (`credit_cards`, `card_statements`, `card_activity`), so account balances and totals are unchanged. It is paid as a seeded internal payee of kind `credit_card`, which `add_payee` cannot create.
+
+`credit.py` works in integer cents:
+
+```
+utilization%   = floor(1000 × balance / limit) / 10        (rounded down, so 29.97% never shows as 30.0%)
+pay_under(r)   = 0 if balance < r × limit
+                 else min(balance, (⌊(balance − r × limit) / 100⌋ + 1) × 100)   (whole dollars, strictly under r)
+projected      = balance + (purchases this cycle / days since close) × days to next close
+recommended    = max(statement balance still unpaid, pay_under(30%))
+```
+
+For the seed: 56.1% now, 36.9% last reported, 75.4% projected; pay CAD 131 to report under 30% (29.9%), or CAD 184.60 to clear the due statement and land at 19.2%. A statement is on time when the minimum was covered by its due date; the streak counts consecutive on-time statements, and a statement not yet due does not break it. The factors use commonly cited approximate weights (payment history ~35%, utilization ~30%, length of history ~15%, new credit ~10%, mix ~10%), shown as education. The "credit health" band (needs attention / fair / on track / strong) is computed only from the sandbox card and is labelled simulated; the tool never produces or quotes a bureau score, and every result carries the "not a licensed adviser" disclosure.
+
+Card payments go through `PolicyEngine.draft_transfer`: T2 within the student's limits, T3 when over a limit, from a sponsor-funded account, or in a flagged conversation. The policy refuses a draft above the amount owed, and the bank re-checks at execution, so a draft that became an overpayment (the card was paid down in between) fails without debiting anything. Executing a payment lowers the card balance, records the payment against the latest statement, and marks it on time once the minimum is covered. Card payments are excluded from the spending summary (they repay earlier spending) but count toward the 24-hour outflow limit.
 
 ---
 
