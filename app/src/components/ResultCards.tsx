@@ -326,10 +326,11 @@ export function RunwayCard({ c, bare, compact }: { c: Extract<Card, { type: 'for
         <Row style={{ height: H, alignItems: 'stretch', gap: n > 60 ? 1 : 2 }}>
           {c.series.map((v, i) => {
             const h = Math.max(1, (Math.abs(v) / range) * H);
-            const color = v < 0 ? t.danger : i === c.lowest.index ? t.gold : i === 0 ? t.accent : t.accentSoft;
+            const color = v < 0 ? t.danger : i === c.lowest.index ? t.gold : t.accent;
+            const strong = v < 0 || i === 0 || i === c.lowest.index;
             return (
               <View key={i} style={{ flex: 1 }}>
-                <View style={{ position: 'absolute', left: 0, right: 0, bottom: v >= 0 ? zero : zero - h, height: h, backgroundColor: color, borderRadius: 1 }} />
+                <View style={{ position: 'absolute', left: 0, right: 0, bottom: v >= 0 ? zero : zero - h, height: h, backgroundColor: color, opacity: strong ? 1 : 0.45, borderRadius: 1 }} />
               </View>
             );
           })}
