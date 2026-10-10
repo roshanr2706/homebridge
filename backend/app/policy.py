@@ -381,13 +381,21 @@ class PolicyEngine:
     @_locked
     def draft_conversion(
         self, owner: str, session_id: str, from_currency: str, to_currency: str, amount: float,
-        guard_flags: Optional[List[str]] = None, destination: str = "everyday",
+        guard_flags: Optional[List[str]] = None, destination: str = "everyday", source: str = "",
     ) -> PendingAction:
+        """A conversion between the user's own wallets, or (same currency) a move between two own accounts,
+        e.g. CAD Everyday to CAD Tuition Fund. Both go through the same tiers, caps and confirmation token."""
         amount = _amount(amount)
         if destination not in ("everyday", "tuition"):
             raise PolicyError("Destination must be 'everyday' or 'tuition'.")
-        src = self.bank.find_account(owner, from_currency, "Wallet" if from_currency.upper() == "MYR" else "Everyday")
+        labels = {"everyday": "Everyday", "tuition": "Tuition", "wallet": "Wallet"}
+        if source and source not in labels:
+            raise PolicyError("Source must be 'everyday', 'tuition' or 'wallet'.")
+        src_label = labels.get(source) or ("Wallet" if from_currency.upper() == "MYR" else "Everyday")
+        src = self.bank.find_account(owner, from_currency, src_label)
         dst = self.bank.find_account(owner, to_currency, "Tuition" if destination == "tuition" else "Everyday")
+        if source and (not src or src_label not in src["label"]):
+            raise PolicyError(f"There is no {from_currency.upper()} {source} account to move money from.")
         if destination == "tuition" and (not dst or "Tuition" not in dst["label"]):
             raise PolicyError(f"There is no {to_currency.upper()} tuition fund to convert into.")
         if not src or not dst:
@@ -395,17 +403,25 @@ class PolicyEngine:
         if src["id"] == dst["id"]:
             raise PolicyError("Source and destination are the same account.")
         self._rate_limit(owner)
-        prov = self.fx.provider("inapp")
-        q = self.fx.quote(src["currency"], dst["currency"], amount, prov)
+        same = src["currency"] == dst["currency"]
+        if same:   # a move between own accounts: no exchange, no margin
+            q = {"rate": 1.0, "mid_rate": 1.0, "you_receive": float(amount)}
+            warnings: List[str] = []
+        else:
+            prov = self.fx.provider("inapp")
+            q = self.fx.quote(src["currency"], dst["currency"], amount, prov)
+            warnings = [f"Rate {q['rate']} includes a {prov.spread_pct}% margin over mid-market ({q['mid_rate']})."]
         amount_cad = self.cad(amount, src["currency"])
         t3: List[str] = []
         reasons: List[str] = []
-        warnings = [f"Rate {q['rate']} includes a {prov.spread_pct}% margin over mid-market ({q['mid_rate']})."]
         risk = 0
+        if "Tuition" in src["label"] and src["sponsor_funded"]:
+            # The tuition fund is earmarked by the sponsor: taking money out of it is always their call.
+            t3.append(f"Moves money out of the sponsor-funded {src['label']}")
         # Converting sponsor money is capped per 24h, counting pending drafts, so it cannot be released in
         # small chunks. The cap also covers conversions into the tuition fund: the money stays earmarked, but
         # the sponsor still decides when large sums are exchanged and pays the spread.
-        if src["sponsor_funded"]:
+        elif src["sponsor_funded"]:
             released = self._sponsor_released_cad(owner)
             if released + amount_cad > self.limits.single_cad:
                 where = "between your sponsor-funded accounts" if dst["sponsor_funded"] else "into spending"
@@ -423,8 +439,11 @@ class PolicyEngine:
                   "from_currency": src["currency"], "to_currency": dst["currency"],
                   "rate": q["rate"], "expected_receive": q["you_receive"],
                   "uses_sponsor_money": bool(src["sponsor_funded"])}
-        summary = (f"Convert {src['currency']} {amount:,.2f} to about {dst['currency']} "
-                   f"{q['you_receive']:,.2f} ({src['label']} to {dst['label']})")
+        if same:
+            summary = f"Move {src['currency']} {amount:,.2f} from {src['label']} to {dst['label']}"
+        else:
+            summary = (f"Convert {src['currency']} {amount:,.2f} to about {dst['currency']} "
+                       f"{q['you_receive']:,.2f} ({src['label']} to {dst['label']})")
         return self._new("conversion", owner, session_id, params, summary, t3, risk, reasons, warnings, {})
 
     @_locked

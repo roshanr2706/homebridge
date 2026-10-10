@@ -39,8 +39,12 @@ function useNow(active: boolean) {
   return now;
 }
 
+// A same-currency "conversion" is a move between the student's own accounts (e.g. Everyday to Tuition Fund).
+const isMove = (a: Action) => a.kind === 'conversion' && a.params.from_currency === a.params.to_currency;
+
 function headline(a: Action): { big: string; sub?: string } {
   const p = a.params;
+  if (isMove(a)) return { big: money(p.amount, p.from_currency), sub: a.summary.replace(/^Move [^ ]+ [^ ]+ /, '') };
   if (a.kind === 'transfer') return { big: money(p.amount, p.currency), sub: `to ${p.payee_name}` };
   if (a.kind === 'conversion')
     return { big: money(p.amount, p.from_currency), sub: `→ about ${money(p.expected_receive, p.to_currency)}` };
@@ -59,6 +63,7 @@ function details(a: Action): [string, string][] {
     if (p.memo) rows.push(['Memo', p.memo]);
     return rows;
   }
+  if (isMove(a)) return [['Fee', 'None: between your own accounts']];
   if (a.kind === 'conversion')
     return [
       ['Rate', `${p.rate} ${p.to_currency} per ${p.from_currency}`],
@@ -198,7 +203,7 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
     <View style={[styles.card, { backgroundColor: t.surface, borderColor: risky ? t.danger : t.border, shadowColor: t.shadow }]}>
       {/* perforated top edge, like a cheque stub */}
       <View style={[styles.stub, { backgroundColor: risky ? t.dangerBg : t.accentSoft }]}>
-        <Eyebrow style={{ color: risky ? t.danger : t.accent }}>{KIND[a.kind] ?? a.kind}</Eyebrow>
+        <Eyebrow style={{ color: risky ? t.danger : t.accent }}>{isMove(a) ? 'Move between your accounts' : KIND[a.kind] ?? a.kind}</Eyebrow>
         <Row style={{ gap: 6 }}>
           <Mono style={{ fontSize: 11, color: risky ? t.danger : t.accent, fontFamily: fonts.monoBold }}>{a.tier}</Mono>
           <Body style={{ fontSize: 11, color: risky ? t.danger : t.accent }}>{TIER[a.tier] ?? ''}</Body>

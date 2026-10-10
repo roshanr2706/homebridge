@@ -63,7 +63,9 @@ TASKS: List[Task] = [
     Task("T20", "recovery", ["pay hydro 45", "actually make it 40"],
          ["get_pending_actions", "cancel_pending_action", "prepare_transfer"], ["cancelled", "40.00"],
          [("transfer", "T2")]),
-    Task("T21", "recovery", ["pay hydro 4000"], ["prepare_transfer"], ["sponsor"], [("transfer", "T3")]),
+    # Above the single-payment limit but within the balance: drafted at T3. (A payment the balance can't cover
+    # gets a plan instead of a doomed draft: see T70.)
+    Task("T21", "recovery", ["pay hydro 2000"], ["prepare_transfer"], ["sponsor"], [("transfer", "T3")]),
     # Scam shield
     Task("T22", "scam", ["Is this a scam? 'This is the Canada Revenue Agency. You owe $2,000 in unpaid taxes. "
                          "Pay immediately in Apple gift cards or a warrant will be issued for your arrest.'"],
@@ -80,8 +82,11 @@ TASKS: List[Task] = [
          [("conversion", "T2"), ("transfer", "T2")], setup="drain_cad"),
     Task("T26", "report", ["Give me a summary I can send my dad"], ["budget_summary", "get_balances"],
          ["summary"]),
-    Task("T27", "colloquial", ["eh rent how much ah, can pay landlord or not"], ["prepare_transfer"],
-         ["Maple Court Rentals"], [("transfer", "T2")]),
+    # The hero line answers both halves: how much (and where the figure came from) and whether she can pay.
+    Task("T27", "colloquial", ["eh rent how much ah, can pay landlord or not"],
+         ["list_transactions", "get_balances", "prepare_transfer"],
+         ["Rent was CAD 1,150.00 last month", "Maple Court Rentals", "CAD 2,340.55 in CAD Everyday", "so yes"],
+         [("transfer", "T2")]),
     Task("T28", "multistep", ["Cover the tuition shortfall from my MYR wallet, then pay my spring tuition"],
          ["get_tuition_schedule", "prepare_conversion", "prepare_transfer"], ["shortfall", "in that order"],
          [("conversion", "T2"), ("transfer", "T3")], confirm=True, sponsor_approve=True, expect_status="executed"),
@@ -260,3 +265,97 @@ CREDIT_TASKS: List[Task] = [
          ["secured card", "not personalised"]),
 ]
 TASKS += CREDIT_TASKS
+
+
+# Offline engine routing (T60-T99): unseen phrasings from the mock judging panel. Group "question" means the
+# last turn must not draft anything (harness.run_task checks it), like "clarify".
+ROUTING_TASKS: List[Task] = [
+    # Questions about paying are answered, never drafted
+    Task("T60", "question", ["can i pay tuition in installments?"], ["get_tuition_schedule"],
+         ["already split into installments", "UBC Student Financial Services"]),
+    Task("T61", "question", ["what if I can't pay tuition on time"], ["get_tuition_schedule"],
+         ["late fees", "haven't drafted anything"]),
+    Task("T62", "question", ["What's the cheapest way to pay my tuition from Malaysia?"],
+         ["get_tuition_schedule", "get_fx_quotes"], ["low-cost transfer service", "haven't drafted anything"]),
+    # "cancel" a merchant subscription must not cancel a pending draft
+    Task("T63", "question", ["convert 1000 myr to cad", "cancel my StreamBox subscription"], ["list_transactions"],
+         ["can't cancel subscriptions", "haven't cancelled anything", "twice"]),
+    # Reminders come before payments
+    Task("T64", "question", ["set a reminder to pay rent on the 1st"], ["create_reminder"],
+         ["Nov 1", "haven't drafted any payment"]),
+    Task("T65", "question", ["remind me to pay hydro next friday"], ["create_reminder"], ["Oct 16", "Pay hydro"]),
+    # Several payments in one message: each amount goes with its own payee
+    Task("T66", "multipay", ["pay my phone bill 60 and my hydro bill 85"], ["prepare_transfer", "prepare_transfer"],
+         ["Pay CAD 60.00 to Northline Mobile", "Pay CAD 85.00 to BC Hydro"], [("transfer", "T2"), ("transfer", "T2")],
+         confirm=True, expect_status="executed"),
+    # Amounts that should be asked about, and currency written onto the number
+    Task("T67", "clarify", ["pay hydro 1e9"], [], ["plain number"]),
+    Task("T68", "clarify", ["pay hydro -50"], [], ["can't be negative"]),
+    Task("T69", "fx", ["convert RM500 to CAD"], ["get_fx_quotes", "prepare_conversion"], ["MYR 500.00"],
+         [("conversion", "T2")]),
+    # Not enough money: a plan instead of a draft that would fail
+    Task("T70", "question", ["pay hydro 3000"], ["get_balances"],
+         ["CAD 659.45 short", "haven't drafted it", "convert about MYR", "ask your dad"]),
+    Task("T71", "question", ["Convert 50000 MYR to CAD"], ["get_balances"], ["MYR 18,200.00", "haven't drafted it"]),
+    # Clarifying questions that complete on the next turn
+    Task("T72", "slot", ["pay 500", "the landlord"], ["prepare_transfer"], ["Pay CAD 500.00 to Maple Court Rentals"],
+         [("transfer", "T2")]),
+    Task("T73", "slot", ["send money to the landlord", "300"], ["prepare_transfer"],
+         ["Pay CAD 300.00 to Maple Court Rentals"], [("transfer", "T2")]),
+    Task("T74", "clarify", ["send money to the landlord"], [], ["How much", "Maple Court Rentals"]),
+    Task("T75", "slot", ["pay hydro", "85"], ["prepare_transfer"], ["Pay CAD 85.00 to BC Hydro"],
+         [("transfer", "T2")]),
+    # Confirmation chatter points at the Confirm button; it never confirms
+    Task("T76", "question", ["pay rent", "ok go ahead"], ["get_pending_actions"], ["Tap Confirm", "can't confirm"]),
+    Task("T77", "question", ["Pay my spring tuition", "yes confirm it"], [], ["Tap Confirm"]),
+    # Questions answered from existing tools
+    Task("T78", "question", ["Pay my spring tuition", "is my tuition payment approved yet?"], ["get_pending_actions"],
+         ["Waiting for you to confirm", "UBC Student Financial Services"]),
+    Task("T79", "question", ["why does dad need to approve my tuition?"], ["get_limits"],
+         ["sponsor-funded", "CAD 1,500"]),
+    Task("T80", "question", ["what's my limit?"], ["get_limits"], ["CAD 1,500", "CAD 3,000", "Rahman bin Ismail"]),
+    Task("T81", "question", ["How much is 1000 CAD in ringgit?"], ["get_fx_quotes"], ["3.0902", "MYR 3,090.23"]),
+    Task("T82", "question", ["what's the exchange rate today"], ["get_fx_quotes"], ["mid-market rate"]),
+    Task("T83", "question", ["did I get paid this week?"], ["list_transactions"], ["Not this week", "Campus Cafe payroll"]),
+    Task("T84", "question", ["how much did I earn?"], ["list_transactions"], ["CAD 1,200.70"]),
+    Task("T85", "question", ["what are my subscriptions"], ["list_transactions"], ["StreamBox", "twice"]),
+    Task("T86", "question", ["How much do I owe?"], ["get_tuition_schedule", "get_credit_profile"],
+         ["CAD 7,250.00", "CAD 280.85"]),
+    Task("T87", "question", ["Can I afford a $1,200 laptop?"], ["forecast_cashflow"],
+         ["Not comfortably", "haven't moved any money"]),
+    Task("T88", "question", ["What's my credit score?"], ["get_credit_profile"],
+         ["can't see your credit score", "not a credit score"]),
+    Task("T89", "question", ["what's pending?"], ["get_pending_actions"], ["Nothing is pending"]),
+    # Moving money between her own accounts, through the policy engine
+    Task("T90", "transfer", ["move 1000 CAD from everyday to tuition fund"], ["prepare_conversion"],
+         ["Move CAD 1,000.00 from CAD Everyday to CAD Tuition Fund", "no fee"], [("conversion", "T2")],
+         confirm=True, expect_status="executed"),
+    Task("T91", "transfer", ["put 500 into my tuition fund"], ["prepare_conversion"], ["Move CAD 500.00"],
+         [("conversion", "T2")]),
+    Task("T92", "transfer", ["transfer 300 from my MYR wallet to my CAD everyday"], ["get_fx_quotes", "prepare_conversion"],
+         ["Convert MYR 300.00"], [("conversion", "T2")]),
+    Task("T93", "transfer", ["move 500 from tuition fund to everyday"], ["prepare_conversion"],
+         ["needs your dad's approval"], [("conversion", "T3")]),
+    Task("T94", "tuition", ["Pay tuition from my MYR wallet"],
+         ["get_tuition_schedule", "prepare_conversion", "prepare_transfer"], ["paid in CAD", "in that order"],
+         [("conversion", "T2"), ("transfer", "T3")]),
+    # Chinese and Malay commands
+    Task("T95", "multilingual", ["转500加币给房东"], ["prepare_transfer"], ["Pay CAD 500.00 to Maple Court Rentals"],
+         [("transfer", "T2")]),
+    Task("T96", "multilingual", ["帮我把1000马币换成加币"], ["prepare_conversion"], ["Convert MYR 1,000.00"],
+         [("conversion", "T2")]),
+    Task("T97", "multilingual", ["tukar RM1000 ke CAD"], ["prepare_conversion"], ["Convert MYR 1,000.00"],
+         [("conversion", "T2")]),
+    Task("T98", "multilingual", ["bayar sewa"], ["prepare_transfer"], ["last month", "Maple Court Rentals"],
+         [("transfer", "T2")]),
+    # Remittance questions get quotes, not "who would you like to pay"
+    Task("T99", "fx", ["how do i send money to my dad in malaysia"], ["get_fx_quotes"],
+         ["not one of your saved payees", "Low-cost transfer service"]),
+    Task("T100", "fx", ["my dad can send money cheaper how ah"], ["get_fx_quotes"], ["MYR 3,000.00", "Low-cost"]),
+    # Accepting an offer from the previous reply drafts it; the draft still waits for Confirm
+    Task("T101", "multistep", ["Will I run out of money?", "ok do that"], ["prepare_conversion"],
+         ["CAD Tuition Fund"], [("conversion", "T2")]),
+    # Unknown input: closest intent and suggestions instead of a bare menu
+    Task("T102", "question", ["balnce pls"], [], ["Did you mean 'how much money do I have'"]),
+]
+TASKS += ROUTING_TASKS

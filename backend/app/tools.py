@@ -389,6 +389,33 @@ def get_pending_actions(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     return {"actions": [x.for_model() for x in acts[-10:]]}
 
 
+@tool("get_limits",
+      "The student's payment limits and approval rules (set by the sponsor), who the sponsor is, which accounts "
+      "are sponsor-funded, how much of the 24h limit is already used, and what each tier means. Read-only: only "
+      "the sponsor can change limits, in the sponsor's own app.", {})
+def get_limits(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
+    lim = ctx.policy.limits
+    user = ctx.bank.user(ctx.user_id) or {}
+    sponsor = ctx.bank.user(user.get("sponsor_id") or "") or {}
+    used = round(ctx.policy._daily_outflow_cad(ctx.user_id), 2)
+    return {
+        "single_payment_cad": lim.single_cad, "daily_cad": lim.daily_cad, "used_24h_cad": used,
+        "remaining_24h_cad": round(max(0.0, lim.daily_cad - used), 2),
+        "sponsor_money_conversion_cap_cad_24h": lim.single_cad,
+        "sponsor_risk_threshold": lim.sponsor_risk_threshold,
+        "new_payee_cooling_seconds": lim.payee_cooling_seconds,
+        "sponsor": {"name": sponsor.get("name", ""), "relationship": "parent"} if sponsor else None,
+        "sponsor_funded_accounts": [x["label"] for x in ctx.bank.accounts(ctx.user_id) if x["sponsor_funded"]],
+        "tiers": {
+            "T1": "Requests to the sponsor (e.g. a top-up): the sponsor decides in their app.",
+            "T2": "You confirm in the app: saved payee, within both limits, not flagged.",
+            "T3": "You confirm, then the sponsor approves: above a limit, paid from or converting a lot of "
+                  "sponsor-funded money, a new payee, or a risky or flagged request.",
+        },
+        "changed_by": "Only the sponsor can change these limits, in their own app.",
+    }
+
+
 # ---------------------------------------------------------------- T1 writes
 @tool("set_budget", "Set a monthly budget for a spending category.",
       {"category": {"type": "string"}, "monthly_amount": {"type": "number"},
@@ -465,18 +492,24 @@ def prepare_transfer(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @tool("prepare_conversion",
-      "Draft a currency conversion between the user's own wallets. Does not execute until the user confirms in the app.",
+      "Draft a currency conversion between the user's own wallets, or a move between two of the user's own "
+      "accounts in the same currency (e.g. CAD Everyday to CAD Tuition Fund: from_currency=to_currency=CAD, "
+      "source='everyday', destination='tuition'). Does not execute until the user confirms in the app.",
       {"from_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]},
        "to_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]},
        "amount": {"type": "number", "description": "Amount in from_currency"},
        "destination": {"type": "string", "enum": ["everyday", "tuition"],
                        "description": "Which account receives the money: 'tuition' for the CAD Tuition Fund "
-                                      "(e.g. to cover a tuition shortfall), default 'everyday'"}},
+                                      "(e.g. to cover a tuition shortfall), default 'everyday'"},
+       "source": {"type": "string", "enum": ["everyday", "tuition", "wallet"],
+                  "description": "Which account the money comes from; default the MYR Wallet for MYR and CAD "
+                                 "Everyday for CAD. Moving money out of the tuition fund always needs the sponsor."}},
       ["from_currency", "to_currency", "amount"], tier="T2/T3")
 def prepare_conversion(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     act = ctx.policy.draft_conversion(ctx.user_id, ctx.session_id, a["from_currency"], a["to_currency"],
                                       _num(a["amount"]), ctx.flags(),
-                                      str(a.get("destination") or "everyday").lower())
+                                      str(a.get("destination") or "everyday").lower(),
+                                      str(a.get("source") or "").lower())
     ctx.created_actions.append(act)
     return {"action": act.for_model()}
 

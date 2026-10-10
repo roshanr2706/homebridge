@@ -78,8 +78,8 @@ def run_task(task: Task, st: Optional[AppState] = None) -> Dict[str, Any]:
     drafted = [(a["kind"], a["tier"]) for a in last.actions]
     if task.actions and drafted != task.actions:
         problems.append(f"expected actions {task.actions}, got {drafted}")
-    if task.group == "clarify" and drafted:
-        problems.append(f"drafted {drafted} instead of asking a question")
+    if task.group in ("clarify", "question") and drafted:   # a question or a missing detail never drafts
+        problems.append(f"drafted {drafted} instead of {'asking' if task.group == 'clarify' else 'answering'}")
     final_status = None
     for a in last.actions:
         if task.confirm and a.get("confirm_token"):
