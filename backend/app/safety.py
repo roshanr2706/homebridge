@@ -229,11 +229,15 @@ class SafetyMonitor:
                         f"(about CAD {typical:,.0f}).", action_id=action_id)
 
     # ------------------------------------------------------------- digest
-    def digest(self, owner: str, actions: List[Any]) -> Dict[str, Any]:
-        """The sponsor's last-24-hours summary."""
+    def digest(self, owner: str, actions: List[Any], account_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+        """The sponsor's last-24-hours summary: counts of drafts, and money out. With `account_ids`, money out
+        covers only those accounts (conversions included): the sponsor sees what left the money they fund,
+        not the student's own spending."""
         since = self.clock() - 24 * 3600
         recent = [a for a in actions if a.owner == owner and a.created_at >= since]
-        spent = self.bank.outflow_since(owner, datetime.fromtimestamp(since).isoformat(timespec="seconds"))
+        since_iso = datetime.fromtimestamp(since).isoformat(timespec="seconds")
+        spent = (self.bank.outflow_from_accounts(account_ids, since_iso) if account_ids is not None
+                 else self.bank.outflow_since(owner, since_iso))
         flagged = [a for a in recent if a.risk_score >= 40]
         alerts = self.alerts(owner)
         return {
@@ -241,8 +245,9 @@ class SafetyMonitor:
             "drafted": len(recent),
             "executed": sum(a.status == "executed" for a in recent),
             "awaiting_sponsor": sum(a.status == "awaiting_sponsor" for a in recent),
-            "stopped": sum(a.status in ("rejected", "cancelled", "expired", "failed") for a in recent),
+            "stopped": sum(a.status in ("rejected", "cancelled", "expired", "failed", "blocked") for a in recent),
             "money_out_cad": round(sum(m / 100 * self.fx.mid(c, "CAD") for c, m in spent.items()), 2),
+            "money_out_scope": "sponsor_funded" if account_ids is not None else "all",
             "flagged": [{"action_id": a.id, "summary": a.summary, "risk_score": a.risk_score, "status": a.status}
                         for a in flagged][-5:],
             "alerts": len(alerts),

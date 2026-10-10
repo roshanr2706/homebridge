@@ -2,17 +2,23 @@
 
 Roles come from the bearer token, never from the request body or chat text.
 Demo tokens can be overridden with HB_STUDENT_TOKEN / HB_SPONSOR_TOKEN.
+
+The sponsor's money decisions (Approve, Unlock, limit changes) also need the sponsor's 6-digit PIN in the
+request body, checked on the server (authn.py; demo PIN 246810). Data is scoped by role: the sponsor sees
+the accounts they fund, the requests sent to them, alerts and a digest, never the student's own account,
+wages or chat. /demo/reset needs demo mode plus the operator token in an X-Operator header.
 """
 from __future__ import annotations
 
 import copy
+import hmac
 import os
 import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from datetime import date
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,12 +27,13 @@ from pydantic import BaseModel, Field
 
 from .agent import Agent
 from .audit import AuditLog
+from .authn import PinChecker, PinError
 from .bank import Bank
 from .config import Limits, Settings, load_settings
 from .fx import FxMarket
-from .policy import PolicyEngine, PolicyError
+from .policy import PendingAction, PolicyEngine, PolicyError
 from .safety import SafetyError
-from .seed import SPONSOR, STUDENT
+from .seed import SPONSOR, STUDENT, seed_security
 from .tools import ToolContext, budget_summary, get_credit_profile, get_tuition_schedule
 from .tools import forecast_cashflow
 from .cards import forecast_card
@@ -46,6 +53,11 @@ class ConfirmIn(BaseModel):
 
 class DecisionIn(BaseModel):
     note: str = Field("", max_length=200)
+    pin: str = Field("", max_length=12)   # required to approve, not to reject
+
+
+class PinIn(BaseModel):
+    pin: str = Field("", max_length=12)
 
 
 class FreezeIn(BaseModel):
@@ -55,6 +67,31 @@ class FreezeIn(BaseModel):
 class LimitsIn(BaseModel):
     single_cad: float = Field(..., gt=0, le=20000)
     daily_cad: float = Field(..., gt=0, le=50000)
+    pin: str = Field("", max_length=12)
+
+
+# Audit events the sponsor never sees (the student's chat and tool use), and ones the student never sees
+# (the sponsor's own PIN attempts).
+CHAT_EVENTS = {"user_message", "assistant_reply", "tool_call", "tool_denied", "rate_limited", "llm_error"}
+SPONSOR_PRIVATE_EVENTS = {"sponsor_pin_failed", "sponsor_pin_locked"}
+SAFETY_EVENTS = {"payments_frozen", "payments_unfrozen", "unfreeze_denied", "alert_raised"}
+
+# What the student agreed to share at onboarding (shown on both phones).
+SHARING = {"scope": "sponsor_funded",
+           "summary": "Your sponsor sees the accounts they fund (MYR, linked Malaysian account; CAD Tuition Fund), the "
+                      "requests sent to them, safety alerts and a daily count of activity. Not your CAD Everyday "
+                      "account, wages, spending or chat.",
+           "consented_at_onboarding": True}
+
+
+def sponsor_sees(bank: Bank, a: PendingAction) -> bool:
+    """Data minimisation: the sponsor sees what was sent to them and what touches money they fund."""
+    if a.kind in ("topup", "add_payee") or a.needs_sponsor:
+        return True
+    if a.kind == "conversion" and a.params.get("uses_sponsor_money"):
+        return True
+    acc = bank.account(a.params.get("from_account_id", ""))
+    return bool(acc and acc["sponsor_funded"])
 
 
 @dataclass
@@ -65,6 +102,10 @@ class AppState:
     audit: AuditLog
     policy: PolicyEngine
     agent: Agent
+
+    @property
+    def pins(self) -> PinChecker:
+        return PinChecker(self.bank, self.audit)
 
     def reset(self) -> None:
         defaults = Limits()
@@ -78,6 +119,7 @@ class AppState:
 def build_state(settings: Optional[Settings] = None, today: Optional[date] = None, provider=None,
                 audit_path: Optional[str] = "default") -> AppState:
     settings = settings or load_settings()
+    today = today or settings.pinned_today()
     bank = Bank(settings.db_path)
     fx = FxMarket()
     audit = AuditLog(settings.audit_path if audit_path == "default" else audit_path)
@@ -88,6 +130,8 @@ def build_state(settings: Optional[Settings] = None, today: Optional[date] = Non
     if not bank.is_seeded():
         bank.reset(agent.today)
         policy.reset()
+    elif not bank.has_security_seed():  # a file database from before KYC and the sponsor PIN existed
+        seed_security(bank, agent.today)
     return AppState(settings, bank, fx, audit, policy, agent)
 
 
@@ -99,7 +143,10 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
     }
     app = FastAPI(title="HomeBridge API", version="0.1.0")
     app.state.hb = st
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    # An allow-list, not "*": only these browser origins may call the API (HB_CORS_ORIGINS). The exported web
+    # app is served from the API's own origin and native apps do not use CORS, so neither needs an entry.
+    app.add_middleware(CORSMiddleware, allow_origins=st.settings.cors_origins, allow_methods=["GET", "POST"],
+                       allow_headers=["Authorization", "Content-Type", "X-Operator"])
 
     def auth(authorization: str = Header(default="")) -> Tuple[str, str]:
         token = authorization.replace("Bearer ", "").strip()
@@ -126,6 +173,40 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
             raise HTTPException(403, "You are not the sponsor for this account.")
         return STUDENT
 
+    def _pin(sponsor_id: str, pin: str, purpose: str) -> None:
+        try:
+            st.pins.verify(sponsor_id, pin, purpose)
+        except PinError as e:
+            raise HTTPException(403, str(e))
+
+    def _visible_actions(who: Tuple[str, str]) -> List[PendingAction]:
+        if who[1] == "student":
+            return st.policy.list_for(who[0])
+        return [a for a in st.policy.list_for(_my_student(who[0])) if sponsor_sees(st.bank, a)]
+
+    def _audit_visible(who: Tuple[str, str], action_ids: set) -> Any:
+        uid, role = who
+
+        def ok(e: Dict[str, Any]) -> bool:
+            d = e.get("data") or {}
+            aid, event = d.get("action_id"), e["event"]
+            if role == "student":
+                if event in SPONSOR_PRIVATE_EVENTS:
+                    return False
+                if aid:
+                    return aid in action_ids
+                return d.get("owner") in (None, uid)
+            if e["actor"] == uid:
+                return True
+            if event in CHAT_EVENTS:
+                return False
+            if aid:
+                return aid in action_ids
+            if event in SAFETY_EVENTS:
+                return d.get("owner") == STUDENT
+            return event in ("limits_changed", "demo_reset")
+        return ok
+
     chat_times: Dict[str, deque] = {}
 
     def _chat_rate_limit(user_id: str) -> None:
@@ -140,7 +221,8 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
 
     @app.get("/health")
     def health():
-        return {"ok": True, "provider": getattr(st.agent.provider, "name", "?"), "demo_mode": st.settings.demo_mode}
+        return {"ok": True, "provider": getattr(st.agent.provider, "name", "?"), "demo_mode": st.settings.demo_mode,
+                "today": st.agent.today.isoformat()}
 
     @app.get("/me")
     def me(who=Depends(auth)):
@@ -171,6 +253,8 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
                 "credit": get_credit_profile(ctx, {}),
                 "freeze": st.policy.safety.state(user_id),
                 "limits": {"single_cad": st.settings.limits.single_cad, "daily_cad": st.settings.limits.daily_cad},
+                "kyc": st.policy.compliance.kyc(user_id),
+                "sharing": SHARING,
                 "rates": {"MYR/CAD": st.fx.mid("MYR", "CAD"), "CAD/MYR": round(st.fx.mid("CAD", "MYR"), 4)}}
 
     @app.get("/forecast")
@@ -225,8 +309,10 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         return {"freeze": st.policy.safety.freeze(_my_student(sponsor_id), "sponsor", body.scope, actor=sponsor_id)}
 
     @app.post("/sponsor/unfreeze")
-    def sponsor_unfreeze(sponsor_id: str = Depends(sponsor)):
-        return {"freeze": st.policy.safety.unfreeze(_my_student(sponsor_id), "sponsor", actor=sponsor_id)}
+    def sponsor_unfreeze(body: Optional[PinIn] = None, sponsor_id: str = Depends(sponsor)):
+        student_id = _my_student(sponsor_id)
+        _pin(sponsor_id, body.pin if body else "", "unfreeze")
+        return {"freeze": st.policy.safety.unfreeze(student_id, "sponsor", actor=sponsor_id)}
 
     @app.get("/sponsor/queue")
     def queue(sponsor_id: str = Depends(sponsor)):
@@ -234,21 +320,39 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
 
     @app.get("/sponsor/overview")
     def overview(sponsor_id: str = Depends(sponsor)):
-        accs = st.bank.accounts(STUDENT)
-        actions = st.policy.list_for(STUDENT)
-        return {"student": st.bank.user(STUDENT), "accounts": accs,
+        """Data minimisation: only the accounts the sponsor funds, the items sent to them, alerts and the digest.
+        The student's own CAD Everyday account, wages and spending stay private (see `sharing`)."""
+        student_id = _my_student(sponsor_id)
+        accs = [a for a in st.bank.accounts(student_id) if a["sponsor_funded"]]
+        actions = st.policy.list_for(student_id)
+        visible = [a for a in actions if sponsor_sees(st.bank, a)]
+        u = st.bank.user(student_id) or {}
+        return {"student": {"id": student_id, "name": u.get("name")}, "accounts": accs,
                 "total_cad": round(sum(a["balance"] * st.fx.mid(a["currency"], "CAD") for a in accs), 2),
                 "limits": st.settings.limits.__dict__,
-                "recent": [st.policy.present(a) for a in actions][-10:],
-                "freeze": st.policy.safety.state(STUDENT),
-                "alerts": list(reversed(st.policy.safety.alerts(STUDENT)))[:10],
-                "digest": st.policy.safety.digest(STUDENT, actions)}
+                "recent": [st.policy.present(a) for a in visible][-10:],
+                "freeze": st.policy.safety.state(student_id),
+                "alerts": list(reversed(st.policy.safety.alerts(student_id)))[:10],
+                # Counts cover all drafts (no details); money out covers only the accounts the sponsor funds.
+                "digest": st.policy.safety.digest(student_id, actions, [a["id"] for a in accs]),
+                "kyc": {"student": st.policy.compliance.kyc(student_id),
+                        "sponsor": st.policy.compliance.kyc(sponsor_id),
+                        "limit_ceiling": st.policy.compliance.limit_ceiling(student_id)},
+                "pin": st.pins.status(sponsor_id),
+                "sharing": SHARING}
 
     @app.post("/sponsor/limits")
     def set_limits(body: LimitsIn, sponsor_id: str = Depends(sponsor)):
         """T4 for the agent: limits change only here, with the sponsor's own credentials."""
         if body.single_cad > body.daily_cad:
             raise HTTPException(400, "The single-payment limit cannot be higher than the 24-hour limit.")
+        student_id = _my_student(sponsor_id)
+        ceiling = st.policy.compliance.limit_ceiling(student_id)
+        if body.single_cad > ceiling["single_cad"] or body.daily_cad > ceiling["daily_cad"]:
+            label = st.policy.compliance.kyc(student_id)["label"].lower()
+            raise HTTPException(400, f"Aisha's identity check ({label}) allows at most CAD {ceiling['single_cad']:,.0f} "
+                                f"per payment and CAD {ceiling['daily_cad']:,.0f} per 24 hours.")
+        _pin(sponsor_id, body.pin, "limits")
         lim = st.settings.limits
         before = {"single_cad": lim.single_cad, "daily_cad": lim.daily_cad}
         lim.single_cad, lim.daily_cad = round(body.single_cad, 2), round(body.daily_cad, 2)
@@ -259,6 +363,7 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
 
     @app.post("/sponsor/actions/{action_id}/approve")
     def approve(action_id: str, body: DecisionIn, sponsor_id: str = Depends(sponsor)):
+        _pin(sponsor_id, body.pin, "approve " + action_id[:20])
         try:
             return st.policy.present(st.policy.sponsor_decide(action_id, sponsor_id, True, body.note))
         except PolicyError as e:
@@ -273,25 +378,49 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
 
     @app.get("/audit")
     def audit(since: int = 0, who=Depends(auth)):
-        return {"entries": st.audit.entries(since)[-200:]}
+        """Entries scoped by role. The student sees her own activity; the sponsor sees decisions and events about
+        the money they fund, never the student's chat or tool calls. The chain itself is verified over the full
+        log by /audit/verify, so a scoped view can still be checked."""
+        ok = _audit_visible(who, {a.id for a in _visible_actions(who)})
+        everything = st.audit.entries()
+        mine = [e for e in everything[max(since, 0):] if ok(e)]
+        return {"entries": mine[-200:], "scope": who[1], "visible": sum(1 for e in everything if ok(e)),
+                "total": len(everything)}
 
     @app.get("/audit/verify")
     def audit_verify(tamper_seq: Optional[int] = None, who=Depends(auth)):
-        """With tamper_seq, verifies a copy of the log with that entry edited, to show detection live."""
+        """Verifies the whole chain on the server and returns only ok / broken_at, the count and the head hash.
+        With tamper_seq (an entry this caller can see), verifies a copy with that entry edited, to show detection."""
         if tamper_seq is None:
             return st.audit.verify()
         entries = copy.deepcopy(st.audit.entries())
         if not 0 <= tamper_seq < len(entries):
             raise HTTPException(400, "No such entry")
+        if not _audit_visible(who, {a.id for a in _visible_actions(who)})(entries[tamper_seq]):
+            raise HTTPException(403, "That entry is not in your view of the log")
         entries[tamper_seq]["data"]["_tampered"] = True
         res = AuditLog.verify_entries(entries)
         res["simulated_tamper_seq"] = tamper_seq
         return res
 
+    @app.get("/compliance/report")
+    def compliance_report(who=Depends(auth)):
+        """Evidence of the compliance checks run, scoped like everything else: the student sees her own drafts,
+        the sponsor the drafts sent to them or touching the money they fund."""
+        acts = _visible_actions(who)
+        people = [who[0]] + ([STUDENT] if who[1] == "sponsor" else
+                             [p for p in [(st.bank.user(who[0]) or {}).get("sponsor_id")] if p])
+        return st.policy.compliance.report(acts, people, who[1])
+
     @app.post("/demo/reset")
-    def demo_reset(who=Depends(auth)):
+    def demo_reset(who=Depends(auth), x_operator: str = Header(default="")):
+        """Demo mode only, and only with the operator token (HB_OPERATOR_TOKEN) in X-Operator. The web app sends it
+        when /health says demo mode is on; the agent has no way to call this."""
         if not st.settings.demo_mode:
             raise HTTPException(403, "Reset is only available in demo mode")
+        if not x_operator or not hmac.compare_digest(x_operator.encode(), st.settings.operator_token.encode()):
+            st.audit.record("reset_denied", who[0], reason="missing or wrong operator token")
+            raise HTTPException(403, "Reset needs the operator token")
         st.reset()
         chat_times.clear()
         return {"ok": True}

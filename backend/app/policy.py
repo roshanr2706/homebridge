@@ -11,6 +11,8 @@ Design rules (quoted in the security self-assessment):
 5. Execution re-checks everything (hash, expiry, balance, cooling period).
 6. While the sponsor or the student has frozen payments (safety.py), drafts are still
    allowed, but Confirm, Approve and execution are refused.
+7. Every draft is screened by the compliance layer (compliance.py) before its tier is set: a sanctions
+   hit blocks it outright, and nobody whose identity is unverified can confirm or approve money movement.
 """
 from __future__ import annotations
 
@@ -32,6 +34,7 @@ from typing import Any, Dict, List, Optional
 
 from .audit import AuditLog
 from .bank import Bank, BankError, to_minor
+from .compliance import Compliance
 from .config import Limits
 from .fx import FxMarket
 from .guard import normalize
@@ -108,6 +111,7 @@ class PendingAction:
     sponsor_note: str = ""
     result: Optional[Dict[str, Any]] = None
     provenance: Dict[str, str] = field(default_factory=dict)
+    compliance: Dict[str, Any] = field(default_factory=dict)  # compliance.py result, shown on the card
     _token: Optional[str] = None   # plaintext, handed to the app once, never to the model
 
     def for_model(self) -> Dict[str, Any]:
@@ -124,7 +128,11 @@ class PendingAction:
             "next_step": {
                 "awaiting_user": "The user must review and tap Confirm in the app. You cannot confirm it.",
                 "awaiting_sponsor": "Waiting for the sponsor to approve in their own app.",
+                "blocked": "Blocked by compliance screening. It cannot be confirmed or approved.",
             }.get(self.status, ""),
+            "compliance": {"outcome": self.compliance.get("outcome", "clear"),
+                           "notes": [c["detail"] for c in self.compliance.get("checks", [])
+                                     if c["status"] in ("flag", "block", "report")]},
         }
 
     def for_app(self, include_token: bool = False) -> Dict[str, Any]:
@@ -141,6 +149,7 @@ class PendingAction:
             "sponsor_note": self.sponsor_note,
             "result": self.result,
             "provenance": self.provenance,
+            "compliance": self.compliance,
         })
         if include_token and self._token and self.status == "awaiting_user":
             d["confirm_token"] = self._token
@@ -156,6 +165,7 @@ class PolicyEngine:
         self.limits_changed_at = 0.0
         self.bank.ensure_policy_tables()
         self.safety = SafetyMonitor(bank, fx, audit)
+        self.compliance = Compliance(bank, fx, audit)
         self._load()
 
     @property
@@ -168,6 +178,8 @@ class PolicyEngine:
         self._audit = log
         if hasattr(self, "safety"):
             self.safety.audit = log
+        if hasattr(self, "compliance"):
+            self.compliance.audit = log
 
     def limits_changed(self) -> None:
         """Called after the sponsor edits the limits. Student-only drafts made earlier then go to the sponsor."""
@@ -255,6 +267,9 @@ class PolicyEngine:
     def _new(self, kind: str, owner: str, session_id: str, params: Dict[str, Any], summary: str,
              reasons_t3: List[str], risk: int, risk_reasons: List[str], warnings: List[str],
              provenance: Dict[str, str]) -> PendingAction:
+        comp = self.compliance.assess(self, kind, owner, params)
+        risk += comp["risk"]
+        risk_reasons.extend(comp["risk_reasons"])
         lock = self.safety.frozen_reason(owner, kind, params)
         if lock:  # drafting is still allowed while frozen; confirming is not
             warnings.append(f"{FROZEN_PREFIX} {lock}. It can't be confirmed or approved until they are unlocked.")
@@ -270,15 +285,23 @@ class PolicyEngine:
             sponsor_reasons=list(reasons_t3) + (["Risk score above sponsor threshold"] if risk >= self.limits.sponsor_risk_threshold and not reasons_t3 else []),
             needs_sponsor=needs_sponsor, params_hash=_hash_params(params), token_hash=_hash_token(token),
             created_at=now, expires_at=now + self.limits.pending_ttl_seconds, provenance=provenance,
-            _token=token,
+            compliance=Compliance.public(comp), _token=token,
         )
+        if comp["blocked"]:  # e.g. a sanctions hit: recorded and shown, but it can never be confirmed
+            action.status, action._token = "blocked", None
+            action.result = {"error": comp["block_reason"]}
+            action.risk_reasons.insert(0, comp["block_reason"])
+            if kind in ("add_payee", "transfer"):  # a listed payee can't be used again
+                self.bank.block_payee(params["payee_id"])
         with self._lock:
             self.actions[action.id] = action
             self._save(action)
         self.audit.record("action_drafted", owner, action_id=action.id, kind=kind, params=params,
                           tier=action.tier, risk=action.risk_score, reasons=action.risk_reasons,
                           provenance=provenance)
-        self.safety.note_draft(owner, kind, params, action.id)
+        self.compliance.record(action, comp)
+        if not comp["blocked"]:
+            self.safety.note_draft(owner, kind, params, action.id)
         return action
 
     # ------------------------------------------------------------- drafts
@@ -505,6 +528,9 @@ class PolicyEngine:
                 raise PolicyError("Only the account owner can confirm this action.")
             if a.status != "awaiting_user":
                 raise PolicyError(f"Action is {a.status}, not awaiting confirmation.")
+            kyc = self.compliance.check_kyc_for(user_id, a.owner, a.kind, "student", a.id)
+            if kyc:
+                raise PolicyError(kyc)
             if not token or not hmac.compare_digest(_hash_token(token), a.token_hash):
                 self.audit.record("confirm_denied", user_id, action_id=action_id, reason="bad token")
                 self.safety.note_failed_confirm(a.owner, a.id, "wrong confirmation code")
@@ -544,6 +570,9 @@ class PolicyEngine:
                 raise PolicyError("You are not the sponsor for this account.")
             if a.status != "awaiting_sponsor":
                 raise PolicyError(f"Action is {a.status}, not awaiting sponsor approval.")
+            kyc = self.compliance.check_kyc_for(sponsor_id, a.owner, a.kind, "sponsor", a.id) if approve else None
+            if kyc:  # rejecting is always allowed
+                raise PolicyError(kyc)
             lock = self._frozen_check(a) if approve else None
             if lock:  # rejecting is always allowed
                 self.audit.record("sponsor_denied", sponsor_id, action_id=action_id, reason="payments frozen")

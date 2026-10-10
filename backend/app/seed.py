@@ -126,6 +126,19 @@ def seed(bank: "Bank", today: date) -> None:
         ],
     )
     seed_credit_card(bank, today)
+    seed_security(bank, today)
+
+
+def seed_security(bank: "Bank", today: date) -> None:
+    """KYC levels (compliance.py) and the sponsor's approval PIN (authn.py; demo PIN 246810, stored hashed).
+    Also run on a file database from before these tables existed."""
+    from .authn import seed_pin
+
+    bank.set_kyc(STUDENT, "verified_basic", (today - timedelta(days=420)).isoformat(),
+                 "passport and study permit, liveness selfie")
+    bank.set_kyc(SPONSOR, "verified_full", (today - timedelta(days=430)).isoformat(),
+                 "MyKad, proof of address, source of funds (salary statements)")
+    seed_pin(bank, SPONSOR)
 
 
 def add_months(d: date, months: int) -> date:

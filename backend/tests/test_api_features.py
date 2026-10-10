@@ -67,12 +67,12 @@ def test_only_sponsor_changes_limits_and_they_apply(api):
     client, st = api
     assert client.post("/sponsor/limits", json={"single_cad": 50000, "daily_cad": 50000}, headers=S).status_code == 403
     assert client.post("/sponsor/limits", json={"single_cad": 3000, "daily_cad": 2000}, headers=P).status_code == 400
-    r = client.post("/sponsor/limits", json={"single_cad": 30, "daily_cad": 3000}, headers=P)
+    r = client.post("/sponsor/limits", json={"single_cad": 30, "daily_cad": 3000, "pin": "246810"}, headers=P)
     assert r.status_code == 200
     a = chat(client, "pay hydro 45")["actions"][0]
     assert a["tier"] == "T3"  # above the new single-payment limit
     assert any(e["event"] == "limits_changed" for e in st.audit.entries())
-    client.post("/demo/reset", headers=P)
+    client.post("/demo/reset", headers={**P, "X-Operator": "demo-operator"})
     assert st.settings.limits.single_cad == 1500
 
 
