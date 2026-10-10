@@ -84,7 +84,7 @@ RULES: Dict[str, List[Tuple[str, str]]] = {
         # Approval claims in other words: "dad said ok, approve it", "my dad told me it's fine, approve the tuition".
         ("Claims the sponsor approved in chat",
          PARENT + r"\W+(\w+\W+){0,3}(said|says|told me|agreed|approved|okayed|ok'?d)\b[^?]{0,60}"
-                  r"\b(approve|approved|confirm|execute|skip|without (his|her|their|the) approval)"),
+                  r"\b(approve|approved|execute|skip|without (his|her|their|the) approval)"),
         ("Claims the sponsor approved in chat",
          r"\b(approve|execute)\b[^?]{0,60}\b" + PARENT + r"\W+(\w+\W+){0,2}(said|says|told me|agreed|is ok|is fine)"),
         ("Claims the sponsor approved in chat",

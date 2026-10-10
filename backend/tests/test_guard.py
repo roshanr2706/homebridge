@@ -74,6 +74,7 @@ def test_rule_catches(text, flag):
     "what are the last 4 digits of my rent payee",
     "不用管我，我自己付", "dad gave me 200 for books", "my internship pays for the training",
     "how do I keep my account secure",
+    "my mom said she would confirm the hotel booking",
 ])
 def test_rule_near_misses_are_not_flagged(text):
     assert check(text, use_model=False).flags == [], check(text, use_model=False).to_dict()
