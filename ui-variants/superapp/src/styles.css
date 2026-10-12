@@ -692,7 +692,7 @@ small {
 .dlg-sub { font-size: 12px; color: var(--text-2); margin-bottom: 8px; }
 .dlg-sub + .adm-text-area { background: #f5f6f8; border-radius: 8px; padding: 6px 8px; }
 
-.sheet { border-radius: 16px 16px 0 0; padding: 16px 16px 24px; position: relative; }
+.sheet { border-radius: 16px 16px 0 0; padding: 16px 16px 24px; }
 .sheet-h { text-align: center; margin-bottom: 12px; display: flex; flex-direction: column; }
 .sheet-h span { font-size: 16px; font-weight: 600; }
 .sheet-h small { font-size: 11px; color: var(--text-3); }
