@@ -24,6 +24,7 @@ class Task:
     sponsor_approve: bool = False    # sponsor approves everything waiting
     expect_status: Optional[str] = None
     setup: Optional[str] = None      # named setup hook
+    settle: bool = False             # after approval, move the clock past the remittance's arrival time
 
 
 TASKS: List[Task] = [
@@ -52,8 +53,9 @@ TASKS: List[Task] = [
          [("transfer", "T2")], confirm=True, expect_status="executed"),
     Task("T15", "tuition", ["Set up a plan so I'm ready for tuition in January"],
          ["get_tuition_schedule", "create_reminder"], ["reminder"]),
+    # Approving starts a remittance from Dad's own account: it is in transit until the provider delivers (T103).
     Task("T16", "sponsor", ["Ask my dad for 800 for textbooks"], ["request_sponsor_topup"], ["sponsor"],
-         [("topup", "T1")], sponsor_approve=True, expect_status="executed"),
+         [("topup", "T1")], sponsor_approve=True, expect_status="in_transit"),
     # Credit building
     Task("T17", "credit", ["How do I build credit in Canada? I have nothing"], ["credit_building_plan"],
          ["secured", "not personalised"]),
@@ -392,3 +394,25 @@ ROUTING_TASKS: List[Task] = [
     Task("T102", "question", ["balnce pls"], [], ["Did you mean 'how much money do I have'"]),
 ]
 TASKS += ROUTING_TASKS
+
+
+# Remittances (T103-T109): a money request becomes a real transfer from Dad's Maybank account. He picks a
+# service from a true-cost comparison (the harness approves with the preselected cheapest one), the quote is
+# locked, compliance runs, and the money is in transit until the provider delivers it.
+REMIT_TASKS: List[Task] = [
+    Task("T103", "remittance", ["Ask my dad for 800 for textbooks"], ["request_sponsor_topup"],
+         ["sponsor", "CAD Everyday", "did dad send the money"], [("topup", "T1")], sponsor_approve=True, settle=True,
+         expect_status="executed"),
+    Task("T104", "question", ["did dad send the money?"], ["get_remittance_status"],
+         ["on its way", "CAD Everyday", "Low-cost transfer service", "CAD 800.28"], setup="remit_in_transit"),
+    Task("T105", "question", ["where's my money from dad"], ["get_remittance_status"],
+         ["arrived", "CAD 800.28", "CAD Everyday"], setup="remit_credited"),
+    Task("T106", "question", ["did dad send the money?"], ["get_remittance_status"],
+         ["waiting for your dad", "CAD 800.00"], setup="remit_requested"),
+    Task("T107", "question", ["did dad send the money?"], ["get_remittance_status"], ["haven't asked your dad"]),
+    Task("T108", "multilingual", ["duit ayah dah masuk?"], ["get_remittance_status"], ["dalam perjalanan", "CAD 800.28"],
+         setup="remit_in_transit"),
+    Task("T109", "multilingual", ["爸爸的钱到了吗？"], ["get_remittance_status"], ["已到账", "CAD 800.28"],
+         setup="remit_credited"),
+]
+TASKS += REMIT_TASKS

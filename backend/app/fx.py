@@ -46,6 +46,24 @@ PROVIDERS: List[Provider] = [
 ]
 
 
+# Services a parent can use to send money from a Malaysian bank account (remit.py). The in-app conversion
+# moves only the student's own money, and an airport changer is cash in person, so neither is offered.
+# The express service is remittance-only, so it is kept out of PROVIDERS and the student's FX comparisons.
+EXPRESS = Provider("express", "Express remittance service", 1.50, 0.0, 12.0, "same day")
+DOMESTIC: List[Provider] = [
+    Provider("duitnow", "Instant domestic transfer", 0.0, 0.0, 0.0, "instant"),
+    Provider("ibg", "Interbank GIRO transfer", 0.0, 0.0, 0.10, "same day"),
+]
+
+
+def remit_providers(dst: str) -> List[Provider]:
+    """The services that can deliver money from the sponsor's MYR account in `dst`."""
+    if dst.upper() == "MYR":
+        return list(DOMESTIC)
+    by_key = {p.key: p for p in PROVIDERS}
+    return [by_key["lowcost"], EXPRESS, by_key["bank"]]
+
+
 class FxMarket:
     def __init__(self) -> None:
         self.fail_next = 0  # test hook: number of upcoming quote calls that time out
@@ -116,6 +134,21 @@ class FxMarket:
             "series": series,
         }
 
+    def quote_to_receive(self, dst: str, receive: float, provider: Provider) -> Dict:
+        """What the sponsor sends from MYR so that at least `receive` arrives in `dst` through `provider`:
+        the true-cost maths of quote() run backwards. Cross-border amounts are rounded up to a whole ringgit,
+        so the student gets slightly more than asked, never less; a domestic transfer is exact to the sen."""
+        dst = dst.upper()
+        if dst == "MYR":
+            send = round((receive + provider.fee_fixed) / (1 - provider.fee_pct / 100), 2)
+        else:
+            rate = self.mid("MYR", dst) * (1 - provider.spread_pct / 100)
+            send = float(math.ceil((receive / rate + provider.fee_fixed) / (1 - provider.fee_pct / 100)))
+        q = self.quote("MYR", dst, send, provider)
+        q["send_amount"] = send
+        q["spread_pct"] = provider.spread_pct
+        return q
+
     @staticmethod
     def provider(key: str) -> Optional[Provider]:
-        return next((p for p in PROVIDERS if p.key == key), None)
+        return next((p for p in PROVIDERS + [EXPRESS] + DOMESTIC if p.key == key), None)

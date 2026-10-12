@@ -33,6 +33,10 @@ class Limits:
     drafts_per_hour: int = 20
     # Risk score at or above which an action needs the sponsor regardless of size.
     sponsor_risk_threshold: int = 50
+    # How long an approved remittance stays "in transit" before it is credited (remit.py): 'business_days' uses
+    # each provider's real speed (1 to 4 business days, same day, instant); 'demo' uses a few seconds so the
+    # whole timeline can be shown live on stage.
+    remit_settle: str = "business_days"
 
 
 @dataclass
@@ -71,6 +75,7 @@ class Settings:
         if self.demo_mode:
             # Shortened so the cooling period can be shown live on stage.
             self.limits.payee_cooling_seconds = 60
+            self.limits.remit_settle = "demo"
 
 
 def load_settings() -> Settings:

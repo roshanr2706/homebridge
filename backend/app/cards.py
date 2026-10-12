@@ -138,7 +138,16 @@ def _credit_profile(args: Dict[str, Any], r: Dict[str, Any]) -> Optional[Dict[st
             "footnote": r["disclosure"]}
 
 
+def _remittance(args: Dict[str, Any], r: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The app shows each request as its own action card, with the remittance timeline (live, from /actions)."""
+    items = r.get("remittances")
+    if not items:
+        return None
+    return {"type": "remittance", "action_ids": [x["action_id"] for x in items[:3]]}
+
+
 BUILDERS: Dict[str, Builder] = {
+    "get_remittance_status": _remittance,
     "get_balances": _balances,
     "get_fx_quotes": _fx_quotes,
     "get_fx_history": _fx_history,

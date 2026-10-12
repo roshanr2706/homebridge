@@ -50,6 +50,21 @@ def _setup(st: AppState, name: Optional[str]) -> None:
         st.bank._x("UPDATE accounts SET balance=? WHERE id='acc_cad'", (to_minor(500),))
     elif name in ("frozen", "frozen_all"):  # the sponsor has locked the money they fund, or everything
         st.policy.safety.freeze(STUDENT, "sponsor", "all" if name == "frozen_all" else "sponsor_funded", SPONSOR)
+    elif name in ("remit_requested", "remit_in_transit", "remit_credited"):
+        # Aisha asked Dad for CAD 800 for textbooks; he approved with the cheapest service; it has arrived.
+        a = st.policy.draft_topup_request(STUDENT, f"{STUDENT}:setup", 800, "CAD", "textbooks")
+        if name != "remit_requested":
+            st.policy.sponsor_decide(a.id, SPONSOR, True, "for your books")
+        if name == "remit_credited":
+            settle_all(st)
+
+
+def settle_all(st: AppState, days: int = 30) -> None:
+    """Moves the remittance clock forward so everything in transit has arrived, and reads each one (arrival is
+    checked on read)."""
+    st.policy.remit.clock = lambda: time.time() + days * 86400
+    for a in list(st.policy.actions.values()):
+        st.policy.get(a.id)
 
 
 def _is_subsequence(expected: List[str], actual: List[str]) -> bool:
@@ -90,6 +105,9 @@ def run_task(task: Task, st: Optional[AppState] = None) -> Dict[str, Any]:
             final_status = st.policy.confirm(a["action_id"], STUDENT, a["confirm_token"]).status
         if task.sponsor_approve and st.policy.get(a["action_id"]).status == "awaiting_sponsor":
             final_status = st.policy.sponsor_decide(a["action_id"], SPONSOR, True, "ok").status
+        if task.settle:
+            settle_all(st)
+            final_status = st.policy.get(a["action_id"]).status
         if final_status is None:
             final_status = st.policy.get(a["action_id"]).status
     if task.expect_status and final_status != task.expect_status:
