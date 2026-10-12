@@ -29,6 +29,7 @@ from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import i18n
+from .guard import quoted_segments
 from .i18n import t
 from .offline_nlu import (PAYEE_NAMES, amount_issue, currencies, first_amount, is_question, nice_date,
                           parse_amounts, parse_date, payee_keys, payment_clauses, relayed_message, short_date)
@@ -159,7 +160,9 @@ PENDING_RE = (r"\bpending\b|waiting (for|on) (my )?(dad|sponsor|approval|me)|\ba
               r"what did (my )?(dad|father|sponsor) approve|status of (my )?|\bin progress\b")
 LIMITS_RE = (r"\blimits?\b|why (does|do|did|must|should|would) (my )?(dad|father|sponsor|ayah|papa)|"
              r"needs? (my )?(dad|sponsor|father)('s)? (to )?approv|who('?s| is) my sponsor|\bmy sponsor\b\??$|"
-             r"what (is|are|does) (a )?t[123]\b|\bt[123]\b.{0,12}mean|\btiers?\b")
+             r"what (is|are|does) (a )?t[123]\b|\bt[123]\b.{0,12}mean|\btiers?\b|"
+             r"(为什么|为啥).{0,10}(爸爸|父亲|担保人).{0,8}(批准|审批|同意)|(kenapa|mengapa).{0,30}(ayah|bapa|penaja)"
+             r".{0,30}lulus|\bhad (bayaran|harian|saya)\b")
 OWE_RE = r"\bowe\b|\bowing\b|\bdebts?\b"
 INCOME_RE = (r"\b(get|got|been|getting) paid\b|\bpaid (this|last) week\b|\bearn(ed|ings|ing)?\b|\bincome\b|"
              r"\bsalary\b|\bpaycheque|\bpaycheck|\bpayday\b|\bwages?\b")
@@ -183,6 +186,13 @@ REMIT_STATUS_RE = (
     r"\b(duit|wang) (ayah|bapa|abah)\b.{0,12}\b(masuk|sampai|tiba)\b|\b(ayah|bapa|abah) (dah|sudah) "
     r"(hantar|kirim|transfer)\b|"
     r"(爸爸|父亲|爸)(的|汇的|转的|打的|寄的)?钱.{0,4}(到了|到账|到没|收到|来了)|(爸爸|父亲)(汇|转|打)钱了|汇款(到了|到账|状态|进度)")
+# Emergency lock, in any wording: "freeze my account", "冻结账户", "快帮我冻结账户", "锁定付款", "kunci akaun".
+LOCK_RE = (r"\b(freeze|lock|block)\s+(my|all|everything|the account|payments)\b|"
+           r"(?<!解)(冻结|锁定|锁住|锁上|锁)(一下)?(我的)?(账户|账号|钱包|付款|支付|银行卡|卡|钱)|"
+           r"(账户|账号|付款|钱包).{0,4}(冻结|锁定|锁住)|(冻结|锁定|锁住)我的|\b(kunci|bekukan|sekat)\b.{0,10}\b(akaun|bayaran|pembayaran|dompet|kad)\b")
+# "I've been scammed": lock first, explain after (the system prompt asks the live model for the same).
+BEEN_SCAMMED_RE = (r"\bi (think |might have |may have )?(have |'ve |just )?(been|got|was|get) (scammed|conned|defrauded)\b|"
+                   r"\bi'?ve been (scammed|conned|defrauded)\b|被骗|上当了|\bkena (tipu|scam|tipu daya)\b")
 ACCOUNT_WORDS = {"everyday": r"everyday|chequing|checking|spending account|cad account|cad wallet",
                  "tuition": r"tuition fund|tuition account|tuition savings|dana yuran|学费账户",
                  "wallet": r"myr wallet|ringgit wallet|myr account|ringgit account|malaysian account|马币账户"}
@@ -335,7 +345,7 @@ class OfflineEngine:
             return _say(self._t("couldnt", error=last["error"]))
 
         # 0. Emergency lock and unlock requests (locking only adds friction, so it runs even in a flagged turn)
-        lock = self._lock_request(low, done)
+        lock = self._lock_request(text, low, res, done)
         if lock:
             return lock
 
@@ -1050,7 +1060,9 @@ class OfflineEngine:
 
         if re.search(r"^(hi|hello|hey|yo|hai|helo|hiya|good (morning|afternoon|evening)|你好|嗨|selamat)\b", raw) and \
                 len(raw.split()) <= 4 or re.search(r"what can you do|what do you do|how can you help|what are you|"
-                                                   r"what('?s| is) homebridge|^help\??$", raw):
+                                                   r"what('?s| is) homebridge|^help\??$|你是谁|你能做什么|你会做什么|"
+                                                   r"能帮我(做)?什么|siapa (awak|anda)|apa (awak|anda) boleh (buat|bantu)",
+                                                   raw):
             name = getattr(self, "_name", "")
             return _say(self._t("hello", name=(("，" if self._lang == "zh" else " ") + name) if name else ""))
 
@@ -1134,8 +1146,9 @@ class OfflineEngine:
             return self._t("pending_none_dad" if about_dad else "pending_none")
         return ("。".join(parts) + "。") if L == "zh" else (". ".join(parts) + ".")
 
-    @staticmethod
-    def _limits_reply(raw: str, L: Dict[str, Any]) -> str:
+    def _limits_reply(self, raw: str, L: Dict[str, Any]) -> str:
+        if self._lang != "en":
+            return self._limits_reply_local(raw, L)
         sp = (L.get("sponsor") or {}).get("name") or "your sponsor"
         funded = " and ".join(L["sponsor_funded_accounts"]) or "none"
         single, daily = L["single_payment_cad"], L["daily_cad"]
@@ -1162,6 +1175,20 @@ class OfflineEngine:
                 f"paid from sponsor-funded money ({funded}), more than CAD {L['sponsor_money_conversion_cap_cad_24h']:,.0f} "
                 f"of sponsor money converted in 24 hours, a new payee, or anything flagged as risky goes to {sp} to "
                 "approve. Only he can change these limits, in his app." + (change and ""))
+
+    def _limits_reply_local(self, raw: str, L: Dict[str, Any]) -> str:
+        """The limits and the tiers in Chinese or Malay, built from get_limits (the same policy numbers)."""
+        lang = self._lang
+        funded = i18n.comma(lang).join(i18n.account(a, lang) for a in L["sponsor_funded_accounts"]) or "-"
+        nums = dict(single=f"{L['single_payment_cad']:,.0f}", daily=f"{L['daily_cad']:,.0f}", funded=funded,
+                    used=f"{L['used_24h_cad']:,.2f}", left=f"{L['remaining_24h_cad']:,.2f}",
+                    cap=f"{L['sponsor_money_conversion_cap_cad_24h']:,.0f}")
+        if re.search(r"为什么|为啥|kenapa|mengapa", raw):
+            key = "limits_why_tuition" if re.search(r"学费|yuran|tuition|ubc", raw) else "limits_why"
+            return self._t(key, **nums) + self._t("limits_tiers", **nums)
+        if re.search(r"\bt[123]\b|tier|等级|层级|peringkat", raw):
+            return self._t("limits_tiers", **nums).strip()
+        return self._t("limits_now", **nums) + self._t("limits_tiers", **nums)
 
     @staticmethod
     def _owe_reply(sched: Dict[str, Any], prof: Dict[str, Any]) -> str:
@@ -1589,11 +1616,29 @@ class OfflineEngine:
         keys = payee_keys(low)
         return keys[0] if keys else None
 
-    def _lock_request(self, low: str, done: List[str]) -> Optional[Dict[str, Any]]:
+    def _lock_request(self, text: str, low: str, res, done: List[str]) -> Optional[Dict[str, Any]]:
         """'Lock my account' calls freeze_payments. Unlocking is never done from chat."""
-        if re.search(r"\b(freeze|lock|block)\s+(my|all|everything)\b|(冻结|锁定|锁住)我的|(kunci|bekukan|sekat) akaun", low):
+        # "I've been scammed" / "我被骗了" / "saya kena tipu" locks too, unless it comes with a message to check.
+        scammed = bool(re.search(BEEN_SCAMMED_RE, low)) and not quoted_segments(text) and not re.search(
+            r"is (this|it) (a scam|real|legit)|是不是|诈骗吗|scam ke", low)
+        if re.search(LOCK_RE, low) or scammed:
             if "freeze_payments" not in done:
                 return _call("freeze_payments", reason="user asked to lock payments")
+            # When she also says what happened ("someone called from the bank and asked me to transfer"), name
+            # the warning signs too, after the lock.
+            if scammed and not re.search(LOCK_RE, low) and len(re.findall(r"\w+", text)) >= 8 and \
+                    "check_message_for_scam" not in done:
+                return _call("check_message_for_scam", text=text)
+            r = _result(res, "check_message_for_scam")
+            if r and r["verdict"] != "no_known_pattern":
+                L = self._lang
+                if L == "en":
+                    why = f" {r['explanation']}" if r.get("explanation") else ""
+                else:
+                    names = [i18n.signal(s["name"], L) for s in r.get("signals", [])[:3]]
+                    why = self._t("scam_why", signals=i18n.sep(L).join(names), quote="") if names else ""
+                lead = self._t("scam_likely" if r["verdict"] == "likely_scam" else "scam_suspicious")
+                return _say(lead + ("。" if L == "zh" else ".") + why + ("" if L == "zh" else " ") + self._t("frozen"))
             return _say(self._t("frozen"))
         if re.search(r"\b(unfreez\w*|unlock\w*|unblock\w*)\b|\blift (the )?(freeze|lock)\b|解冻|解锁|buka (kunci|semula)",
                      low) and not re.search(r"scam|is this (real|legit)|legit ke", low):

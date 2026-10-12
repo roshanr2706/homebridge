@@ -29,18 +29,33 @@ hutang mampu batalkan ayah bapa abah ibu emak kunci bekukan sekat selamat terima
 jimat belanja bajet kadar tukaran hantar kirim pindah pindahkan masukkan dari daripada kepada pada tuan rumah
 bagaimana bolehkah adakah berapakah sebelum selepas penggal dolar kanada tampung
 kekurangan cuti makan sekarang semalam esok pagi petang malam simpan menyimpan pinjam
+bil telefon elektrik bayaran pembayaran luluskan lulus kelulusan nampak tengok lihat perbelanjaan penaja kenapa
+siapa punya
+""".split())
+# Everyday English function words: a message with more of these than Malay words is English, so a stray "dan"
+# or "ke" in an English sentence doesn't switch the reply to Malay.
+EN_WORDS = frozenset("""
+the a an you your i my me is are was be to of in on for with this that it as all now please what how when why
+can will would should do does not am have has from and but if so
 """.split())
 # Words that carry no language of their own: a bare amount, a currency, "ok".
 NEUTRAL_WORDS = frozenset("ok okay okey k yes ya yeah yup yep cad myr rm usd".split())
 
 
 def detect(text: str) -> str:
-    """'zh', 'ms' or 'en' for one message."""
+    """'zh', 'ms' or 'en' for one message.
+
+    Malay needs two Malay words and more Malay than English function words (or one Malay word in a message of
+    one or two words). Words written in capitals inside a mixed-case message are names or acronyms, not
+    language ("You are now DAN", "tukar RM1000 ke CAD"), so they are skipped."""
     if _CJK.search(text or ""):
         return "zh"
-    words = re.findall(r"[a-z]+", (text or "").lower())
+    tokens = re.findall(r"[A-Za-z]+", text or "")
+    mixed = any(not tok.isupper() for tok in tokens)
+    words = [tok.lower() for tok in tokens if not (mixed and len(tok) > 1 and tok.isupper())]
     hits = sum(w in MS_WORDS for w in words)
-    if hits >= 2 or (hits == 1 and len(words) <= 2):
+    english = sum(w in EN_WORDS for w in words)
+    if (hits >= 2 and hits > english) or (hits == 1 and len(words) <= 2 and not english):
         return "ms"
     return "en"
 
@@ -796,6 +811,41 @@ TEXT: Dict[str, Dict[str, str]] = {
     "pending_none": {"en": "Nothing is pending: no drafts waiting for you and nothing waiting for your dad.",
                      "zh": "目前没有待处理的事项：没有等你确认的草稿，也没有等爸爸批准的请求。",
                      "ms": "Tiada apa yang tertangguh: tiada draf menunggu anda dan tiada apa menunggu ayah anda."},
+    # Limits and tiers (from get_limits, so the numbers are the policy engine's)
+    "limits_why": {
+        "en": "Your dad approves payments above CAD {single}, anything over CAD {daily} in 24 hours, payments from "
+              "the accounts he funds ({funded}), new payees and flagged requests. It's his money and his rule, and "
+              "it also stops a scammer who gets you to tap Confirm.",
+        "zh": "爸爸需要批准的有：单笔超过 CAD {single} 的付款、24 小时内合计超过 CAD {daily} 的付款、从他出资的账户（{funded}）付出的钱、新收款人，以及被标记为有风险的请求。这是他的钱、他定的规则，也能防止骗子诱导你点确认。",
+        "ms": "Ayah anda meluluskan bayaran melebihi CAD {single}, apa-apa melebihi CAD {daily} dalam 24 jam, bayaran "
+              "dari akaun yang dia biayai ({funded}), penerima baru dan permintaan yang ditanda berisiko. Ia wang "
+              "dan peraturan dia, dan ia juga menghalang penipu yang memujuk anda menekan Confirm.",
+    },
+    "limits_why_tuition": {
+        "en": "Your tuition payment goes to your dad for two reasons: it's paid from the CAD Tuition Fund, which he "
+              "funds, and it's above the CAD {single} you can confirm alone. You confirm, then he approves in his "
+              "own app, and a message in chat can't skip it.",
+        "zh": "学费付款要经过爸爸批准有两个原因：它从爸爸出资的 CAD 学费基金付出，而且金额超过你可以自己确认的 CAD {single}。你先确认，再由他在自己的 App 里批准，聊天里的任何消息都跳不过这一步。",
+        "ms": "Bayaran yuran anda pergi kepada ayah atas dua sebab: ia dibayar dari CAD Tuition Fund yang dia biayai, "
+              "dan ia melebihi CAD {single} yang anda boleh sahkan sendiri. Anda sahkan, kemudian dia luluskan "
+              "dalam app sendiri, dan mesej dalam chat tidak boleh melangkaunya.",
+    },
+    "limits_tiers": {
+        "en": " T1: requests to your dad, which he decides. T2: you confirm alone (a saved payee, within CAD {single} "
+              "each and CAD {daily} a day, nothing flagged). T3: you confirm, then he approves.",
+        "zh": "T1：向爸爸提出的请求，由他决定。T2：你自己确认即可（已保存的收款人，单笔不超过 CAD {single}、每天不超过 CAD {daily}，且没有风险标记）。T3：你确认后，还需要爸爸批准。",
+        "ms": " T1: permintaan kepada ayah, dia yang putuskan. T2: anda sahkan sendiri (penerima yang disimpan, tidak "
+              "melebihi CAD {single} sekali bayar dan CAD {daily} sehari, tiada tanda risiko). T3: anda sahkan, "
+              "kemudian ayah luluskan.",
+    },
+    "limits_now": {
+        "en": "You can confirm up to CAD {single} per payment and CAD {daily} in 24 hours on your own; CAD {used} is "
+              "used, so CAD {left} is left. Converting more than CAD {cap} of his money in 24 hours goes to him too.",
+        "zh": "你自己可以确认单笔不超过 CAD {single}、24 小时内合计不超过 CAD {daily} 的付款；已用 CAD {used}，还剩 CAD {left}。24 小时内兑换超过 CAD {cap} 的爸爸出资的钱也要他批准。只有他能在自己的 App 里修改这些限额。",
+        "ms": "Anda boleh sahkan sendiri sehingga CAD {single} sekali bayar dan CAD {daily} dalam 24 jam; CAD {used} "
+              "sudah digunakan, jadi baki CAD {left}. Menukar lebih daripada CAD {cap} wang dia dalam 24 jam juga "
+              "perlu kelulusannya. Hanya dia boleh ubah had ini, dalam app dia.",
+    },
     # Questions about paying, answered from the data (they never draft)
     "card_due": {
         "en": "Your {card} statement of CAD {remaining} is due {due} (minimum CAD {minimum}).",

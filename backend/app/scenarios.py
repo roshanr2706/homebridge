@@ -448,5 +448,10 @@ ROUND2_TASKS: List[Task] = [
                           "4444-5555-6666'"], ["check_message_for_scam", "list_payees"],
          ["bank details changed by message", "account ending"]),
     Task("T114", "multilingual", ["房租什么时候交？"], ["list_transactions"], ["CAD 1,150.00", "到期"]),
+    Task("T115", "multilingual", ["我被骗了，快帮我冻结账户"], ["freeze_payments"], ["锁定"]),
+    Task("T116", "question", ["帮我交学费", "为什么要爸爸批准？"], ["get_limits"], ["CAD 1,500", "T3", "学费基金"]),
+    Task("T117", "multilingual", ["Bayar bil telefon 55"], ["prepare_transfer"], ["Saya dah sediakan draf"],
+         [("transfer", "T2")]),
+    Task("T118", "question", ["Kenapa ayah kena luluskan bayaran yuran?"], ["get_limits"], ["CAD Tuition Fund", "T3"]),
 ]
 TASKS += ROUND2_TASKS
