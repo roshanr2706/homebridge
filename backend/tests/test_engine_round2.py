@@ -432,6 +432,50 @@ def test_forecast_counts_a_remittance_in_transit_on_its_arrival_date():
     assert round(r["series"][days] - before["series"][days], 2) == round(receive, 2)
 
 
+# ------------------------------------------------------- 8. currencies are data
+def test_cny_rates_are_consistent_cross_rates():
+    from app.fx import FxMarket
+    fx = FxMarket()
+    assert abs(fx.mid("CNY", "CAD") - fx.mid("CNY", "MYR") * fx.mid("MYR", "CAD")) < 1e-12
+    assert abs(fx.mid("CAD", "CNY") * fx.mid("CNY", "CAD") - 1) < 1e-12
+
+
+def test_cny_quotes_use_the_cny_providers_and_never_the_wallet():
+    from app.fx import FxMarket
+    qs = FxMarket().quotes("CNY", "CAD", 10000, include_wallet=True)
+    assert {q["provider_key"] for q in qs} == {"cn_app", "cn_bank", "cn_counter"}
+    assert qs[0]["provider_key"] == "cn_app" and qs[0]["you_receive"] > qs[-1]["you_receive"]
+
+
+@pytest.mark.parametrize("msg,lang", [("how much is 10000 RMB in CAD", "en"), ("人民币换加币", "zh"),
+                                      ("一万人民币换加币多少", "zh"), ("convert 10000 cny to cad", "en")])
+def test_cny_question_gets_a_read_only_true_cost_comparison(msg, lang):
+    st = fresh()
+    r = run(st, msg)
+    assert tools(r) == ["get_fx_quotes"] and not r.actions and not st.policy.actions
+    args = r.trace[0]["args"]
+    assert args["from_currency"] == "CNY" and args["to_currency"] == "CAD" and args["amount"] == 10000.0
+    assert ("Licensed cross-border payment service" in r.reply) if lang == "en" else ("持牌跨境支付服务" in r.reply)
+    assert "USD 50,000" in r.reply or "5 万美元" in r.reply
+    assert [c["type"] for c in r.cards] == ["fx_quotes"]
+
+
+def test_wechat_pay_tuition_question():
+    r = run(fresh(), "Can I pay tuition with WeChat Pay or Alipay?")
+    assert tools(r) == ["get_fx_quotes"] and not r.actions
+    assert r.reply.startswith("HomeBridge can't pay with WeChat Pay or Alipay")
+
+
+def test_shenzhen_tuition_question():
+    r = run(fresh(), "How do I send money from Shenzhen to Canada for my tuition?")
+    assert r.trace[0]["args"]["from_currency"] == "CNY" and "SAFE" in r.reply
+
+
+def test_myr_comparisons_are_unchanged_by_cny():
+    r = run(fresh(), "Cheapest way to change 5,000 MYR to CAD?")
+    assert "HomeBridge wallet conversion" in r.reply
+
+
 def test_who_are_you_in_chinese():
     r = run(fresh(), "你是谁？你能做什么？")
     assert r.reply.startswith("你好") and "我没听懂" not in r.reply

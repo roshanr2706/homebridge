@@ -808,13 +808,13 @@ class OfflineEngine:
         if re.search(r"from (my |the )?(myr|ringgit|rm|malaysian)( wallet| account)?\b|马币账户", raw):
             return _say(self._t("from_myr_wallet", payee=PAYEE_NAMES[plan[0][0]]))
         # Saved payees are paid in CAD: "pay hydro 50 USD" is asked about, never silently sent as CAD 50
-        foreign = next((a for a in parse_amounts(text) if a.currency in ("USD", "MYR") and not a.issue), None)
+        foreign = next((a for a in parse_amounts(text) if a.currency in ("USD", "MYR", "CNY") and not a.issue), None)
         if foreign and len(plan) == 1:
             k = plan[0][0]
             cmd = f"pay {k} {foreign.value:g}"
             return _say(self._t("pay_in_cad", payee=PAYEE_NAMES[k], cur=foreign.currency,
                                 amount=f"{foreign.value:,.2f}", cmd=cmd,
-                                extra=self._t("no_usd_note") if foreign.currency == "USD" else ""),
+                                extra=self._t("no_usd_note") if foreign.currency != "MYR" else ""),
                         state={"offer": cmd})
         # "from my everyday account" / "from my tuition fund": the account she named, not the default
         named = re.search(r"\bfrom (my |the )?(cad )?(everyday|chequing|checking|spending)\b|\bdari (akaun )?everyday\b|"
@@ -1052,6 +1052,16 @@ class OfflineEngine:
         if re.search(PRIVACY_WHO_RE, raw) or re.search(PRIVACY_DATA_RE, raw):
             return self._privacy(raw, res, done)
 
+        # Chinese yuan ("how much is 10000 RMB in CAD", "人民币换加币"): there is no CNY wallet, so any yuan
+        # question gets a read-only true-cost comparison from the same quote engine
+        if "CNY" in _currencies(text) and not payee_keys(raw):
+            return self._cny_quote(text, res, done)
+        # "How do I send money from Shenzhen for my tuition?", "Can I pay tuition with WeChat Pay or Alipay?"
+        if re.search(r"\b(shenzhen|china|mainland|beijing|shanghai|guangzhou|wechat ?pay|alipay|weixin)\b|微信支付|支付宝|"
+                     r"中国|深圳|国内", raw) and re.search(r"\b(send|transfer|pay|tuition|money|remit)\b|汇|付|交|学费", raw):
+            lead = self._t("cny_wallets") if re.search(r"wechat|alipay|weixin|微信|支付宝", raw) else ""
+            return self._cny_quote(text, res, done, src="CNY", lead=lead)
+
         if re.search(PENDING_RE, low):
             if "get_pending_actions" not in done:
                 return _call("get_pending_actions")
@@ -1146,6 +1156,28 @@ class OfflineEngine:
                         "and only invest money they won't need for years. I can show what's left after your bills: "
                         "ask 'will I run out of money before tuition?'")
         return None
+
+    def _cny_quote(self, text: str, res, done, src: str = "", lead: str = "") -> Dict[str, Any]:
+        L = self._lang
+        curs = _currencies(text)
+        src = src or curs[0]
+        dst = next((c for c in curs if c != src), "CAD")
+        amts = parse_amounts(text)
+        amt = next((a.value for a in amts if not a.issue), None)
+        if "get_fx_quotes" not in done:
+            return _call("get_fx_quotes", from_currency=src, to_currency=dst, amount=amt or 10000.0, own_wallet=False)
+        r = _result(res, "get_fx_quotes")
+        best, worst = r["quotes"][0], r["quotes"][-1]
+        amount = r["amount"]
+        prov = (lambda q: q["provider"] if L == "en" else i18n.provider(q["provider"], L))  # noqa: E731
+        msg = self._t("cny_quote", amount=_money(amount, src), example="" if amt else self._t("cny_example"),
+                      mid=_money(amount * best["mid_rate"], dst), src=src, dst=dst, rate=f"{best['mid_rate']:.4f}",
+                      best=prov(best), receive=_money(best["you_receive"], dst), pct=best["true_cost_pct"],
+                      speed=i18n.speed(best["speed"], L), saving=_money(r["saving_vs_worst"], dst),
+                      worst=prov(worst) if L != "en" else worst["provider"].lower())
+        if src == "CNY":
+            msg += self._t("cny_safe")
+        return _say(lead + msg + self._t("cny_readonly"))
 
     def _privacy(self, raw: str, res, done) -> Dict[str, Any]:
         """Who sees her data and where the chat goes, from get_data_sharing (the same scope the app enforces)."""

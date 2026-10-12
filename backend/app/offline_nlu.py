@@ -17,9 +17,9 @@ from .i18n import t
 MAX_AMOUNT = 100_000.0   # anything above this in one chat request is treated as a typo and asked about
 MIN_AMOUNT = 0.01
 
-_CUR_PREFIX = r"(?:rm|cad|myr|usd|c\$|us\$|\$)"
-_CUR_SUFFIX = (r"(?:rm|cad|myr|usd|ringgit|dollars?|bucks|canadian dollars?|"
-               r"块钱|块|元|加币|加元|马币|令吉|美元|美金)")
+_CUR_PREFIX = r"(?:rmb|cny|rm|cad|myr|usd|c\$|us\$|\$|¥)"
+_CUR_SUFFIX = (r"(?:rmb|cny|yuan|renminbi|rm|cad|myr|usd|ringgit|dollars?|bucks|canadian dollars?|"
+               r"块钱|块|元人民币|人民币|元|加币|加元|马币|令吉|美元|美金)")
 _AMOUNT_RE = re.compile(
     r"(?P<neg>-\s*|\bminus\s+|\bnegative\s+)?"
     rf"(?P<pre>(?<![a-z]){_CUR_PREFIX}\s*)?"
@@ -40,7 +40,7 @@ _LABEL_BEFORE = re.compile(r"(?:\b(?:installment|instalment|term|step|number|lev
 _CN_DIGITS = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8,
               "九": 9}
 _CN_UNITS = {"十": 10, "百": 100, "千": 1000, "万": 10000}
-_CN_RE = re.compile(r"[零〇一二两三四五六七八九十百千万\d]+(?=\s*(?:块|元|加币|加元|马币|令吉|美元|美金|给|到|去|换))")
+_CN_RE = re.compile(r"[零〇一二两三四五六七八九十百千万\d]+(?=\s*(?:块|元|加币|加元|马币|令吉|美元|美金|人民币|给|到|去|换))")
 
 
 @dataclass
@@ -86,6 +86,8 @@ def _cur_word(w: str) -> Optional[str]:
         return "MYR"
     if w in ("usd", "us$", "美元", "美金"):
         return "USD"
+    if w in ("rmb", "cny", "yuan", "renminbi", "人民币", "元人民币", "¥"):
+        return "CNY"
     if w in ("cad", "c$", "加币", "加元") or w.startswith("canadian"):
         return "CAD"
     return None   # "$", "dollars", "块" do not say which dollar
@@ -150,8 +152,8 @@ def amount_issue(text: str, lang: str = "en") -> Optional[str]:
 
 
 # --------------------------------------------------------------- currencies
-_CUR_RE = re.compile(r"(?<![a-z])(myr|ringgit|rm(?=\s*\d)|rm(?![a-z])|cad|canadian|c\$|usd|us\$|"
-                     r"dolar kanada|令吉|马币|加币|加元|美元|美金)(?![a-z])", re.I)
+_CUR_RE = re.compile(r"(?<![a-z])(myr|ringgit|rmb|cny|yuan|renminbi|rm(?=\s*\d)|rm(?![a-z])|cad|canadian|c\$|usd|"
+                     r"us\$|dolar kanada|令吉|马币|加币|加元|美元|美金|人民币)(?![a-z])", re.I)
 
 
 def currencies(text: str) -> List[str]:

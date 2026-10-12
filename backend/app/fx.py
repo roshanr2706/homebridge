@@ -19,8 +19,18 @@ MID: Dict[str, float] = {
     "USD/MYR": 1 / 0.2370,
     "CAD/USD": 0.7324,
     "USD/CAD": 1 / 0.7324,
+    # Chinese yuan, for a family sending from mainland China (read-only comparisons: there is no CNY wallet).
+    # Cross rates are derived from CNY/MYR so the snapshot stays consistent.
+    "CNY/MYR": 0.5940,
+    "MYR/CNY": 1 / 0.5940,
+    "CNY/CAD": 0.5940 * 0.3236,
+    "CAD/CNY": 1 / (0.5940 * 0.3236),
+    "CNY/USD": 0.5940 * 0.2370,
+    "USD/CNY": 1 / (0.5940 * 0.2370),
 }
-SUPPORTED = {"MYR", "CAD", "USD"}
+SUPPORTED = {"MYR", "CAD", "USD", "CNY"}
+# Currencies with a wallet in the sandbox; the others can be quoted and compared, not held or converted.
+WALLET_CURRENCIES = {"MYR", "CAD"}
 
 
 class FxUnavailable(Exception):
@@ -44,6 +54,23 @@ PROVIDERS: List[Provider] = [
     Provider("bank", "Bank telegraphic transfer", 2.80, 0.0, 80.0, "2 to 4 business days"),
     Provider("kiosk", "Airport money changer", 6.50, 0.0, 0.0, "in person"),
 ]
+
+
+# Ways to send money out of mainland China (yuan), modelled the same way: spread inside the rate plus a fee in
+# CNY. Generic names, like the MYR set. The same engine compares them, so the currency is data, not code.
+CNY_PROVIDERS: List[Provider] = [
+    Provider("cn_app", "Licensed cross-border payment service", 0.50, 0.0, 30.0, "1 to 2 business days"),
+    Provider("cn_bank", "Bank telegraphic transfer (SWIFT)", 1.20, 0.0, 150.0, "2 to 4 business days"),
+    Provider("cn_counter", "Cash exchange counter", 4.00, 0.0, 0.0, "in person"),
+]
+CNY_NOTE = ("Sending from mainland China: each person can buy up to the equivalent of USD 50,000 in foreign currency "
+            "a year under the SAFE annual quota; tuition can also be paid through a bank with the admission letter "
+            "and fee invoice. Check the current rules with the bank.")
+
+
+def providers_for(src: str) -> List[Provider]:
+    """The comparison set for money leaving `src`."""
+    return CNY_PROVIDERS if src.upper() == "CNY" else PROVIDERS
 
 
 # Services a parent can use to send money from a Malaysian bank account (remit.py). The in-app conversion
@@ -104,16 +131,18 @@ class FxMarket:
             self.fail_next -= 1
             raise FxUnavailable("Quote service timed out")
         if src.upper() not in SUPPORTED or dst.upper() not in SUPPORTED:
-            raise ValueError("Supported currencies are MYR, CAD and USD")
+            raise ValueError("Supported currencies are MYR, CAD, USD and CNY")
         if amount <= 0:
             raise ValueError("Amount must be positive")
-        qs = [self.quote(src, dst, amount, p) for p in PROVIDERS if include_wallet or not p.own_wallet_only]
+        # The in-app conversion only moves money between the user's own wallets (MYR and CAD)
+        wallet = include_wallet and {src.upper(), dst.upper()} <= WALLET_CURRENCIES
+        qs = [self.quote(src, dst, amount, p) for p in providers_for(src) if wallet or not p.own_wallet_only]
         qs.sort(key=lambda q: -q["you_receive"])
         return qs
 
     def cached_quotes(self, src: str, dst: str, amount: float) -> List[Dict]:
         """Fallback used after a timeout: same maths, flagged as cached."""
-        qs = [self.quote(src, dst, amount, p) for p in PROVIDERS]
+        qs = [self.quote(src, dst, amount, p) for p in providers_for(src)]
         for q in qs:
             q["cached"] = True
         qs.sort(key=lambda q: -q["you_receive"])
@@ -151,4 +180,4 @@ class FxMarket:
 
     @staticmethod
     def provider(key: str) -> Optional[Provider]:
-        return next((p for p in PROVIDERS + [EXPRESS] + DOMESTIC if p.key == key), None)
+        return next((p for p in PROVIDERS + [EXPRESS] + DOMESTIC + CNY_PROVIDERS if p.key == key), None)

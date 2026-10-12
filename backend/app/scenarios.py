@@ -476,5 +476,11 @@ ROUND2_TASKS: List[Task] = [
     Task("T129", "rent", ["pay rent", "pay rent"], ["prepare_transfer"], ["same payment waiting"], [("transfer", "T2")]),
     Task("T130", "payee", ["add a new payee Crimsen Harbor Trading, business, CAD, account 9999-8888-7777"],
          ["add_payee"], ["can't be paid", "Contact support"], [("add_payee", "T3")], expect_status="blocked"),
+    # Currencies are data: yuan gets the same true-cost comparison (read-only, there is no CNY wallet)
+    Task("T131", "question", ["how much is 10000 RMB in CAD"], ["get_fx_quotes"],
+         ["CNY 10,000.00", "Licensed cross-border payment service", "SAFE", "haven't drafted"]),
+    Task("T132", "multilingual", ["人民币换加币"], ["get_fx_quotes"], ["持牌跨境支付服务", "示例金额"]),
+    Task("T133", "question", ["Can I pay tuition with WeChat Pay or Alipay?"], ["get_fx_quotes"],
+         ["WeChat Pay", "CNY 10,000.00"]),
 ]
 TASKS += ROUND2_TASKS

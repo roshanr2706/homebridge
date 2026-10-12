@@ -16,7 +16,7 @@ from typing import Any, Callable, Dict, List, Optional
 from . import credit
 from .audit import AuditLog
 from .bank import Bank, to_minor
-from .fx import FxMarket, FxUnavailable
+from .fx import CNY_NOTE, FxMarket, FxUnavailable
 from .guard import SCAM_SUSPICIOUS_CONFIDENCE, check as guard_check
 from .classifier import shared as shared_classifier
 from .compliance import STUDENT_BLOCK_MESSAGE
@@ -163,8 +163,9 @@ def list_payees(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
 @tool("get_fx_quotes",
       "Compare providers for converting or sending money between currencies. Ranks by what the recipient gets "
       "and shows the true cost (fees plus exchange-rate margin) against the mid-market rate.",
-      {"from_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]},
-       "to_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]},
+      {"from_currency": {"type": "string", "enum": ["MYR", "CAD", "USD", "CNY"],
+                         "description": "CNY (Chinese yuan) is for comparisons only: there is no CNY wallet"},
+       "to_currency": {"type": "string", "enum": ["MYR", "CAD", "USD", "CNY"]},
        "amount": {"type": "number", "description": "Amount in from_currency"},
        "own_wallet": {"type": "boolean", "description": "True if converting between the user's own wallets "
                       "(includes in-app conversion). False for money sent from someone else, e.g. a parent's bank."}},
@@ -183,15 +184,18 @@ def get_fx_quotes(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
             qs = [q for q in ctx.fx.cached_quotes(src, dst, amt) if own or not q["own_wallet_only"]]
             note = "Live quotes are unavailable right now; these are cached quotes and may be slightly out of date."
     best, worst = qs[0], qs[-1]
-    return {"quotes": qs, "amount": amt, "from_currency": src, "best": best["provider"],
-            "saving_vs_worst": round(best["you_receive"] - worst["you_receive"], 2),
-            "saving_currency": dst, "note": note,
-            "disclosure": "Rates are a simulated snapshot for the sandbox. Not financial advice."}
+    out = {"quotes": qs, "amount": amt, "from_currency": src, "best": best["provider"],
+           "saving_vs_worst": round(best["you_receive"] - worst["you_receive"], 2),
+           "saving_currency": dst, "note": note,
+           "disclosure": "Rates are a simulated snapshot for the sandbox. Not financial advice."}
+    if src == "CNY":
+        out["regulatory_note"] = CNY_NOTE
+    return out
 
 
 @tool("get_fx_history", "Range of the exchange rate over the last 30 days. Use this instead of predicting rates.",
-      {"from_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]},
-       "to_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]}},
+      {"from_currency": {"type": "string", "enum": ["MYR", "CAD", "USD", "CNY"]},
+       "to_currency": {"type": "string", "enum": ["MYR", "CAD", "USD", "CNY"]}},
       ["from_currency", "to_currency"])
 def get_fx_history(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     return ctx.fx.history(a["from_currency"], a["to_currency"])

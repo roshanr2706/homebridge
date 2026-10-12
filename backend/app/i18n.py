@@ -853,6 +853,39 @@ TEXT: Dict[str, Dict[str, str]] = {
     "pending_none": {"en": "Nothing is pending: no drafts waiting for you and nothing waiting for your dad.",
                      "zh": "目前没有待处理的事项：没有等你确认的草稿，也没有等爸爸批准的请求。",
                      "ms": "Tiada apa yang tertangguh: tiada draf menunggu anda dan tiada apa menunggu ayah anda."},
+    # Chinese yuan: a read-only true-cost comparison (no CNY wallet), from the same quote engine
+    "cny_quote": {
+        "en": "{amount}{example} is about {mid} at today's mid-market rate (1 {src} = {rate} {dst}). Cheapest way to "
+              "send it: {best}, {receive} arrives (true cost {pct}%, {speed}); that's {saving} more than {worst}.",
+        "zh": "{amount}{example}按今天的中间价约合 {mid}（1 {src} = {rate} {dst}）。最便宜的汇款方式是{best}：到账 {receive}（真实成本 {pct}%，{speed}），比{worst}多到账 {saving}。",
+        "ms": "{amount}{example} bersamaan kira-kira {mid} pada kadar tengah pasaran hari ini (1 {src} = {rate} {dst}). "
+              "Cara paling murah: {best}, {receive} sampai (kos sebenar {pct}%, {speed}); itu {saving} lebih "
+              "daripada {worst}.",
+    },
+    "cny_example": {"en": " (an example amount)", "zh": "（示例金额）", "ms": " (jumlah contoh)"},
+    "cny_wallets": {
+        "en": "HomeBridge can't pay with WeChat Pay or Alipay: your tuition goes from your CAD Tuition Fund to UBC. "
+              "If the money starts in yuan in China, here's what sending it costs. ",
+        "zh": "HomeBridge 不能用微信支付或支付宝付款：学费从你的 CAD 学费基金付给 UBC。如果钱在中国、是人民币，下面是汇过来的成本。",
+        "ms": "HomeBridge tidak boleh bayar dengan WeChat Pay atau Alipay: yuran anda dibayar dari CAD Tuition Fund "
+              "kepada UBC. Jika wang itu dalam yuan di China, ini kos menghantarnya. ",
+    },
+    "cny_safe": {
+        "en": " From mainland China, each person can buy up to the equivalent of USD 50,000 in foreign currency a year "
+              "under the SAFE quota, and tuition can also go through a bank with the admission letter and fee "
+              "invoice; check the current rules with the bank.",
+        "zh": "从中国大陆汇出时，每人每年可按外汇管理局（SAFE）便利化额度购汇等值 5 万美元；学费也可凭录取通知书和缴费单通过银行办理。具体规定请向银行确认。",
+        "ms": " Dari tanah besar China, setiap orang boleh membeli sehingga setara USD 50,000 mata wang asing setahun "
+              "di bawah kuota SAFE, dan yuran juga boleh dibayar melalui bank dengan surat tawaran dan invois "
+              "yuran; semak peraturan semasa dengan bank.",
+    },
+    "cny_readonly": {
+        "en": " HomeBridge has no yuan wallet, so this is a comparison only: I haven't drafted anything. Rates are a "
+              "sandbox snapshot, not advice.",
+        "zh": "HomeBridge 没有人民币钱包，这只是比较，我没有起草任何操作。汇率为沙盒快照，仅供参考，不构成建议。",
+        "ms": " HomeBridge tiada dompet yuan, jadi ini perbandingan sahaja: saya belum sediakan apa-apa draf. Kadar "
+              "ialah petikan sandbox, bukan nasihat.",
+    },
     # Privacy (from get_data_sharing: the sponsor's scope and where the chat goes)
     "privacy_no": {"en": "No. ", "zh": "看不到。", "ms": "Tidak. "},
     "privacy_yes": {"en": "Yes. ", "zh": "是的。", "ms": "Ya. "},
@@ -1089,8 +1122,13 @@ PROVIDERS = {
     "zh": {"HomeBridge wallet conversion": "HomeBridge 钱包内兑换", "Low-cost transfer service": "低成本汇款服务",
            "Bank telegraphic transfer": "银行电汇", "Airport money changer": "机场换汇柜台",
            "Express remittance service": "快速汇款服务", "Instant domestic transfer": "境内即时转账",
-           "Interbank GIRO transfer": "银行间 GIRO 转账"},
-    "ms": {"HomeBridge wallet conversion": "pertukaran dompet HomeBridge",
+           "Interbank GIRO transfer": "银行间 GIRO 转账",
+           "Licensed cross-border payment service": "持牌跨境支付服务", "Bank telegraphic transfer (SWIFT)": "银行电汇（SWIFT）",
+           "Cash exchange counter": "现钞兑换柜台"},
+    "ms": {"Licensed cross-border payment service": "perkhidmatan pembayaran rentas sempadan berlesen",
+           "Bank telegraphic transfer (SWIFT)": "pindahan telegrafik bank (SWIFT)",
+           "Cash exchange counter": "kaunter pertukaran tunai",
+           "HomeBridge wallet conversion": "pertukaran dompet HomeBridge",
            "Low-cost transfer service": "perkhidmatan pindahan kos rendah",
            "Bank telegraphic transfer": "pindahan telegrafik bank", "Airport money changer": "pengurup wang lapangan terbang",
            "Express remittance service": "perkhidmatan kiriman wang ekspres",
@@ -1098,9 +1136,9 @@ PROVIDERS = {
 }
 SPEEDS = {
     "zh": {"instant": "即时到账", "1 business day": "1 个工作日", "2 to 4 business days": "2 至 4 个工作日",
-           "in person": "需现场办理", "same day": "当天到账"},
+           "in person": "需现场办理", "same day": "当天到账", "1 to 2 business days": "1 至 2 个工作日"},
     "ms": {"instant": "segera", "1 business day": "1 hari bekerja", "2 to 4 business days": "2 hingga 4 hari bekerja",
-           "in person": "secara bersemuka", "same day": "hari yang sama"},
+           "in person": "secara bersemuka", "same day": "hari yang sama", "1 to 2 business days": "1 hingga 2 hari bekerja"},
 }
 HEALTH = {
     "zh": {"needs_attention": "需要注意", "fair": "一般", "on_track": "良好", "strong": "优秀"},
