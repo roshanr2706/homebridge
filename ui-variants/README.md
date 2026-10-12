@@ -1,1 +1,2 @@
 - [playful](playful/README.md): warm, Gen-Z friendly bento UI (Mantine v9, coral/sun palette, streaks, Dad mascot, PIN-pad approvals), port 5184
+- [superapp](superapp/README.md): dense Chinese super-app style (antd-mobile, Alipay/WeChat Pay-like service grid, bilingual 中/EN, notice ticker, PIN-pad approvals), port 5181
