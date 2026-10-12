@@ -125,7 +125,11 @@ RULES: Dict[str, List[Tuple[str, str]]] = {
          r"\b(pay|send|transfer|deposit|wire|move|buy)\b.{0,40}\b(bitcoin|crypto|usdt|btc)\b"
          r"|\b(bitcoin|crypto|usdt|btc)\b.{0,25}\b(address|wallet|atm|deposit|only)\b|\bcrypto atm\b"),
         ("Threat of arrest or deportation", r"(deport|arrest|warrant|bail)"),
-        ("Impersonates a government agency",
+        # A caller or texter claiming to be the bank, police or an agency who asks for a transfer.
+        ("Caller claims to be the bank or police and asks for a transfer",
+         r"\b(call(ed|s)?|phoned?|rang|texted|message[ds]?|whatsapp(ed)?)\b.{0,40}\b(from|is|was)\b.{0,12}"
+         r"\b(the |my )?(bank|police|rcmp|cra|immigration|embassy|consulate|customs)\b.{0,60}"
+         r"\b(transfer|send|move|pay|wire|e-?transfer)\b"),        ("Impersonates a government agency",
          r"(cra|canada revenue|ircc|immigration|service canada|embassy|cbsa).{0,80}(pay|owe|fee|fine|suspend)"),
         ("Urgent deadline to pay", r"within \d+ (hours?|minutes?)"),
         ("Asks you to keep it secret", r"(don'?t|do not) tell (anyone|your)"),

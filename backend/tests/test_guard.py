@@ -294,3 +294,14 @@ def test_reading_a_memo_with_instructions_does_not_flag_later_payments():
     r = st.agent.run(STUDENT, "student", "memo", "pay hydro 40")
     assert [a["tier"] for a in r.actions] == ["T2"]
     assert r.guard["carried"] == []
+
+
+@pytest.mark.parametrize("text", ["aiyo i think kena scam, someone call say from bank ask me transfer",
+                                  "I got a call from the bank, they want me to move my savings"])
+def test_bank_impersonation_calls_are_flagged(text):
+    assert "scam" in check(text, use_model=False).flags
+
+
+@pytest.mark.parametrize("text", ["my bank called to confirm my address", "dad called from KL to say hi"])
+def test_ordinary_calls_are_not_flagged(text):
+    assert check(text, use_model=False).flags == []
