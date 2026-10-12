@@ -110,7 +110,8 @@ TASKS: List[Task] = [
     Task("T37", "forecast", ["Will I run out of money before tuition is due?"], ["forecast_cashflow"],
          ["below zero", "CAD 1,250.00 short", "cut dining", "haven't moved any money"]),
     Task("T38", "forecast", ["duit cukup tak sampai hujung sem?"], ["forecast_cashflow"],
-         ["bawah sifar", "dana yuran", "Tukar kira-kira MYR"]),
+         # One next step (the spending cut that fixes the dip); the tuition gap is the offer that ends the reply.
+         ["bawah sifar", "dana yuran", "kurangkan perbelanjaan harian", "tampung kekurangan yuran"]),
     Task("T39", "forecast", ["我的钱够用到学期末吗？"], ["forecast_cashflow"], ["跌破零", "学费基金"]),
     Task("T40", "forecast", ["Can I survive until January?"], ["forecast_cashflow"],
          ["Not quite", "Jan 15", "covers the installment"], setup="fund_tuition"),
