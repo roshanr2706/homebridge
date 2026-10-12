@@ -1,0 +1,170 @@
+{
+ "actions": [
+  {
+   "action_id": "act_731c2a1b93",
+   "kind": "transfer",
+   "summary": "Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund",
+   "tier": "T3",
+   "status": "awaiting_sponsor",
+   "needs_sponsor_approval": true,
+   "risk_score": 0,
+   "warnings": [],
+   "next_step": "Waiting for the sponsor to approve in their own app.",
+   "compliance": {
+    "outcome": "clear",
+    "blocked": false,
+    "block_reason": null,
+    "checks": [
+     {
+      "id": "sanctions",
+      "label": "Sanctions screening",
+      "status": "pass",
+      "detail": "No match on the sample watchlist (12 entries)"
+     },
+     {
+      "id": "kyc",
+      "label": "Identity (KYC)",
+      "status": "pass",
+      "detail": "Aisha: verified (basic) · Rahman: verified (full)"
+     },
+     {
+      "id": "structuring",
+      "label": "Structuring detection",
+      "status": "pass",
+      "detail": "No split payments in the last 24h"
+     }
+    ],
+    "reports": [],
+    "record": null,
+    "purpose_code": null,
+    "cross_border": false,
+    "amount_cad": 7250.0,
+    "screened_at": 1791787473.012
+   },
+   "params": {
+    "payee_id": "py_ubc",
+    "payee_name": "UBC Student Financial Services",
+    "amount": 7250.0,
+    "currency": "CAD",
+    "from_account_id": "acc_tui",
+    "from_account": "CAD Tuition Fund",
+    "memo": "Winter Term 2, installment 1"
+   },
+   "risk_reasons": [
+    "Amount above the single-payment limit of CAD 1,500",
+    "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+    "Paid from a sponsor-funded account (CAD Tuition Fund)"
+   ],
+   "sponsor_reasons": [
+    "Amount above the single-payment limit of CAD 1,500",
+    "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+    "Paid from a sponsor-funded account (CAD Tuition Fund)"
+   ],
+   "risk_signals": [],
+   "created_at": 1791787473.0129395,
+   "expires_at": 1791873873.0961425,
+   "user_confirmed": true,
+   "sponsor_decision": null,
+   "sponsor_note": "",
+   "result": null,
+   "provenance": {
+    "amount": "user"
+   },
+   "frozen": null
+  },
+  {
+   "action_id": "act_8ab4d8703e",
+   "kind": "topup",
+   "summary": "Ask sponsor for CAD 300.00: textbooks",
+   "tier": "T1",
+   "status": "awaiting_sponsor",
+   "needs_sponsor_approval": true,
+   "risk_score": 0,
+   "warnings": [],
+   "next_step": "Waiting for the sponsor to approve in their own app.",
+   "compliance": {
+    "outcome": "clear",
+    "blocked": false,
+    "block_reason": null,
+    "checks": [
+     {
+      "id": "sanctions",
+      "label": "Sanctions screening",
+      "status": "pass",
+      "detail": "Sender is the verified sponsor (screened at onboarding)"
+     },
+     {
+      "id": "kyc",
+      "label": "Identity (KYC)",
+      "status": "pass",
+      "detail": "Aisha: verified (basic) · Rahman: verified (full)"
+     },
+     {
+      "id": "record_keeping",
+      "label": "Cross-border record",
+      "status": "pass",
+      "detail": "Originator, beneficiary, purpose and source of funds recorded"
+     },
+     {
+      "id": "eftr",
+      "label": "FINTRAC EFTR",
+      "status": "pass",
+      "detail": "Below the CAD 10,000 reporting threshold (24h total CAD 1,558)"
+     },
+     {
+      "id": "bnm_purpose",
+      "label": "BNM purpose code",
+      "status": "pass",
+      "detail": "ED02: Education: living expenses of a student abroad"
+     }
+    ],
+    "reports": [],
+    "record": {
+     "originator": {
+      "name": "Rahman bin Ismail",
+      "account": "sponsor's Malaysian bank account",
+      "country": "MY"
+     },
+     "beneficiary": {
+      "name": "Aisha Rahman",
+      "account": "••••2290",
+      "institution": "HomeBridge (Canada)",
+      "country": "CA"
+     },
+     "purpose": "textbooks",
+     "source_of_funds": "Sponsor's own funds (Rahman bin Ismail, parent)",
+     "amount": 300.0,
+     "currency": "CAD",
+     "purpose_code": "ED02"
+    },
+    "purpose_code": {
+     "code": "ED02",
+     "label": "Education: living expenses of a student abroad"
+    },
+    "cross_border": true,
+    "amount_cad": 300.0,
+    "screened_at": 1791787473.084
+   },
+   "params": {
+    "amount": 300.0,
+    "currency": "CAD",
+    "reason": "textbooks"
+   },
+   "risk_reasons": [
+    "A request for money: the sponsor decides whether to send it"
+   ],
+   "sponsor_reasons": [
+    "A request for money: the sponsor decides whether to send it"
+   ],
+   "risk_signals": [],
+   "created_at": 1791787473.0837574,
+   "expires_at": 1792392273.0838926,
+   "user_confirmed": true,
+   "sponsor_decision": null,
+   "sponsor_note": "",
+   "result": null,
+   "provenance": {},
+   "frozen": null
+  }
+ ]
+}
