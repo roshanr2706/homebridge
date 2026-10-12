@@ -616,6 +616,48 @@ TEXT: Dict[str, Dict[str, str]] = {
     "cover_then_pay": {"en": " Confirm it in the app, then ask me to pay your tuition.",
                        "zh": "请在 App 里确认，然后让我帮你交学费。",
                        "ms": " Sahkan dalam app, kemudian minta saya bayar yuran anda."},
+    "cover_then_tuition_card": {
+        "en": " Confirm it first, then confirm the tuition payment card that's already waiting.",
+        "zh": "请先确认这笔兑换，再确认已在等待的学费付款卡片。",
+        "ms": " Sahkan ini dahulu, kemudian sahkan kad bayaran yuran yang sedang menunggu.",
+    },
+    # Changing a draft, and money semantics (currency, direction, "all")
+    "amend_nothing": {
+        "en": "There's no payment or conversion waiting for you to confirm, so there's nothing to change. Tell me what "
+              "to draft instead.",
+        "zh": "目前没有等你确认的付款或兑换，所以没有可以修改的草稿。告诉我要重新起草什么。",
+        "ms": "Tiada bayaran atau pertukaran yang menunggu pengesahan anda, jadi tiada apa untuk diubah. Beritahu "
+              "saya apa yang perlu didraf.",
+    },
+    "amend_done": {"en": "I cancelled the earlier draft ({old}). ", "zh": "我已取消之前的草稿（{old}）。",
+                   "ms": "Saya dah batalkan draf sebelum ini ({old}). "},
+    "no_usd_wallet": {
+        "en": "HomeBridge only has CAD and MYR wallets, so there's no USD to convert from or into. I can convert "
+              "between MYR and CAD, or show what USD {amount} is worth (say 'how much is {amount} USD in CAD').",
+        "zh": "HomeBridge 只有加币和马币钱包，没有美元可以兑换。我可以帮你在马币和加币之间兑换，或者告诉你 USD {amount} 值多少加币。",
+        "ms": "HomeBridge hanya ada dompet CAD dan MYR, jadi tiada USD untuk ditukar. Saya boleh tukar antara MYR "
+              "dan CAD, atau tunjukkan nilai USD {amount}.",
+    },
+    "pay_in_cad": {
+        "en": "{payee} is paid in CAD, so I can't send it in {cur}.{extra} Did you mean CAD {amount}? Say '{cmd}' and "
+              "I'll draft it in CAD.",
+        "zh": "{payee} 只收加币，不能用 {cur} 付。{extra}你是说 CAD {amount} 吗？说“{cmd}”，我就按加币起草。",
+        "ms": "{payee} dibayar dalam CAD, jadi saya tak boleh hantar dalam {cur}.{extra} Maksud anda CAD {amount}? "
+              "Sebut '{cmd}' dan saya akan sediakan draf dalam CAD.",
+    },
+    "no_usd_note": {"en": " You only have CAD and MYR wallets.", "zh": "你只有加币和马币钱包。",
+                    "ms": " Anda hanya ada dompet CAD dan MYR."},
+    "convert_nothing": {"en": "Your {account} is empty, so there's nothing to convert.",
+                        "zh": "你的{account}是空的，没有可以兑换的钱。",
+                        "ms": "{account} anda kosong, jadi tiada apa untuk ditukar."},
+    "ask_convert_amount": {"en": "How much {src} would you like to convert to {dst}?",
+                           "zh": "你想把多少 {src} 兑换成 {dst}？",
+                           "ms": "Berapa banyak {src} yang anda mahu tukar ke {dst}?"},
+    "convert_all_sponsor": {
+        "en": " That's everything in your {account}, which your dad funds, so he approves it too.",
+        "zh": "这是你{account}里的全部余额，这笔钱是爸爸出资的，所以也需要他批准。",
+        "ms": " Itu semua dalam {account} anda, yang ayah anda biayai, jadi dia perlu luluskannya juga.",
+    },
     # Spending
     "spent_total": {"en": "In the last 30 days you spent {total}. Biggest categories: {top}.",
                     "zh": "过去 30 天你一共花了 {total}。最大的几项：{top}。",

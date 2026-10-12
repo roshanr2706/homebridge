@@ -458,5 +458,19 @@ ROUND2_TASKS: List[Task] = [
          ["No. Your dad sees only", "CAD Everyday account"]),
     Task("T120", "question", ["Is my data sent to China?"], ["get_data_sharing"], ["leaves our server", "DeepSeek"]),
     Task("T121", "multilingual", ["爸爸能看到我的消费吗？"], ["get_data_sharing"], ["看不到", "学费基金"]),
+    # Money semantics: amending a conversion, direction, the named source account, USD, "10k", "all", rounding
+    Task("T122", "recovery", ["convert 2000 myr to cad", "actually make it 2500"],
+         ["get_pending_actions", "cancel_pending_action", "prepare_conversion"], ["cancelled", "MYR 2,500.00"],
+         [("conversion", "T2")]),
+    Task("T123", "fx", ["what's my balance", "ok convert 500 of it to MYR"], ["prepare_conversion"],
+         ["Convert CAD 500.00"], [("conversion", "T2")]),
+    Task("T124", "question", ["Pay UBC 7250 from my everyday account"], ["get_balances"],
+         ["CAD Everyday has CAD 2,340.55", "haven't drafted"]),
+    Task("T125", "clarify", ["pay hydro 50 USD"], [], ["paid in CAD", "CAD and MYR wallets"]),
+    Task("T126", "fx", ["Convert all my ringgit to CAD"], ["prepare_conversion"], ["MYR 18,200.00", "approves it too"],
+         [("conversion", "T3")]),
+    Task("T127", "question", ["how much fee if i send 10k ringgit"], ["get_fx_quotes"], ["MYR 10,000.00"]),
+    Task("T128", "tuition", ["will I run out of money before tuition?", "cover the tuition shortfall from my MYR wallet"],
+         ["prepare_conversion"], ["MYR 3,887.00"], [("conversion", "T2")]),
 ]
 TASKS += ROUND2_TASKS

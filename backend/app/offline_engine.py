@@ -186,6 +186,11 @@ REMIT_STATUS_RE = (
     r"\b(duit|wang) (ayah|bapa|abah)\b.{0,12}\b(masuk|sampai|tiba)\b|\b(ayah|bapa|abah) (dah|sudah) "
     r"(hantar|kirim|transfer)\b|"
     r"(爸爸|父亲|爸)(的|汇的|转的|打的|寄的)?钱.{0,4}(到了|到账|到没|收到|来了)|(爸爸|父亲)(汇|转|打)钱了|汇款(到了|到账|状态|进度)")
+# Currency words, for "convert 500 of it to MYR" (the one currency named is where the money goes).
+_CUR_WORDS = r"myr|ringgit|rm|cad|canadian(?: dollars?)?|dolar kanada|usd|加币|加元|马币|令吉"
+# "Convert all my ringgit": the whole balance of the wallet.
+ALL_RE = (r"\b(all|everything|whole|entire|semua|seluruh)\b.{0,20}\b(ringgit|myr|rm|cad|wallet|money|duit|balance|baki)\b|"
+          r"全部|所有的?(马币|加币|钱)")
 # Privacy questions: someone else seeing her data, or where her data and chat go.
 _PRIV_TARGET = (r"(data|transactions?|spend\w*|purchases?|messages?|chats?|accounts?|balances?|money|history|buy|"
                 r"bought|wages?|salary|food)")
@@ -213,7 +218,8 @@ BEEN_SCAMMED_RE = (r"\bi (think |might have |may have )?(have |'ve |just )?(been
 ACCOUNT_WORDS = {"everyday": r"everyday|chequing|checking|spending account|cad account|cad wallet",
                  "tuition": r"tuition fund|tuition account|tuition savings|dana yuran|学费账户",
                  "wallet": r"myr wallet|ringgit wallet|myr account|ringgit account|malaysian account|马币账户"}
-MOVE_RE = r"\b(move|put|transfer|shift|top ?up|add|deposit|send|pindah(kan)?|masukkan)\b|转到|存到|转入|存入"
+MOVE_RE = (r"\b(move|put|transfer|shift|top ?up|add|deposit|send|convert|change|exchange|tukar|pindah(kan)?|masukkan)\b|"
+           r"转到|存到|转入|存入|换到|换进")
 
 # Suggestions for messages the planner does not understand: (example, keywords that point at it).
 SUGGESTIONS: List[Tuple[str, List[str]]] = [
@@ -423,18 +429,9 @@ class OfflineEngine:
                 return _say(slot["text"], state=state)
 
         # 3. Change of mind: "actually make it 400"
-        if re.search(r"\b(actually|instead|make it|change it to)\b", low) and _amount(text) and prev_user:
-            if "get_pending_actions" not in done:
-                return _call("get_pending_actions")
-            if "cancel_pending_action" not in done:
-                acts = [a for a in res[0][1]["actions"] if a["status"] == "awaiting_user" and a["kind"] == "transfer"]
-                if not acts:
-                    return _say("There's no draft waiting for you to confirm, so there's nothing to change.")
-                return _call("cancel_pending_action", action_id=acts[-1]["action_id"])
-            if "prepare_transfer" not in done:
-                m = re.search(r"to (.+?) from", res[1][1]["action"]["summary"])
-                return _call("prepare_transfer", payee=m.group(1) if m else "", amount=_amount(text))
-            return _say("I cancelled the earlier draft. " + self._act(last["action"]))
+        if re.search(r"\b(actually|instead|make it|change it to|tukar jadi|ubah jadi)\b|改成|改为", low) and \
+                _amount(text) and prev_user:
+            return self._amend(text, res, done)
 
         # 3b. Cancel a draft, but only when the text points at one; merchants' subscriptions are not ours to cancel
         if re.search(CANCEL_RE, low) or re.search(r"\brefund\b", raw):
@@ -536,6 +533,8 @@ class OfflineEngine:
         # 7. Pay tuition (a question about paying tuition is answered, never drafted)
         question = is_question(text)
         if re.search(r"\bpay\b", low) and re.search(r"tuition|school fees|yuran", low) and not question:
+            if re.search(r"\bfrom (my |the )?(cad )?(everyday|chequing|checking|spending)\b", raw):
+                return self._pay(text, low, res, done)   # paid from the account she named, not the Tuition Fund
             if re.search(r"from (my |the )?(myr|ringgit|rm|malaysian|wallet)|马币|令吉", raw):
                 return self._cover_tuition(low, res, done, pay=True, lead=self._t("cover_lead_myr"))
             if "get_tuition_schedule" not in done:
@@ -564,12 +563,16 @@ class OfflineEngine:
         # 9. Conversion (execute) vs comparison
         curs = _currencies(text)
         amt = _amount(text)
-        if re.search(r"\b(convert|change|tukar|exchange)\b", low) and curs and (amt or amount_issue(text)) and \
-                not re.search(r"cheapest|cheaper|best way|compare|which", low) and not question:
+        fee_q = re.search(r"\bhow much (is the |are the )?(fees?|charges?|cost)\b|\bfees?\b.{0,30}\b(send|sending|transfer|"
+                          r"convert|remit|change)\b|\b(send|sending|transfer|convert|remit)\b.{0,30}\b(fees?|charges?)\b|"
+                          r"手续费|yuran (pindahan|tukaran)|caj", low)
+        if re.search(r"\b(convert|change|tukar|exchange)\b", low) and curs and (
+                amt or amount_issue(text) or re.search(ALL_RE, low)) and \
+                not re.search(r"cheapest|cheaper|best way|compare|which", low) and not question and not fee_q:
             return self._convert(text, curs, res, done)
 
         if re.search(r"cheapest|cheaper|best way|compare|which .*(service|provider)|lowest fee", low) or \
-                re.search(REMIT_RE, low):
+                re.search(REMIT_RE, low) or (fee_q and (curs or amt)):
             return self._fx_compare(text, raw, low, curs, amt, res, done)
 
         if re.search(r"good time|right time|should i (convert|change)|rate (going|trend)|wait", low):
@@ -643,6 +646,31 @@ class OfflineEngine:
             return _say(self._t("okay_else"))
 
         return self._fallback(raw)
+
+    # ---------------------------------------------------------------- amend
+    def _amend(self, text: str, res, done) -> Dict[str, Any]:
+        """'Actually make it 2500': cancel the latest draft waiting for her (a payment or a conversion) and draft
+        it again with the new amount, through the same tools and tiers. Nothing else changes."""
+        amt = _amount(text)
+        if "get_pending_actions" not in done:
+            return _call("get_pending_actions")
+        if "cancel_pending_action" not in done:
+            acts = [a for a in _result(res, "get_pending_actions")["actions"]
+                    if a["status"] == "awaiting_user" and a["kind"] in ("transfer", "conversion")]
+            if not acts:
+                return _say(self._t("amend_nothing"))
+            return _call("cancel_pending_action", action_id=acts[-1]["action_id"])
+        old = _result(res, "cancel_pending_action")["action"]
+        if old["kind"] == "transfer":
+            if "prepare_transfer" not in done:
+                m = re.search(r"to (.+?) from", old["summary"])
+                return _call("prepare_transfer", payee=m.group(1) if m else "", amount=amt)
+            new = _result(res, "prepare_transfer")
+        else:
+            if "prepare_conversion" not in done:
+                return _call("prepare_conversion", amount=amt, **_conversion_args(old["summary"]))
+            new = _result(res, "prepare_conversion")
+        return _say(self._t("amend_done", old=i18n.summary(old["summary"], self._lang)) + self._act(new["action"]))
 
     # ------------------------------------------------------------- scam check
     def _scam_answer(self, text: str, res, done) -> Dict[str, Any]:
@@ -779,6 +807,20 @@ class OfflineEngine:
 
         if re.search(r"from (my |the )?(myr|ringgit|rm|malaysian)( wallet| account)?\b|马币账户", raw):
             return _say(self._t("from_myr_wallet", payee=PAYEE_NAMES[plan[0][0]]))
+        # Saved payees are paid in CAD: "pay hydro 50 USD" is asked about, never silently sent as CAD 50
+        foreign = next((a for a in parse_amounts(text) if a.currency in ("USD", "MYR") and not a.issue), None)
+        if foreign and len(plan) == 1:
+            k = plan[0][0]
+            cmd = f"pay {k} {foreign.value:g}"
+            return _say(self._t("pay_in_cad", payee=PAYEE_NAMES[k], cur=foreign.currency,
+                                amount=f"{foreign.value:,.2f}", cmd=cmd,
+                                extra=self._t("no_usd_note") if foreign.currency == "USD" else ""),
+                        state={"offer": cmd})
+        # "from my everyday account" / "from my tuition fund": the account she named, not the default
+        named = re.search(r"\bfrom (my |the )?(cad )?(everyday|chequing|checking|spending)\b|\bdari (akaun )?everyday\b|"
+                          r"从(我的)?日常", raw)
+        named_fund = re.search(r"\bfrom (my |the )?(cad )?tuition (fund|account|savings)\b|\bdari dana yuran\b|从(我的)?学费(基金|账户)",
+                               raw)
 
         # How much? Last month's rent only when the text says rent; anything else is asked.
         says_rent = bool(re.search(r"\brent\b|\bsewa\b|房租|租金", raw))
@@ -808,7 +850,9 @@ class OfflineEngine:
         bal = _result(res, "get_balances")
         everyday = _account(bal, "Everyday")
         fund = _account(bal, "Tuition")
-        need_everyday = sum(a for k, a in plan if k != "tuition")
+        stated = everyday if named else fund if named_fund else None
+        source = lambda k: stated or (fund if k == "tuition" else everyday)  # noqa: E731
+        need_everyday = sum(a for k, a in plan if source(k) is everyday)
         src_note = ""
         if rent_row:
             src_note = self._t("rent_was", amount=_money(abs(rent_row["amount"]), rent_row["currency"]),
@@ -818,7 +862,7 @@ class OfflineEngine:
 
         if info_only:
             k, a = plan[0]
-            have = fund if k == "tuition" else everyday
+            have = source(k)
             lead = (src_note + ("。" if L == "zh" else ". ")) if src_note else ""
             cmd = f"pay {k} {a:g}"
             return _say(self._t("can_pay_offer", lead=lead, account=i18n.account(have["label"], L),
@@ -829,6 +873,8 @@ class OfflineEngine:
         n = done.count("prepare_transfer")
         if n < len(plan):
             k, a = plan[n]
+            if stated:
+                return _call("prepare_transfer", payee=k, amount=a, from_account_id=stated["id"])
             return _call("prepare_transfer", payee=k, amount=a)
         acts = [r["action"] for nm, r in res if nm == "prepare_transfer" and "action" in r]
         if len(acts) == 1:
@@ -1366,15 +1412,28 @@ class OfflineEngine:
         issue = amount_issue(text, L)
         if issue:
             return _say(issue)
+        if "USD" in curs:   # quotes can show USD, but there is no USD wallet to convert from or into
+            return _say(self._t("no_usd_wallet", amount=f"{_amount(text) or 0:,.2f}"))
         amt = _amount(text)
         src = curs[0]
         dst = curs[1] if len(curs) > 1 else ("CAD" if src == "MYR" else "MYR")
         amts = parse_amounts(text)
         if len(curs) == 1 and amts and amts[0].currency and amts[0].currency != src:
-            src, dst = amts[0].currency, src     # "convert 500 to cad" style with the currency on the amount
+            src, dst = amts[0].currency, src     # "convert RM500 to cad": the currency is on the amount
+        elif len(curs) == 1 and re.search(r"\b(to|into|ke|kepada|jadi)\s+(" + _CUR_WORDS + r")\b|(换成|兑换成|换)(" +
+                                          _CUR_WORDS + ")", text.lower()):
+            dst = curs[0]                        # "convert 500 of it to MYR": the one currency named is the target
+            src = "CAD" if dst == "MYR" else "MYR"
         if "get_balances" not in done:
             return _call("get_balances", total_currency="CAD")
         acc = next((a for a in _result(res, "get_balances")["accounts"] if a["currency"] == src), None)
+        whole_wallet = amt is None and bool(re.search(ALL_RE, text.lower()))
+        if whole_wallet:   # "convert all my ringgit": the whole balance of the source wallet
+            if not acc or acc["balance"] <= 0:
+                return _say(self._t("convert_nothing", account=i18n.account(acc["label"], L) if acc else src))
+            amt = acc["balance"]
+        if amt is None:
+            return _say(self._t("ask_convert_amount", src=src, dst=dst))
         if acc and acc["balance"] < amt:
             whole = int(acc["balance"])
             return _say(self._t("convert_too_much", account=i18n.account(acc["label"], L),
@@ -1387,8 +1446,12 @@ class OfflineEngine:
             return _call("prepare_conversion", from_currency=src, to_currency=dst, amount=amt)
         q = _result(res, "get_fx_quotes")["quotes"]
         inapp = next(x for x in q if x["provider_key"] == "inapp")
-        return _say(self._act(res[-1][1]["action"]) + self._t("convert_fee", pct=inapp["true_cost_pct"],
-                                                               rate=inapp["rate"], mid=inapp["mid_rate"]))
+        act = _without_rate_note(res[-1][1]["action"])   # the fee sentence below says it once
+        msg = self._act(act) + self._t("convert_fee", pct=inapp["true_cost_pct"], rate=inapp["rate"],
+                                       mid=inapp["mid_rate"])
+        if whole_wallet and acc and acc.get("sponsor_funded"):
+            msg += self._t("convert_all_sponsor", account=i18n.account(acc["label"], L))
+        return _say(msg)
 
     def _fx_compare(self, text: str, raw: str, low: str, curs: List[str], amt: Optional[float], res, done):
         last = res[-1][1] if res else {}
@@ -1487,7 +1550,7 @@ class OfflineEngine:
                          own_wallet=True)
         if "prepare_conversion" not in done:
             return _call("prepare_conversion", **args)
-        act = res[-1][1]["action"]
+        act = _without_rate_note(res[-1][1]["action"])
         msg = self._act(act)
         if same:
             msg += self._t("move_no_fee")
@@ -1733,13 +1796,21 @@ class OfflineEngine:
         if short > 0 and "get_fx_quotes" not in done:
             return _call("get_fx_quotes", from_currency="MYR", to_currency="CAD", amount=1000, own_wallet=True)
         if short > 0 and "prepare_conversion" not in done:
-            rate = next(q for q in res[1][1]["quotes"] if q["provider_key"] == "inapp")["rate"]
-            myr = float(int(short / rate) + 2)  # round up, with a ringgit of headroom
+            # The schedule's own figure (fx.quote_to_receive), the one the forecast suggests too
+            myr = sched.get("cover_shortfall_myr") or float(math.ceil(short / next(
+                q for q in _result(res, "get_fx_quotes")["quotes"] if q["provider_key"] == "inapp")["rate"]))
             return _call("prepare_conversion", from_currency="MYR", to_currency="CAD", amount=myr,
                          destination="tuition")
         if pay and nxt and "prepare_transfer" not in done:
             return _call("prepare_transfer", payee="UBC Student Financial Services", amount=nxt["amount"],
                          memo=nxt["term"])
+        # Is the tuition payment already drafted? Then the next step is its card, not "ask me to pay".
+        if not pay and "get_pending_actions" not in done:
+            return _call("get_pending_actions")
+        tuition_waiting = not pay and any(
+            a["kind"] == "transfer" and "UBC Student Financial Services" in a["summary"]
+            and a["status"] in ("awaiting_user", "awaiting_sponsor")
+            for a in _result(res, "get_pending_actions")["actions"])
         drafted = [i18n.summary(r["action"]["summary"], self._lang) for n, r in res
                    if n in ("prepare_conversion", "prepare_transfer") and "action" in r]
         msg = lead + self._t("cover_drafted", list=self._t("then").join(drafted))
@@ -1747,7 +1818,7 @@ class OfflineEngine:
             msg += self._t("cover_short", short=f"{short:,.2f}")
         elif lead:
             msg += self._t("cover_no_conversion")
-        msg += self._t("cover_in_order" if pay else "cover_then_pay")
+        msg += self._t("cover_in_order" if pay else "cover_then_tuition_card" if tuition_waiting else "cover_then_pay")
         return _say(msg)
 
     def _convert_then_rent(self, res, done):
@@ -1770,6 +1841,30 @@ class OfflineEngine:
         pre = "" if short > 0 else "You already have enough CAD for rent, so no conversion is needed. "
         return _say(pre + "I've drafted: " + "; then ".join(msgs) +
                     ". Confirm them in that order in the app.")
+
+
+_ACCOUNT_KEYS = {"Wallet": "wallet", "Tuition": "tuition", "Everyday": "everyday"}
+
+
+def _without_rate_note(action: Dict[str, Any]) -> Dict[str, Any]:
+    """The draft without its 'Rate … includes a 0.6% margin' warning, for replies that state the fee themselves
+    (the card still shows the warning)."""
+    return {**action, "warnings": [w for w in action.get("warnings", []) if not w.startswith("Rate ")]}
+
+
+def _conversion_args(summary: str) -> Dict[str, str]:
+    """prepare_conversion arguments (currencies, source, destination) read back from a drafted conversion's summary:
+    'Convert MYR 2,000.00 to about CAD 643.32 (MYR Wallet to CAD Everyday)' or 'Move CAD 500.00 from CAD Everyday
+    to CAD Tuition Fund'. The model never sees action params, only the summary."""
+    m = re.match(r"Convert (\w{3}) [\d,.]+ to about (\w{3}) [\d,.]+ \((.+) to (.+)\)$", summary) or \
+        re.match(r"Move (\w{3}) [\d,.]+ from ((.+)) to (.+)$", summary)
+    if not m:
+        return {}
+    src_cur = m.group(1)
+    dst_cur = m.group(2) if summary.startswith("Convert") else src_cur
+    key = lambda label: next((v for k, v in _ACCOUNT_KEYS.items() if k in label), "")  # noqa: E731
+    return {"from_currency": src_cur, "to_currency": dst_cur, "source": key(m.group(3)),
+            "destination": "tuition" if key(m.group(4)) == "tuition" else "everyday"}
 
 
 def last_due(res: List[Tuple[str, Dict[str, Any]]]) -> str:

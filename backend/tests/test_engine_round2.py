@@ -239,6 +239,119 @@ def test_privacy_words_do_not_steal_her_own_lookups():
     assert tools(run(fresh(), "can i see my spending this month")) == ["budget_summary"]
 
 
+# ------------------------------------------------------ 5. money semantics
+def test_amend_a_pending_conversion():
+    st = fresh()
+    run(st, "convert 2000 myr to cad")
+    r = run(st, "actually make it 2500")
+    assert tools(r) == ["get_pending_actions", "cancel_pending_action", "prepare_conversion"]
+    assert [a["summary"][:24] for a in r.actions] == ["Convert MYR 2,500.00 to "]
+    assert "I cancelled the earlier draft (Convert MYR 2,000.00" in r.reply
+    statuses = sorted(a.status for a in st.policy.actions.values())
+    assert statuses == ["awaiting_user", "cancelled"]
+    r = run(st, "ok confirm")
+    assert "MYR 2,500.00" in r.reply and "no draft" not in r.reply
+
+
+def test_amend_a_conversion_into_the_tuition_fund_keeps_the_destination():
+    st = fresh()
+    run(st, "cover the tuition shortfall from my MYR wallet")
+    r = run(st, "actually make it 4000")
+    assert r.actions and r.actions[0]["summary"].endswith("(MYR Wallet to CAD Tuition Fund)")
+    assert "MYR 4,000.00" in r.actions[0]["summary"]
+
+
+def test_amend_with_nothing_pending_says_so():
+    st = fresh()
+    run(st, "what's my balance")
+    r = run(st, "actually make it 300")
+    assert not r.actions and "nothing to change" in r.reply
+
+
+@pytest.mark.parametrize("turns,summary", [
+    (["what's my balance", "ok convert 500 of it to MYR"], "Convert CAD 500.00 to about MYR"),
+    (["convert 500 to cad"], "Convert MYR 500.00 to about CAD"),
+    (["convert 500 cad to myr"], "Convert CAD 500.00 to about MYR"),
+    (["convert 10k ringgit to cad"], "Convert MYR 10,000.00 to about CAD"),
+    (["帮我把500加币换成马币"], "Convert CAD 500.00 to about MYR"),
+])
+def test_conversion_direction(turns, summary):
+    r = run(fresh(), *turns)
+    assert r.actions and r.actions[0]["summary"].startswith(summary), (turns, r.reply)
+
+
+def test_convert_all_my_ringgit_converts_the_whole_wallet_at_t3():
+    r = run(fresh(), "Convert all my ringgit to CAD")
+    assert [(a["kind"], a["tier"]) for a in r.actions] == [("conversion", "T3")]
+    assert r.actions[0]["summary"].startswith("Convert MYR 18,200.00")
+    assert "your dad funds, so he approves it too" in r.reply
+
+
+def test_convert_into_the_tuition_fund():
+    r = run(fresh(), "convert 1000 myr to tuition fund")
+    assert r.actions and r.actions[0]["summary"].endswith("(MYR Wallet to CAD Tuition Fund)")
+
+
+def test_stated_source_account_is_used():
+    st = fresh()
+    r = run(st, "Pay UBC 7250 from my everyday account")
+    # Everyday can't cover it: a plan, and never a draft from the Tuition Fund she didn't name
+    assert not r.actions and "CAD Everyday has CAD 2,340.55" in r.reply
+    r = run(fresh(), "pay UBC 500 from my everyday account")
+    assert r.actions and r.actions[0]["summary"] == ("Pay CAD 500.00 to UBC Student Financial Services from "
+                                                     "CAD Everyday")
+
+
+@pytest.mark.parametrize("msg", ["pay hydro 50 USD", "pay hydro US$50", "convert 500 USD to CAD"])
+def test_usd_is_explained_not_dropped(msg):
+    st = fresh()
+    r = run(st, msg)
+    assert not r.actions and not st.policy.actions
+    assert "USD" in r.reply and "CAD and MYR wallets" in r.reply
+
+
+def test_usd_payment_offer_drafts_in_cad_when_accepted():
+    st = fresh()
+    run(st, "pay hydro 50 USD")
+    r = run(st, "ok")
+    assert r.actions and r.actions[0]["summary"].startswith("Pay CAD 50.00 to BC Hydro")
+
+
+def test_fee_question_in_ringgit_is_a_quote_not_a_payment():
+    r = run(fresh(), "how much fee if i send 10k ringgit")
+    assert tools(r) == ["get_fx_quotes"] and not r.actions
+    assert r.trace[0]["args"] == {"from_currency": "MYR", "to_currency": "CAD", "amount": 10000.0,
+                                  "own_wallet": True}
+    assert "MYR 10,000.00" in r.reply
+
+
+def test_conversion_reply_states_the_fee_once():
+    r = run(fresh(), "convert 2000 myr to cad")
+    assert r.reply.count("0.6%") == 1
+
+
+def test_forecast_suggestion_and_cover_draft_agree():
+    import re as _re
+    st = fresh()
+    r = run(st, "will I run out of money before tuition?")
+    card = next(c for c in r.cards if c.get("type") == "forecast")
+    tip = next(s for s in card["suggestions"] if "Tuition Fund" in s)
+    suggested = float(_re.search(r"MYR ([\d,]+)", tip).group(1).replace(",", ""))
+    r = run(st, "cover the tuition shortfall from my MYR wallet")
+    drafted = float(_re.search(r"Convert MYR ([\d,.]+)", r.actions[0]["summary"]).group(1).replace(",", ""))
+    assert drafted == suggested == 3887.0
+    # and it really covers the gap
+    assert st.policy.actions[r.actions[0]["action_id"]].params["expected_receive"] >= 1250.0
+
+
+def test_cover_after_tuition_draft_points_at_the_waiting_card():
+    st = fresh()
+    run(st, "Pay my spring tuition")
+    r = run(st, "cover the tuition shortfall from my MYR wallet")
+    assert "tuition payment card that's already waiting" in r.reply
+    assert "ask me to pay your tuition" not in r.reply
+
+
 def test_who_are_you_in_chinese():
     r = run(fresh(), "你是谁？你能做什么？")
     assert r.reply.startswith("你好") and "我没听懂" not in r.reply

@@ -208,8 +208,11 @@ def get_tuition_schedule(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
         out.append({**t, "days_until_due": days})
     nxt = out[0] if out else None
     shortfall = round(max(0.0, nxt["amount"] - fund), 2) if nxt else 0.0
+    # MYR to convert in the app so the shortfall arrives in full: the same maths (and rounding) as the forecast's
+    # suggestion, so "convert about MYR 3,887" and the drafted conversion agree to the ringgit.
+    cover = ctx.fx.quote_to_receive("CAD", shortfall, ctx.fx.provider("inapp"))["send_amount"] if shortfall else 0.0
     return {"installments": out, "tuition_fund_cad": round(fund, 2),
-            "next_shortfall_cad": shortfall,
+            "next_shortfall_cad": shortfall, "cover_shortfall_myr": cover,
             "myr_wallet_value_cad": round(myr_cad, 2),
             "hint": "Cover a shortfall with prepare_conversion(MYR to CAD, destination='tuition') or by asking "
                     "the sponsor with request_sponsor_topup."}
@@ -646,11 +649,9 @@ def _forecast_end(today: date, until: str, days: Any, unpaid: List[Dict[str, Any
 def _myr_to_receive(ctx: ToolContext, cad: float) -> List[Dict[str, Any]]:
     """MYR each provider needs so that CAD `cad` arrives, cheapest first (inverts the true-cost maths in fx.py)."""
     out = []
-    mid = ctx.fx.mid("MYR", "CAD")
     for p in PROVIDERS:
-        rate = mid * (1 - p.spread_pct / 100)
-        myr = math.ceil((cad / rate + p.fee_fixed) / (1 - p.fee_pct / 100))
-        q = ctx.fx.quote("MYR", "CAD", myr, p)
+        q = ctx.fx.quote_to_receive("CAD", cad, p)   # shared with get_tuition_schedule's cover_shortfall_myr
+        myr = q["send_amount"]
         out.append({"provider": p.name, "provider_key": p.key, "myr": float(myr), "you_receive": q["you_receive"],
                     "true_cost_cad": q["true_cost"], "true_cost_pct": q["true_cost_pct"], "speed": p.speed})
     return sorted(out, key=lambda x: x["myr"])
