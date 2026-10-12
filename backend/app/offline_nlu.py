@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import List, Optional, Tuple
 
+from .i18n import t
+
 # ------------------------------------------------------------------ amounts
 MAX_AMOUNT = 100_000.0   # anything above this in one chat request is treated as a typo and asked about
 MIN_AMOUNT = 0.01
@@ -137,19 +139,13 @@ def first_amount(text: str) -> Optional[float]:
     return amts[0].value
 
 
-def amount_issue(text: str) -> Optional[str]:
-    """A clarifying question if an amount in the text should not be used as written."""
+def amount_issue(text: str, lang: str = "en") -> Optional[str]:
+    """A clarifying question (in the reply language) if an amount in the text should not be used as written."""
     for a in parse_amounts(text):
-        if a.issue == "negative":
-            return "Amounts can't be negative. How much would you like to send?"
-        if a.issue == "scientific":
-            return ("I can't read that amount (it looks like scientific notation). Please type it as a plain "
-                    "number, for example 85 or 1,200.")
-        if a.issue == "too_small":
-            return "That amount is less than one cent. How much did you mean?"
         if a.issue == "too_large":
-            return (f"{a.value:,.0f} is far more than any payment I can draft here. Please check the amount and "
-                    "type it again.")
+            return t("amt_too_large", lang, value=f"{a.value:,.0f}")
+        if a.issue in ("negative", "scientific", "too_small"):
+            return t("amt_" + a.issue, lang)
     return None
 
 
