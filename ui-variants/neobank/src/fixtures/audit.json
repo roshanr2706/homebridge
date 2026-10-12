@@ -1,0 +1,129 @@
+{
+ "entries": [
+  {
+   "seq": 21,
+   "ts": 1791787682.631,
+   "event": "action_drafted",
+   "actor": "aisha",
+   "data": {
+    "action_id": "act_d7c5f40bc2",
+    "kind": "transfer",
+    "params": {
+     "payee_id": "py_ubc",
+     "payee_name": "UBC Student Financial Services",
+     "amount": 7250.0,
+     "currency": "CAD",
+     "from_account_id": "acc_tui",
+     "from_account": "CAD Tuition Fund",
+     "memo": "Winter Term 2, installment 1"
+    },
+    "tier": "T3",
+    "risk": 0,
+    "reasons": [
+     "Amount above the single-payment limit of CAD 1,500",
+     "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+     "Paid from a sponsor-funded account (CAD Tuition Fund)"
+    ],
+    "provenance": {
+     "amount": "user"
+    }
+   },
+   "prev": "ab84d869f85bbac07bb7f08f8016889d1a89a7d8a39eb379dbe0fac3fd187bf4",
+   "hash": "50e6570f3fb4e0b0a4e56a30530260995526c92b1c6478e5acc887c1537490e4"
+  },
+  {
+   "seq": 22,
+   "ts": 1791787682.631,
+   "event": "compliance_check",
+   "actor": "system",
+   "data": {
+    "action_id": "act_d7c5f40bc2",
+    "kind": "transfer",
+    "outcome": "clear",
+    "checks": {
+     "sanctions": "pass",
+     "kyc": "pass",
+     "structuring": "pass"
+    },
+    "reports": [],
+    "purpose_code": null
+   },
+   "prev": "50e6570f3fb4e0b0a4e56a30530260995526c92b1c6478e5acc887c1537490e4",
+   "hash": "ea7941248f4aa905ac3cc6b2256e6b0edb768fe9f27c34d94e61be5e1ce3d11f"
+  },
+  {
+   "seq": 37,
+   "ts": 1791787682.675,
+   "event": "action_drafted",
+   "actor": "aisha",
+   "data": {
+    "action_id": "act_662767b907",
+    "kind": "conversion",
+    "params": {
+     "from_account_id": "acc_myr",
+     "to_account_id": "acc_tui",
+     "amount": 3888.0,
+     "from_currency": "MYR",
+     "to_currency": "CAD",
+     "rate": 0.32166,
+     "expected_receive": 1250.61,
+     "uses_sponsor_money": true
+    },
+    "tier": "T2",
+    "risk": 0,
+    "reasons": [],
+    "provenance": {}
+   },
+   "prev": "53d75970f5fb5f7056b4c82422cce686be581b1a5abd2d3d146227d00956e504",
+   "hash": "bf8e72b2803a164bf361edcde18468995023e488a1e4bed3f137a64f46ea34bf"
+  },
+  {
+   "seq": 38,
+   "ts": 1791787682.675,
+   "event": "compliance_check",
+   "actor": "system",
+   "data": {
+    "action_id": "act_662767b907",
+    "kind": "conversion",
+    "outcome": "clear",
+    "checks": {
+     "sanctions": "pass",
+     "kyc": "pass",
+     "structuring": "pass",
+     "record_keeping": "pass",
+     "eftr": "pass",
+     "bnm_purpose": "pass"
+    },
+    "reports": [],
+    "purpose_code": "ED01"
+   },
+   "prev": "bf8e72b2803a164bf361edcde18468995023e488a1e4bed3f137a64f46ea34bf",
+   "hash": "4b7ae37de7f387956fc36837e7faca614fbbdd9133678bade690ebe595f7bca2"
+  },
+  {
+   "seq": 43,
+   "ts": 1791787682.682,
+   "event": "action_confirmed",
+   "actor": "aisha",
+   "data": {
+    "action_id": "act_d7c5f40bc2"
+   },
+   "prev": "c24c1de660ea19899a2468a9a4ceb34034ef6caf1e3aea801f490726362e6bcd",
+   "hash": "608fec84f524c072cf30165ba8c38a5067e198ae9e2c12569fe324b637d62f6a"
+  },
+  {
+   "seq": 44,
+   "ts": 1791787682.683,
+   "event": "sponsor_approval_requested",
+   "actor": "system",
+   "data": {
+    "action_id": "act_d7c5f40bc2"
+   },
+   "prev": "608fec84f524c072cf30165ba8c38a5067e198ae9e2c12569fe324b637d62f6a",
+   "hash": "b80f3cfaff1d4a511f4ff236de9f1fb38ca6b40717d58fc4c982469b978b7279"
+  }
+ ],
+ "scope": "sponsor",
+ "visible": 6,
+ "total": 45
+}
