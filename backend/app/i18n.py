@@ -1011,7 +1011,7 @@ def summary(s: str, lang: str) -> str:
 
 
 _WARNINGS = [
-    (re.compile(r"Balance in (.+) is lower than this amount; it will fail( unless topped up)?\."),
+    (re.compile(r"Balance in (.+) is lower than this amount(?: right now)?; it will fail( unless topped up(?: first)?)?\."),
      {"zh": "{0}的余额低于这笔金额，除非先补足，否则会失败。",
       "ms": "Baki dalam {0} lebih rendah daripada jumlah ini; ia akan gagal kecuali ditambah."}),
     (re.compile(r"Rate ([\d.]+) includes a ([\d.]+)% margin over mid-market \(([\d.]+)\)\."),

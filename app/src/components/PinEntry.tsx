@@ -6,6 +6,7 @@ import { StyleSheet, TextInput, View } from 'react-native';
 
 import { DEMO_PIN_HINT } from '../api';
 import { useDemoMode } from '../hooks';
+import { useT } from '../i18n';
 import { fonts, useTheme } from '../theme';
 import { Body, Button, Mono, Row } from '../ui';
 
@@ -19,6 +20,7 @@ type Props = {
 
 export function PinEntry({ title, submitLabel, busy, onSubmit, onCancel }: Props) {
   const t = useTheme();
+  const tr = useT();
   const demo = useDemoMode();
   const [pin, setPin] = useState('');
   const ready = /^\d{6}$/.test(pin);
@@ -50,14 +52,14 @@ export function PinEntry({ title, submitLabel, busy, onSubmit, onCancel }: Props
         textContentType="oneTimeCode"
         maxLength={6}
         autoFocus
-        accessibilityLabel="Approval PIN"
-        placeholder="6-digit PIN"
+        accessibilityLabel={tr('pin.label')}
+        placeholder={tr('pin.placeholder')}
         placeholderTextColor={t.faint}
         style={[styles.input, { color: t.text, borderColor: t.border, backgroundColor: t.surface, fontFamily: fonts.mono }]}
       />
-      {demo ? <Mono style={{ fontSize: 10.5, color: t.muted, marginTop: 4 }}>demo mode: the demo PIN is {DEMO_PIN_HINT}</Mono> : null}
+      {demo ? <Mono style={{ fontSize: 10.5, color: t.muted, marginTop: 4 }}>{tr('pin.demo', { pin: DEMO_PIN_HINT })}</Mono> : null}
       <Row style={{ gap: 10, marginTop: 10 }}>
-        <Button label="Cancel" kind="ghost" onPress={onCancel} style={{ flex: 1 }} />
+        <Button label={tr('btn.cancel')} kind="ghost" onPress={onCancel} style={{ flex: 1 }} />
         <Button label={submitLabel} busy={busy} disabled={!ready} onPress={submit} style={{ flex: 2 }} />
       </Row>
     </View>

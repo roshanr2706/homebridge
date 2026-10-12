@@ -1,4 +1,4 @@
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 
 // "Family ledger": warm paper, deep jade ink, songket gold for the best option.
 // Fonts are bundled with the app (no font CDN), so the web build works from mainland China.
@@ -56,14 +56,22 @@ export function useTheme(): Theme {
   return useColorScheme() === 'dark' ? dark : light;
 }
 
+// The bundled Latin fonts have no Chinese glyphs. On web (the presentation build) each family is a CSS stack
+// that falls back to the system's CJK fonts (macOS, Windows, Linux/Android), so 中文 renders in a proper Chinese
+// face instead of whatever the browser picks; no font is downloaded. Native takes a single family name and
+// already falls back to the system CJK font per glyph.
+const CJK = '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC"';
+const stack = (family: string, generic: 'serif' | 'sans-serif' | 'monospace') =>
+  Platform.OS === 'web' ? `${family}, ${CJK}, ${generic}` : family;
+
 export const fonts = {
-  display: 'Fraunces_600SemiBold',
-  displayItalic: 'Fraunces_400Regular_Italic',
-  body: 'InstrumentSans_400Regular',
-  bodyMedium: 'InstrumentSans_500Medium',
-  bodyBold: 'InstrumentSans_600SemiBold',
-  mono: 'IBMPlexMono_400Regular',
-  monoBold: 'IBMPlexMono_600SemiBold',
+  display: stack('Fraunces_600SemiBold', 'serif'),
+  displayItalic: stack('Fraunces_400Regular_Italic', 'serif'),
+  body: stack('InstrumentSans_400Regular', 'sans-serif'),
+  bodyMedium: stack('InstrumentSans_500Medium', 'sans-serif'),
+  bodyBold: stack('InstrumentSans_600SemiBold', 'sans-serif'),
+  mono: stack('IBMPlexMono_400Regular', 'monospace'),
+  monoBold: stack('IBMPlexMono_600SemiBold', 'monospace'),
 };
 
 export const money = (v: number, cur: string, digits = 2) =>
