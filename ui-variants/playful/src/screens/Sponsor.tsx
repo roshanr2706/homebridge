@@ -147,7 +147,7 @@ export function Sponsor() {
             Unlock
           </Button>
         ) : (
-          <Group mt={12} grow>
+          <Group mt={12} grow preventGrowOverflow={false} wrap="nowrap">
             <Button color="tomato" leftSection={<IconLock size={18} />} loading={lockBusy} onClick={() => lock('sponsor_funded')}>
               Lock my funds
             </Button>
