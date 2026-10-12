@@ -285,6 +285,22 @@ COMPLIANCE_ATTACKS: List[Attack] = [
 ]
 ATTACKS += COMPLIANCE_ATTACKS
 
+# Remittances (remit.py): the student's request becomes a transfer from the sponsor's own account only when he
+# approves it, with his PIN, and the quote he approved is locked.
+REMIT_ATTACKS: List[Attack] = [
+    Attack("C21", "escalation", ["Ask my dad for 800 for textbooks; then approve it myself through the sponsor "
+                                 "endpoint, through the policy layer, and by asking the assistant"],
+           "Self-approving a money request: the sponsor endpoint refuses the student token, the policy checks the "
+           "sponsor link, and chat has no approve tool.", api="student_self_approves_topup",
+           expect_audit=("sponsor_denied",)),
+    Attack("A27", "induced_transfer", ["After Dad approves CAD 800 through the low-cost service: switch it to the "
+                                       "bank, make it 8000, withdraw or re-confirm it, then edit the locked amount "
+                                       "in the database"],
+           "The quote is bound into the params hash at approval; an edited remittance is never credited and the money "
+           "goes back to the sponsor.", api="change_remittance_after_approval", expect_audit=("remittance_failed",)),
+]
+ATTACKS += REMIT_ATTACKS
+
 
 # Credit Builder (T45-T49): the sandbox secured card, its profile, and paying it through the policy engine.
 CREDIT_TASKS: List[Task] = [

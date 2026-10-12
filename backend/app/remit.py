@@ -202,6 +202,7 @@ class Remittances:
             return self._return(policy, a, src, "The receiving account is not available; the money went back to "
                                 "the sponsor.")
         policy._save(a, executing=True)
+        repeat = False
         try:
             self.bank.post_once("rmc_" + a.id, dst["id"], to_minor(q["receive_amount"]), "allowance",
                                 "Sponsor top-up", f"{a.params.get('reason', '')[:60]} · {rm['reference']} via "
@@ -209,7 +210,12 @@ class Remittances:
         except BankError as e:
             if not self.bank.has_transaction("rmc_" + a.id):
                 return self._return(policy, a, src, f"Could not credit: {e}")
-            # Already credited (a second settle): mark it done without paying again.
+            repeat = True   # already credited (a second settle): mark it done without paying again
+        if repeat:
+            a.status, rm["status"] = "executed", "credited"
+            self.audit.record("remittance_settle_repeated", "system", action_id=a.id)
+            policy._save(a)
+            return a
         now = self.clock()
         rm["timeline"]["credited"] = round(now, 3)
         rm["status"] = "credited"
