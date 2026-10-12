@@ -7,3 +7,6 @@ app/.expo/
 app/dist/
 .venv/
 .claude/worktrees/
+
+# Internal planning notes (kept locally, not part of the submission)
+PLAN.md
