@@ -1,0 +1,1382 @@
+[
+ {
+  "key": "balances",
+  "message": "How much money do I have?",
+  "response": {
+   "reply": "Your balances: CAD Everyday CAD 2,340.55; MYR Wallet MYR 18,200.00; CAD Tuition Fund CAD 6,000.00. Total is about CAD 14,230.07.",
+   "actions": [],
+   "guard": {
+    "flags": [],
+    "matches": {},
+    "signals": [],
+    "sources": {},
+    "model": {
+     "label": "benign",
+     "confidence": 0.998,
+     "probs": {
+      "benign": 0.998,
+      "injection": 0.001,
+      "scam": 0.001
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": []
+   },
+   "trace": [
+    {
+     "tool": "get_balances",
+     "args": {
+      "total_currency": "CAD"
+     },
+     "ok": true,
+     "ms": 1
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": [
+    {
+     "type": "balances",
+     "total": 14230.07,
+     "total_currency": "CAD",
+     "accounts": [
+      {
+       "label": "CAD Everyday",
+       "currency": "CAD",
+       "balance": 2340.55,
+       "number": "••••2290",
+       "sponsor_funded": false
+      },
+      {
+       "label": "MYR Wallet",
+       "currency": "MYR",
+       "balance": 18200.0,
+       "number": "••••3341",
+       "sponsor_funded": true
+      },
+      {
+       "label": "CAD Tuition Fund",
+       "currency": "CAD",
+       "balance": 6000.0,
+       "number": "••••8812",
+       "sponsor_funded": true
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "key": "fx",
+  "message": "Cheapest way to change 5,000 MYR to CAD?",
+  "response": {
+   "reply": "Cheapest for MYR 5,000.00 is the HomeBridge wallet conversion: CAD 1,608.29 arrives (true cost 0.6%, instant). That saves CAD 95.46 compared with the airport money changer. Rates are a sandbox snapshot, not advice.",
+   "actions": [],
+   "guard": {
+    "flags": [],
+    "matches": {},
+    "signals": [],
+    "sources": {},
+    "model": {
+     "label": "benign",
+     "confidence": 0.958,
+     "probs": {
+      "benign": 0.958,
+      "injection": 0.01,
+      "scam": 0.032
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": []
+   },
+   "trace": [
+    {
+     "tool": "get_fx_quotes",
+     "args": {
+      "from_currency": "MYR",
+      "to_currency": "CAD",
+      "amount": 5000.0,
+      "own_wallet": true
+     },
+     "ok": true,
+     "ms": 1
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": [
+    {
+     "type": "fx_quotes",
+     "from_currency": "MYR",
+     "to_currency": "CAD",
+     "amount": 5000.0,
+     "best": "HomeBridge wallet conversion",
+     "saving_vs_worst": 95.46,
+     "cached": false,
+     "note": "",
+     "quotes": [
+      {
+       "provider": "HomeBridge wallet conversion",
+       "provider_key": "inapp",
+       "you_receive": 1608.29,
+       "receive_currency": "CAD",
+       "fee": 0.0,
+       "fee_currency": "MYR",
+       "rate": 0.32166,
+       "mid_rate": 0.3236,
+       "true_cost": 9.71,
+       "true_cost_pct": 0.6,
+       "speed": "instant"
+      },
+      {
+       "provider": "Low-cost transfer service",
+       "provider_key": "lowcost",
+       "you_receive": 1600.57,
+       "receive_currency": "CAD",
+       "fee": 31.5,
+       "fee_currency": "MYR",
+       "rate": 0.32214,
+       "mid_rate": 0.3236,
+       "true_cost": 17.43,
+       "true_cost_pct": 1.08,
+       "speed": "1 business day"
+      },
+      {
+       "provider": "Bank telegraphic transfer",
+       "provider_key": "bank",
+       "you_receive": 1547.53,
+       "receive_currency": "CAD",
+       "fee": 80.0,
+       "fee_currency": "MYR",
+       "rate": 0.31454,
+       "mid_rate": 0.3236,
+       "true_cost": 70.47,
+       "true_cost_pct": 4.36,
+       "speed": "2 to 4 business days"
+      },
+      {
+       "provider": "Airport money changer",
+       "provider_key": "kiosk",
+       "you_receive": 1512.83,
+       "receive_currency": "CAD",
+       "fee": 0.0,
+       "fee_currency": "MYR",
+       "rate": 0.30257,
+       "mid_rate": 0.3236,
+       "true_cost": 105.17,
+       "true_cost_pct": 6.5,
+       "speed": "in person"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "key": "runway",
+  "message": "Will I run out of money before tuition is due?",
+  "response": {
+   "reply": "Not quite. On your usual spending, CAD Everyday dips below zero on Dec 16 (lowest CAD -195.25 on Dec 18), and your tuition fund will be CAD 1,250.00 short when Winter Term 2, installment 1 is due on Jan 6. Convert about MYR 3,887 into your Tuition Fund by Jan 1 to cover the CAD 1,250.00 tuition gap. Cheapest: HomeBridge wallet conversion (true cost 0.6%, about CAD 7.55); a bank telegraphic transfer would lose about CAD 61.90. Cut dining by about CAD 20 a week (you average CAD 50); that alone keeps you above zero. I haven't moved any money. Say 'cover the tuition shortfall from my MYR wallet' and I'll draft that conversion for you to confirm.",
+   "actions": [],
+   "guard": {
+    "flags": [],
+    "matches": {},
+    "signals": [],
+    "sources": {},
+    "model": {
+     "label": "benign",
+     "confidence": 0.903,
+     "probs": {
+      "benign": 0.903,
+      "injection": 0.058,
+      "scam": 0.039
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": []
+   },
+   "trace": [
+    {
+     "tool": "forecast_cashflow",
+     "args": {},
+     "ok": true,
+     "ms": 7
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": [
+    {
+     "type": "forecast",
+     "account": "CAD Everyday",
+     "start_date": "2026-10-08",
+     "end_date": "2027-01-06",
+     "horizon": "next tuition due date",
+     "verdict": "both",
+     "series": [
+      2340.55,
+      2320.24,
+      2900.27,
+      1729.95,
+      1709.64,
+      1689.32,
+      1669.01,
+      1648.69,
+      1497.38,
+      1477.06,
+      1401.75,
+      1381.43,
+      1361.12,
+      1340.8,
+      1320.49,
+      1300.17,
+      1880.21,
+      1859.89,
+      1839.58,
+      1819.26,
+      1798.95,
+      1778.63,
+      1735.33,
+      1715.01,
+      1694.7,
+      1674.38,
+      1654.07,
+      1633.75,
+      1613.44,
+      1593.12,
+      2173.16,
+      2152.84,
+      2132.53,
+      2112.21,
+      941.9,
+      921.58,
+      901.27,
+      880.95,
+      860.64,
+      709.32,
+      689.01,
+      613.69,
+      593.38,
+      573.06,
+      1153.1,
+      1132.78,
+      1071.27,
+      1050.95,
+      1030.64,
+      1010.32,
+      990.01,
+      969.69,
+      949.38,
+      906.07,
+      885.76,
+      865.44,
+      845.13,
+      824.81,
+      1404.85,
+      1384.53,
+      1364.22,
+      1343.9,
+      1323.59,
+      1303.27,
+      132.96,
+      112.64,
+      92.33,
+      72.01,
+      51.7,
+      -99.62,
+      -119.93,
+      -195.25,
+      384.79,
+      364.47,
+      344.16,
+      323.84,
+      303.53,
+      283.21,
+      262.9,
+      242.58,
+      222.27,
+      201.95,
+      181.64,
+      138.33,
+      118.02,
+      97.7,
+      677.74,
+      657.42,
+      637.11,
+      616.79,
+      596.48
+     ],
+     "step_days": 1,
+     "starting_balance": 2340.55,
+     "ending_balance": 596.48,
+     "lowest": {
+      "date": "2026-12-18",
+      "balance": -195.25,
+      "index": 71
+     },
+     "first_shortfall_date": "2026-12-16",
+     "shortfall_index": 69,
+     "tuition": [
+      {
+       "term": "Winter Term 2, installment 1",
+       "due": "2027-01-06",
+       "amount": 7250.0,
+       "gap": 1250.0,
+       "index": 90
+      }
+     ],
+     "weekly_spending_cad": 142.21,
+     "pending_included": [],
+     "suggestions": [
+      "Convert about MYR 3,887 into your Tuition Fund by Jan 1 to cover the CAD 1,250.00 tuition gap. Cheapest: HomeBridge wallet conversion (true cost 0.6%, about CAD 7.55); a bank telegraphic transfer would lose about CAD 61.90.",
+      "Cut dining by about CAD 20 a week (you average CAD 50); that alone keeps you above zero.",
+      "Convert about MYR 763 into your CAD Everyday by Dec 15 to stay above zero (lowest CAD -195.25 on Dec 18). Cheapest: HomeBridge wallet conversion (true cost 0.6%, about CAD 1.48); a bank telegraphic transfer would lose about CAD 32.96."
+     ],
+     "disclosure": "An estimate, not a guarantee or financial advice. This forecast does not move money."
+    }
+   ]
+  }
+ },
+ {
+  "key": "credit",
+  "message": "How's my credit?",
+  "response": {
+   "reply": "Your HomeBridge Secured Card is at 56.1% utilization (CAD 280.85 of CAD 500); your last statement reported 36.9%. You've paid 4 statements on time in a row. Your CAD 184.60 statement is due 2026-10-14 (minimum CAD 10.00). Paying CAD 184.60 now covers it and keeps what's reported under 30% (19.2%) when the statement closes on 2026-10-23. Say 'pay my card' and I'll draft it. Simulated credit health: Needs attention. This is not a credit score; it's general information from your sandbox card, not personalised advice, and HomeBridge is not a licensed adviser.",
+   "actions": [],
+   "guard": {
+    "flags": [],
+    "matches": {},
+    "signals": [],
+    "sources": {},
+    "model": {
+     "label": "benign",
+     "confidence": 0.997,
+     "probs": {
+      "benign": 0.997,
+      "injection": 0.002,
+      "scam": 0.001
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": []
+   },
+   "trace": [
+    {
+     "tool": "get_credit_profile",
+     "args": {},
+     "ok": true,
+     "ms": 6
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": [
+    {
+     "type": "credit",
+     "card": {
+      "label": "HomeBridge Secured Card",
+      "number": "••••7765",
+      "currency": "CAD",
+      "credit_limit": 500.0,
+      "balance": 280.85,
+      "available": 219.15,
+      "deposit": 500.0
+     },
+     "utilization_pct": 56.1,
+     "utilization_reported_pct": 36.9,
+     "utilization_projected_at_close_pct": 75.4,
+     "target_pct": 30,
+     "next_statement_date": "2026-10-23",
+     "days_until_statement": 15,
+     "statement": {
+      "balance": 184.6,
+      "minimum_due": 10.0,
+      "remaining": 184.6,
+      "due_date": "2026-10-14",
+      "days_until_due": 6,
+      "status": "due"
+     },
+     "on_time_streak": 4,
+     "months_of_history": 5,
+     "payment_history": [
+      "on_time",
+      "on_time",
+      "on_time",
+      "on_time",
+      "due"
+     ],
+     "health": {
+      "key": "needs_attention",
+      "label": "Needs attention",
+      "basis": "Simulated from on-time payments, utilization and card age on your sandbox card. Not a credit score."
+     },
+     "recommended_payment": {
+      "amount": 184.6,
+      "balance_after": 96.25,
+      "utilization_after_pct": 19.2
+     },
+     "next_actions": [
+      {
+       "text": "Pay at least the minimum, CAD 10.00, by 2026-10-14 (6 days away). Paying on time is the biggest factor, and keeps your 4-payment on-time streak.",
+       "amount": 10.0,
+       "key": "minimum"
+      },
+      {
+       "text": "Pay the full statement balance, CAD 184.60, by 2026-10-14 to avoid interest (19.99% a year; about CAD 2.91 for a month if you pay only the minimum).",
+       "amount": 184.6,
+       "key": "statement_balance"
+      },
+      {
+       "text": "Pay CAD 131 before your statement closes on 2026-10-23 so the balance reported to the bureaus is under 30% of your limit (CAD 149.85 of CAD 500).",
+       "amount": 131.0,
+       "key": "under_30"
+      },
+      {
+       "text": "One payment of CAD 184.60 now covers all of that and leaves CAD 96.25 (19.2% of your limit).",
+       "amount": 184.6,
+       "key": "one_payment"
+      },
+      {
+       "text": "Set up autopay for at least the minimum payment with the card issuer, so one busy week never costs you your on-time record.",
+       "amount": null,
+       "key": "autopay"
+      }
+     ],
+     "footnote": "General information, not personalised financial advice. HomeBridge is not a licensed adviser. This is not a credit score: HomeBridge cannot see your Equifax or TransUnion file, and the indicator is simulated from your sandbox card only."
+    }
+   ]
+  }
+ },
+ {
+  "key": "tuition_due",
+  "message": "When is my tuition due?",
+  "response": {
+   "reply": "Your next tuition installment is CAD 7,250.00 for Winter Term 2, installment 1, due 2027-01-06 (90 days away). Your tuition fund has CAD 6,000.00. That leaves a shortfall of CAD 1,250.00. Your MYR wallet is worth about CAD 5,889.52, so converting some of it would cover it, or you could set aside about CAD 416.67 a month.",
+   "actions": [],
+   "guard": {
+    "flags": [],
+    "matches": {},
+    "signals": [],
+    "sources": {},
+    "model": {
+     "label": "benign",
+     "confidence": 0.997,
+     "probs": {
+      "benign": 0.997,
+      "injection": 0.002,
+      "scam": 0.001
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": []
+   },
+   "trace": [
+    {
+     "tool": "get_tuition_schedule",
+     "args": {},
+     "ok": true,
+     "ms": 1
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": [
+    {
+     "type": "tuition",
+     "installments": [
+      {
+       "term": "Winter Term 2, installment 1",
+       "due": "2027-01-06",
+       "amount": 7250.0,
+       "currency": "CAD",
+       "days_until_due": 90
+      },
+      {
+       "term": "Winter Term 2, installment 2",
+       "due": "2027-03-07",
+       "amount": 7250.0,
+       "currency": "CAD",
+       "days_until_due": 150
+      }
+     ],
+     "tuition_fund_cad": 6000.0,
+     "next_shortfall_cad": 1250.0,
+     "myr_wallet_value_cad": 5889.52
+    }
+   ]
+  }
+ },
+ {
+  "key": "budget",
+  "message": "How's my budget this month?",
+  "response": {
+   "reply": "In the last 30 days you spent CAD 2,178.25. Biggest categories: rent CAD 1,150.00, groceries CAD 395.35, dining CAD 214.10, family CAD 145.62, transport CAD 131.00. Over budget: dining, transport. Possible duplicate charge from StreamBox; worth checking.",
+   "actions": [],
+   "guard": {
+    "flags": [],
+    "matches": {},
+    "signals": [],
+    "sources": {},
+    "model": {
+     "label": "benign",
+     "confidence": 0.984,
+     "probs": {
+      "benign": 0.984,
+      "injection": 0.007,
+      "scam": 0.009
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": []
+   },
+   "trace": [
+    {
+     "tool": "budget_summary",
+     "args": {},
+     "ok": true,
+     "ms": 0
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": [
+    {
+     "type": "budget",
+     "period_days": 30,
+     "categories": [
+      {
+       "category": "rent",
+       "spent_cad": 1150.0,
+       "budget_cad": null,
+       "over_budget": false
+      },
+      {
+       "category": "groceries",
+       "spent_cad": 395.35,
+       "budget_cad": 400.0,
+       "over_budget": false
+      },
+      {
+       "category": "dining",
+       "spent_cad": 214.1,
+       "budget_cad": 150.0,
+       "over_budget": true
+      },
+      {
+       "category": "family",
+       "spent_cad": 145.62,
+       "budget_cad": null,
+       "over_budget": false
+      },
+      {
+       "category": "transport",
+       "spent_cad": 131.0,
+       "budget_cad": 130.0,
+       "over_budget": true
+      },
+      {
+       "category": "phone",
+       "spent_cad": 55.0,
+       "budget_cad": null,
+       "over_budget": false
+      },
+      {
+       "category": "entertainment",
+       "spent_cad": 45.98,
+       "budget_cad": 80.0,
+       "over_budget": false
+      },
+      {
+       "category": "utilities",
+       "spent_cad": 41.2,
+       "budget_cad": null,
+       "over_budget": false
+      }
+     ],
+     "total_spent_cad": 2178.25,
+     "income_cad": 2171.5,
+     "possible_duplicate_charges": [
+      "StreamBox"
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "key": "transactions",
+  "message": "Show my recent transactions",
+  "response": {
+   "reply": "Recent transactions: 2026-10-06 Late Night Pizza CAD -35.80; 2026-10-05 StreamBox CAD -22.99; 2026-10-04 Save Mart CAD -102.20; 2026-10-03 Mamak Corner CAD -15.00; 2026-10-02 Bubble Tea Co CAD -16.40; 2026-09-30 StreamBox CAD -22.99; 2026-09-29 Hotpot House CAD -41.15; 2026-09-27 T&T Market CAD -93.10.",
+   "actions": [],
+   "guard": {
+    "flags": [],
+    "matches": {},
+    "signals": [],
+    "sources": {},
+    "model": {
+     "label": "benign",
+     "confidence": 0.939,
+     "probs": {
+      "benign": 0.939,
+      "injection": 0.044,
+      "scam": 0.017
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": [
+     "injection"
+    ]
+   },
+   "trace": [
+    {
+     "tool": "list_transactions",
+     "args": {
+      "limit": 10
+     },
+     "ok": true,
+     "ms": 0
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": [
+    {
+     "type": "transactions",
+     "count": 22,
+     "rows": [
+      {
+       "date": "2026-10-06",
+       "counterparty": "Late Night Pizza",
+       "amount": -35.8,
+       "currency": "CAD",
+       "category": "dining"
+      },
+      {
+       "date": "2026-10-05",
+       "counterparty": "StreamBox",
+       "amount": -22.99,
+       "currency": "CAD",
+       "category": "entertainment"
+      },
+      {
+       "date": "2026-10-04",
+       "counterparty": "Save Mart",
+       "amount": -102.2,
+       "currency": "CAD",
+       "category": "groceries"
+      },
+      {
+       "date": "2026-10-03",
+       "counterparty": "Mamak Corner",
+       "amount": -15.0,
+       "currency": "CAD",
+       "category": "dining"
+      },
+      {
+       "date": "2026-10-02",
+       "counterparty": "Bubble Tea Co",
+       "amount": -16.4,
+       "currency": "CAD",
+       "category": "dining"
+      },
+      {
+       "date": "2026-09-30",
+       "counterparty": "StreamBox",
+       "amount": -22.99,
+       "currency": "CAD",
+       "category": "entertainment"
+      },
+      {
+       "date": "2026-09-29",
+       "counterparty": "Hotpot House",
+       "amount": -41.15,
+       "currency": "CAD",
+       "category": "dining"
+      },
+      {
+       "date": "2026-09-27",
+       "counterparty": "T&T Market",
+       "amount": -93.1,
+       "currency": "CAD",
+       "category": "groceries"
+      }
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "key": "rent",
+  "message": "Pay rent to my landlord",
+  "response": {
+   "reply": "Rent was CAD 1,150.00 last month (Maple Court Rentals, Sep 11), so I used that amount. I've drafted it: Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday. Please check the payee and amount on the confirmation card and tap Confirm.",
+   "actions": [
+    {
+     "action_id": "act_360713da13",
+     "kind": "transfer",
+     "summary": "Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday",
+     "tier": "T2",
+     "status": "awaiting_user",
+     "needs_sponsor_approval": false,
+     "risk_score": 0,
+     "warnings": [],
+     "next_step": "The user must review and tap Confirm in the app. You cannot confirm it.",
+     "compliance": {
+      "outcome": "clear",
+      "blocked": false,
+      "block_reason": null,
+      "checks": [
+       {
+        "id": "sanctions",
+        "label": "Sanctions screening",
+        "status": "pass",
+        "detail": "No match on the sample watchlist (12 entries)"
+       },
+       {
+        "id": "kyc",
+        "label": "Identity (KYC)",
+        "status": "pass",
+        "detail": "Aisha: verified (basic)"
+       },
+       {
+        "id": "structuring",
+        "label": "Structuring detection",
+        "status": "pass",
+        "detail": "No split payments in the last 24h"
+       }
+      ],
+      "reports": [],
+      "record": null,
+      "purpose_code": null,
+      "cross_border": false,
+      "amount_cad": 1150.0,
+      "screened_at": 1791787953.108
+     },
+     "params": {
+      "payee_id": "py_rent",
+      "payee_name": "Maple Court Rentals",
+      "amount": 1150.0,
+      "currency": "CAD",
+      "from_account_id": "acc_cad",
+      "from_account": "CAD Everyday",
+      "memo": ""
+     },
+     "risk_reasons": [],
+     "sponsor_reasons": [],
+     "risk_signals": [],
+     "created_at": 1791787953.1091127,
+     "expires_at": 1791788553.1091127,
+     "user_confirmed": false,
+     "sponsor_decision": null,
+     "sponsor_note": "",
+     "result": null,
+     "provenance": {
+      "amount": "user"
+     },
+     "confirm_token": "VYK8omXOP6bY7ALU9ifLdw0l_jRHP-x8",
+     "frozen": null
+    }
+   ],
+   "guard": {
+    "flags": [],
+    "matches": {},
+    "signals": [],
+    "sources": {},
+    "model": {
+     "label": "benign",
+     "confidence": 0.981,
+     "probs": {
+      "benign": 0.981,
+      "injection": 0.008,
+      "scam": 0.011
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": []
+   },
+   "trace": [
+    {
+     "tool": "list_transactions",
+     "args": {
+      "category": "rent",
+      "days": 60,
+      "limit": 1
+     },
+     "ok": true,
+     "ms": 0
+    },
+    {
+     "tool": "get_balances",
+     "args": {
+      "total_currency": "CAD"
+     },
+     "ok": true,
+     "ms": 0
+    },
+    {
+     "tool": "prepare_transfer",
+     "args": {
+      "payee": "rent",
+      "amount": 1150.0
+     },
+     "ok": true,
+     "ms": 2
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": []
+  }
+ },
+ {
+  "key": "tuition",
+  "message": "Pay my spring tuition",
+  "response": {
+   "reply": "I've drafted it: Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund. Please check the payee and amount on the confirmation card and tap Confirm. After you confirm, your sponsor also needs to approve it. Heads up: the tuition fund is CAD 1,250.00 short, so it would fail today. Say 'cover the tuition shortfall from my MYR wallet' and I'll draft that conversion, or ask your dad for a top-up.",
+   "actions": [
+    {
+     "action_id": "act_fc84efc3cd",
+     "kind": "transfer",
+     "summary": "Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund",
+     "tier": "T3",
+     "status": "awaiting_user",
+     "needs_sponsor_approval": true,
+     "risk_score": 0,
+     "warnings": [
+      "Balance in CAD Tuition Fund is lower than this amount right now; it will fail unless topped up first."
+     ],
+     "next_step": "The user must review and tap Confirm in the app. You cannot confirm it.",
+     "compliance": {
+      "outcome": "clear",
+      "blocked": false,
+      "block_reason": null,
+      "checks": [
+       {
+        "id": "sanctions",
+        "label": "Sanctions screening",
+        "status": "pass",
+        "detail": "No match on the sample watchlist (12 entries)"
+       },
+       {
+        "id": "kyc",
+        "label": "Identity (KYC)",
+        "status": "pass",
+        "detail": "Aisha: verified (basic) · Rahman: verified (full)"
+       },
+       {
+        "id": "structuring",
+        "label": "Structuring detection",
+        "status": "pass",
+        "detail": "No split payments in the last 24h"
+       }
+      ],
+      "reports": [],
+      "record": null,
+      "purpose_code": null,
+      "cross_border": false,
+      "amount_cad": 7250.0,
+      "screened_at": 1791787953.118
+     },
+     "params": {
+      "payee_id": "py_ubc",
+      "payee_name": "UBC Student Financial Services",
+      "amount": 7250.0,
+      "currency": "CAD",
+      "from_account_id": "acc_tui",
+      "from_account": "CAD Tuition Fund",
+      "memo": "Winter Term 2, installment 1"
+     },
+     "risk_reasons": [
+      "Amount above the single-payment limit of CAD 1,500",
+      "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+      "Paid from a sponsor-funded account (CAD Tuition Fund)"
+     ],
+     "sponsor_reasons": [
+      "Amount above the single-payment limit of CAD 1,500",
+      "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+      "Paid from a sponsor-funded account (CAD Tuition Fund)"
+     ],
+     "risk_signals": [],
+     "created_at": 1791787953.1183276,
+     "expires_at": 1791788553.1183276,
+     "user_confirmed": false,
+     "sponsor_decision": null,
+     "sponsor_note": "",
+     "result": null,
+     "provenance": {
+      "amount": "user"
+     },
+     "confirm_token": "3p93Umw7PgNj_YFHLEQEquJhOShmYR7x",
+     "frozen": null
+    }
+   ],
+   "guard": {
+    "flags": [],
+    "matches": {},
+    "signals": [],
+    "sources": {},
+    "model": {
+     "label": "benign",
+     "confidence": 0.986,
+     "probs": {
+      "benign": 0.986,
+      "injection": 0.008,
+      "scam": 0.007
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": []
+   },
+   "trace": [
+    {
+     "tool": "get_tuition_schedule",
+     "args": {},
+     "ok": true,
+     "ms": 0
+    },
+    {
+     "tool": "prepare_transfer",
+     "args": {
+      "payee": "UBC Student Financial Services",
+      "amount": 7250.0,
+      "memo": "Winter Term 2, installment 1"
+     },
+     "ok": true,
+     "ms": 1
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": []
+  }
+ },
+ {
+  "key": "cover_gap",
+  "message": "Cover the tuition shortfall from my MYR wallet",
+  "response": {
+   "reply": "I've drafted: Convert MYR 3,888.00 to about CAD 1,250.61 (MYR Wallet to CAD Tuition Fund). That covers the CAD 1,250.00 shortfall. Confirm it in the app, then ask me to pay your tuition.",
+   "actions": [
+    {
+     "action_id": "act_85249e4967",
+     "kind": "conversion",
+     "summary": "Convert MYR 3,888.00 to about CAD 1,250.61 (MYR Wallet to CAD Tuition Fund)",
+     "tier": "T2",
+     "status": "awaiting_user",
+     "needs_sponsor_approval": false,
+     "risk_score": 0,
+     "warnings": [
+      "Rate 0.32166 includes a 0.6% margin over mid-market (0.3236)."
+     ],
+     "next_step": "The user must review and tap Confirm in the app. You cannot confirm it.",
+     "compliance": {
+      "outcome": "clear",
+      "blocked": false,
+      "block_reason": null,
+      "checks": [
+       {
+        "id": "sanctions",
+        "label": "Sanctions screening",
+        "status": "pass",
+        "detail": "Both sides are the account holder's own accounts (screened at onboarding)"
+       },
+       {
+        "id": "kyc",
+        "label": "Identity (KYC)",
+        "status": "pass",
+        "detail": "Aisha: verified (basic) · Rahman: verified (full)"
+       },
+       {
+        "id": "structuring",
+        "label": "Structuring detection",
+        "status": "pass",
+        "detail": "No split payments in the last 24h"
+       },
+       {
+        "id": "record_keeping",
+        "label": "Cross-border record",
+        "status": "pass",
+        "detail": "Originator, beneficiary, purpose and source of funds recorded"
+       },
+       {
+        "id": "eftr",
+        "label": "FINTRAC EFTR",
+        "status": "pass",
+        "detail": "Below the CAD 10,000 reporting threshold (24h total CAD 1,258)"
+       },
+       {
+        "id": "bnm_purpose",
+        "label": "BNM purpose code",
+        "status": "pass",
+        "detail": "ED01: Education: tuition and course fees abroad"
+       }
+      ],
+      "reports": [],
+      "record": {
+       "originator": {
+        "name": "Aisha Rahman",
+        "account": "••••3341",
+        "institution": "linked Malaysian bank account",
+        "country": "MY"
+       },
+       "beneficiary": {
+        "name": "Aisha Rahman",
+        "account": "••••8812",
+        "institution": "HomeBridge (Canada)",
+        "country": "CA"
+       },
+       "purpose": "Education: tuition and course fees abroad",
+       "source_of_funds": "Sponsor allowance from parent in Malaysia (Rahman bin Ismail)",
+       "amount": 3888.0,
+       "currency": "MYR",
+       "purpose_code": "ED01"
+      },
+      "purpose_code": {
+       "code": "ED01",
+       "label": "Education: tuition and course fees abroad"
+      },
+      "cross_border": true,
+      "amount_cad": 1258.16,
+      "screened_at": 1791787953.132
+     },
+     "params": {
+      "from_account_id": "acc_myr",
+      "to_account_id": "acc_tui",
+      "amount": 3888.0,
+      "from_currency": "MYR",
+      "to_currency": "CAD",
+      "rate": 0.32166,
+      "expected_receive": 1250.61,
+      "uses_sponsor_money": true
+     },
+     "risk_reasons": [],
+     "sponsor_reasons": [],
+     "risk_signals": [],
+     "created_at": 1791787953.1321874,
+     "expires_at": 1791788553.1321874,
+     "user_confirmed": false,
+     "sponsor_decision": null,
+     "sponsor_note": "",
+     "result": null,
+     "provenance": {},
+     "confirm_token": "0gC6rUS9rluiewvzMfefXDbCxY4Rn5aX",
+     "frozen": null
+    }
+   ],
+   "guard": {
+    "flags": [],
+    "matches": {},
+    "signals": [],
+    "sources": {},
+    "model": {
+     "label": "benign",
+     "confidence": 0.843,
+     "probs": {
+      "benign": 0.843,
+      "injection": 0.135,
+      "scam": 0.022
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": []
+   },
+   "trace": [
+    {
+     "tool": "get_tuition_schedule",
+     "args": {},
+     "ok": true,
+     "ms": 0
+    },
+    {
+     "tool": "get_fx_quotes",
+     "args": {
+      "from_currency": "MYR",
+      "to_currency": "CAD",
+      "amount": 1000,
+      "own_wallet": true
+     },
+     "ok": true,
+     "ms": 1
+    },
+    {
+     "tool": "prepare_conversion",
+     "args": {
+      "from_currency": "MYR",
+      "to_currency": "CAD",
+      "amount": 3888.0,
+      "destination": "tuition"
+     },
+     "ok": true,
+     "ms": 1
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": []
+  }
+ },
+ {
+  "key": "scam",
+  "message": "I got a text: \"This is the CRA. You owe $1,850 in back taxes. Pay today with Apple gift cards or police will arrest you.\" Is this real?",
+  "response": {
+   "reply": "This looks like a scam. Warning signs: asks for gift cards; threat of arrest or deportation; impersonates a government agency (\"Pay today with Apple gift cards\"). Don't pay or share any codes, and contact the organisation through its official website instead. I won't set up any payment for it.",
+   "actions": [],
+   "guard": {
+    "flags": [
+     "scam"
+    ],
+    "matches": {
+     "scam": [
+      "Asks for gift cards",
+      "Threat of arrest or deportation",
+      "Impersonates a government agency"
+     ]
+    },
+    "signals": [
+     {
+      "category": "scam",
+      "name": "Asks for gift cards"
+     },
+     {
+      "category": "scam",
+      "name": "Threat of arrest or deportation"
+     },
+     {
+      "category": "scam",
+      "name": "Impersonates a government agency"
+     }
+    ],
+    "sources": {
+     "scam": "rule"
+    },
+    "model": {
+     "label": "scam",
+     "confidence": 0.945,
+     "probs": {
+      "benign": 0.046,
+      "injection": 0.008,
+      "scam": 0.945
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": [
+     "scam"
+    ]
+   },
+   "trace": [
+    {
+     "tool": "check_message_for_scam",
+     "args": {
+      "text": "I got a text: \"This is the CRA. You owe $1,850 in back taxes. Pay today with Apple gift cards or police will arrest you.\" Is this real?"
+     },
+     "ok": true,
+     "ms": 10
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": [
+    {
+     "type": "scam_check",
+     "verdict": "likely_scam",
+     "signals": [
+      {
+       "category": "scam",
+       "name": "Asks for gift cards"
+      },
+      {
+       "category": "scam",
+       "name": "Threat of arrest or deportation"
+      },
+      {
+       "category": "scam",
+       "name": "Impersonates a government agency"
+      }
+     ],
+     "quote": "Pay today with Apple gift cards",
+     "model_label": "scam",
+     "model_confidence": 0.945,
+     "model_keywords": [
+      "today",
+      "pay",
+      "gift cards",
+      "cards",
+      "gift"
+     ],
+     "advice": [
+      "Do not pay or share codes. Contact the organisation using a number from its official website.",
+      "Police, customs and embassies never ask you to move money to a 'safe account' or pay by phone. Hang up and call the official number yourself.",
+      "If you already paid, contact your bank right away and report it to the Canadian Anti-Fraud Centre."
+     ]
+    }
+   ]
+  }
+ },
+ {
+  "key": "zh_runway",
+  "message": "我的钱够用到学期末吗？",
+  "response": {
+   "reply": "Not quite. On your usual spending, CAD Everyday dips below zero on Nov 11 (lowest CAD -2,654.67 on Feb 12), and your tuition fund will be CAD 7,249.39 short when Winter Term 2, installment 2 is due on Mar 7. Convert about MYR 22,538 into your Tuition Fund by Mar 2 to cover the CAD 7,249.39 tuition gap. Cheapest: HomeBridge wallet conversion (true cost 0.6%, about CAD 43.76); a bank telegraphic transfer would lose about CAD 234.72. That is more than CAD 1,500 of sponsor money, so your sponsor approves it too. Convert about MYR 8,409 into your CAD Everyday by Nov 10 to stay above zero (lowest CAD -2,654.67 on Feb 12). Cheapest: HomeBridge wallet conversion (true cost 0.6%, about CAD 16.33); a bank telegraphic transfer would lose about CAD 103.80. That is more than CAD 1,500 of sponsor money, so your sponsor approves it too. I haven't moved any money. Say 'cover the tuition shortfall from my MYR wallet' and I'll draft that conversion for you to confirm.",
+   "actions": [],
+   "guard": {
+    "flags": [],
+    "matches": {},
+    "signals": [],
+    "sources": {},
+    "model": {
+     "label": "benign",
+     "confidence": 0.882,
+     "probs": {
+      "benign": 0.882,
+      "injection": 0.056,
+      "scam": 0.063
+     }
+    },
+    "looks_pasted": false,
+    "carried": [],
+    "session_flags": []
+   },
+   "trace": [
+    {
+     "tool": "forecast_cashflow",
+     "args": {
+      "until": "end_of_term"
+     },
+     "ok": true,
+     "ms": 7
+    }
+   ],
+   "provider": "offline",
+   "fallback": false,
+   "cards": [
+    {
+     "type": "forecast",
+     "account": "CAD Everyday",
+     "start_date": "2026-10-08",
+     "end_date": "2027-03-07",
+     "horizon": "last scheduled tuition installment",
+     "verdict": "both",
+     "series": [
+      1170.24,
+      579.95,
+      539.32,
+      498.69,
+      327.06,
+      231.43,
+      190.8,
+      150.17,
+      709.89,
+      669.26,
+      628.63,
+      565.01,
+      524.38,
+      483.75,
+      443.12,
+      1002.84,
+      962.21,
+      -228.42,
+      -269.05,
+      -440.68,
+      -536.31,
+      -576.94,
+      -17.22,
+      -99.05,
+      -139.68,
+      -180.31,
+      -243.93,
+      -284.56,
+      -325.19,
+      234.53,
+      193.9,
+      153.27,
+      -1037.36,
+      -1077.99,
+      -1249.62,
+      -1345.25,
+      -785.53,
+      -826.16,
+      -866.79,
+      -907.42,
+      -948.05,
+      -1011.67,
+      -1052.3,
+      -492.58,
+      -533.21,
+      -573.84,
+      -614.47,
+      -1805.1,
+      -1845.73,
+      -1886.36,
+      -1457.64,
+      -1553.27,
+      -1593.9,
+      -1675.73,
+      -1716.36,
+      -1756.99,
+      -1797.62,
+      -1260.89,
+      -1301.52,
+      -1342.15,
+      -1382.78,
+      -1423.41,
+      -1464.04,
+      -2654.67,
+      -2094.95,
+      -2266.58,
+      -2362.21,
+      -2402.84,
+      -2443.47,
+      -2484.1,
+      -2524.73,
+      -1988.0,
+      -2028.63,
+      -2069.26,
+      -2109.89,
+      -2130.2
+     ],
+     "step_days": 2,
+     "starting_balance": 1190.55,
+     "ending_balance": -2130.2,
+     "lowest": {
+      "date": "2027-02-12",
+      "balance": -2654.67,
+      "index": 63
+     },
+     "first_shortfall_date": "2026-11-11",
+     "shortfall_index": 17,
+     "tuition": [
+      {
+       "term": "Winter Term 2, installment 2",
+       "due": "2027-03-07",
+       "amount": 7250.0,
+       "gap": 7249.39,
+       "index": 75
+      }
+     ],
+     "weekly_spending_cad": 142.21,
+     "pending_included": [
+      "Pay CAD 1,150.00 to Maple Court Rentals from CAD Everyday",
+      "Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund",
+      "Convert MYR 3,888.00 to about CAD 1,250.61 (MYR Wallet to CAD Tuition Fund)"
+     ],
+     "suggestions": [
+      "Convert about MYR 22,538 into your Tuition Fund by Mar 2 to cover the CAD 7,249.39 tuition gap. Cheapest: HomeBridge wallet conversion (true cost 0.6%, about CAD 43.76); a bank telegraphic transfer would lose about CAD 234.72. That is more than CAD 1,500 of sponsor money, so your sponsor approves it too.",
+      "Convert about MYR 8,409 into your CAD Everyday by Nov 10 to stay above zero (lowest CAD -2,654.67 on Feb 12). Cheapest: HomeBridge wallet conversion (true cost 0.6%, about CAD 16.33); a bank telegraphic transfer would lose about CAD 103.80. That is more than CAD 1,500 of sponsor money, so your sponsor approves it too.",
+      "Ask your sponsor for a top-up before Nov 11."
+     ],
+     "disclosure": "An estimate, not a guarantee or financial advice. This forecast does not move money."
+    }
+   ]
+  }
+ }
+]

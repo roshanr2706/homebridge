@@ -1,0 +1,78 @@
+{
+ "actions": [
+  {
+   "action_id": "act_fc84efc3cd",
+   "kind": "transfer",
+   "summary": "Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund",
+   "tier": "T3",
+   "status": "awaiting_sponsor",
+   "needs_sponsor_approval": true,
+   "risk_score": 0,
+   "warnings": [
+    "Balance in CAD Tuition Fund is lower than this amount right now; it will fail unless topped up first."
+   ],
+   "next_step": "Waiting for the sponsor to approve in their own app.",
+   "compliance": {
+    "outcome": "clear",
+    "blocked": false,
+    "block_reason": null,
+    "checks": [
+     {
+      "id": "sanctions",
+      "label": "Sanctions screening",
+      "status": "pass",
+      "detail": "No match on the sample watchlist (12 entries)"
+     },
+     {
+      "id": "kyc",
+      "label": "Identity (KYC)",
+      "status": "pass",
+      "detail": "Aisha: verified (basic) · Rahman: verified (full)"
+     },
+     {
+      "id": "structuring",
+      "label": "Structuring detection",
+      "status": "pass",
+      "detail": "No split payments in the last 24h"
+     }
+    ],
+    "reports": [],
+    "record": null,
+    "purpose_code": null,
+    "cross_border": false,
+    "amount_cad": 7250.0,
+    "screened_at": 1791787953.118
+   },
+   "params": {
+    "payee_id": "py_ubc",
+    "payee_name": "UBC Student Financial Services",
+    "amount": 7250.0,
+    "currency": "CAD",
+    "from_account_id": "acc_tui",
+    "from_account": "CAD Tuition Fund",
+    "memo": "Winter Term 2, installment 1"
+   },
+   "risk_reasons": [
+    "Amount above the single-payment limit of CAD 1,500",
+    "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+    "Paid from a sponsor-funded account (CAD Tuition Fund)"
+   ],
+   "sponsor_reasons": [
+    "Amount above the single-payment limit of CAD 1,500",
+    "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+    "Paid from a sponsor-funded account (CAD Tuition Fund)"
+   ],
+   "risk_signals": [],
+   "created_at": 1791787953.1183276,
+   "expires_at": 1791874353.1890972,
+   "user_confirmed": true,
+   "sponsor_decision": null,
+   "sponsor_note": "",
+   "result": null,
+   "provenance": {
+    "amount": "user"
+   },
+   "frozen": null
+  }
+ ]
+}
