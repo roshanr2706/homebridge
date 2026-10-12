@@ -811,6 +811,48 @@ TEXT: Dict[str, Dict[str, str]] = {
     "pending_none": {"en": "Nothing is pending: no drafts waiting for you and nothing waiting for your dad.",
                      "zh": "目前没有待处理的事项：没有等你确认的草稿，也没有等爸爸批准的请求。",
                      "ms": "Tiada apa yang tertangguh: tiada draf menunggu anda dan tiada apa menunggu ayah anda."},
+    # Privacy (from get_data_sharing: the sponsor's scope and where the chat goes)
+    "privacy_no": {"en": "No. ", "zh": "看不到。", "ms": "Tidak. "},
+    "privacy_yes": {"en": "Yes. ", "zh": "是的。", "ms": "Ya. "},
+    "privacy_not_china": {"en": "No. ", "zh": "不会。", "ms": "Tidak. "},
+    "privacy_sponsor": {
+        "en": "Your dad sees only what you agreed to share when you signed up: the accounts he funds ({funded}), the "
+              "requests you send him, safety alerts and a daily count of activity. Your CAD Everyday account, wages, "
+              "spending and this chat stay private to you.",
+        "zh": "爸爸只能看到你注册时同意分享的内容：他出资的账户（{funded}）、你发给他的请求、安全提醒和每天的活动次数。你的 CAD 日常账户、工资、消费和这段聊天只有你自己能看到。",
+        "ms": "Ayah anda hanya nampak apa yang anda setuju kongsi semasa mendaftar: akaun yang dia biayai ({funded}), "
+              "permintaan yang anda hantar kepadanya, amaran keselamatan dan kiraan aktiviti harian. Akaun CAD "
+              "Everyday, gaji, perbelanjaan dan chat ini kekal peribadi untuk anda.",
+    },
+    "privacy_offline": {
+        "en": " Replies right now come from HomeBridge's built-in engine, so nothing you type leaves our server.",
+        "zh": "目前的回复来自 HomeBridge 内置引擎，你输入的内容不会离开我们的服务器。",
+        "ms": " Jawapan sekarang datang daripada enjin terbina dalam HomeBridge, jadi apa yang anda taip tidak "
+              "keluar dari pelayan kami.",
+    },
+    "privacy_cloud": {
+        "en": " Replies come from {model} ({region}): the text you type goes there, and the account data it reads is "
+              "masked; it never gets full account numbers, confirmation codes, compliance records or your dad's data.",
+        "zh": "回复来自 {model}（{region}）：你输入的文字会发送到那里，它读取的账户数据经过脱敏；它永远拿不到完整账号、确认码、合规记录或爸爸的数据。",
+        "ms": " Jawapan datang daripada {model} ({region}): teks yang anda taip dihantar ke sana, dan data akaun yang "
+              "dibacanya disamarkan; ia tidak pernah dapat nombor akaun penuh, kod pengesahan, rekod pematuhan atau "
+              "data ayah anda.",
+    },
+    "privacy_china_option": {
+        "en": " If HomeBridge is switched to DeepSeek, your chat text would be processed in mainland China, which needs "
+              "your consent; Qwen's Singapore endpoint or a self-hosted model keeps it out of China.",
+        "zh": "如果 HomeBridge 改用 DeepSeek，你的聊天文字会在中国大陆处理，这需要你同意；使用通义千问新加坡节点或自托管模型则不会进入中国大陆。",
+        "ms": " Jika HomeBridge ditukar kepada DeepSeek, teks chat anda akan diproses di tanah besar China, yang "
+              "memerlukan persetujuan anda; titik akhir Qwen di Singapura atau model hos sendiri mengekalkannya di "
+              "luar China.",
+    },
+    "privacy_log": {"en": " The audit log keeps events, never your message text.",
+                    "zh": "审计日志只记录事件，从不保存你的消息内容。",
+                    "ms": " Log audit menyimpan peristiwa sahaja, tidak pernah teks mesej anda."},
+    "region_cn": {"en": "mainland China", "zh": "中国大陆", "ms": "tanah besar China"},
+    "region_sg": {"en": "Singapore", "zh": "新加坡", "ms": "Singapura"},
+    "region_self": {"en": "the operator's own servers", "zh": "运营方自己的服务器", "ms": "pelayan pengendali sendiri"},
+    "region_server": {"en": "this server", "zh": "本服务器", "ms": "pelayan ini"},
     # Limits and tiers (from get_limits, so the numbers are the policy engine's)
     "limits_why": {
         "en": "Your dad approves payments above CAD {single}, anything over CAD {daily} in 24 hours, payments from "

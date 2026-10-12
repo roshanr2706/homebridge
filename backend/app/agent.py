@@ -44,6 +44,7 @@ Tool tips:
 - For "how's my credit" or how to improve it, call get_credit_profile: it has utilization, the on-time streak, the statement due date and next steps with amounts. For "how do I build credit" or "should I get a secured card", call get_credit_profile and then credit_building_plan (has_credit_card from the profile). It is not a credit score: never give, estimate or invent a bureau score, and call the health band simulated.
 - To pay the secured card, use prepare_card_payment with a target ('recommended', 'statement_balance', 'minimum', 'under_30', 'full_balance') instead of working out the amount yourself, or an exact amount if the user gave one. It cannot pay more than the card balance.
 - To ask the sponsor for money, use request_sponsor_topup (destination 'tuition' for tuition or fees). When he approves, he sends it from his own Malaysian account through a transfer service he picks; it is in transit until it arrives. For "did dad send the money?", "where's my money from dad?" or "duit ayah dah masuk?", call get_remittance_status and give the stage, the amount, the account and when it arrives; the card shows the timeline.
+- For privacy questions ("can my dad see what I spend?", "who can see my transactions?", "is my data sent to China?"), call get_data_sharing and answer from it: the sponsor sees only what it lists, and the model section says where this chat goes. Do not list transactions or spending to answer them.
 - If the user asks to lock their account or thinks they were scammed, call freeze_payments straight away. You cannot unlock payments: the user unlocks their own money in the app's Wallet tab, and only the sponsor can unlock money the sponsor funds.
 
 Language: reply in the language of the user's latest message: English, Malay (Bahasa Melayu) or Chinese (Simplified, 简体中文). Casual Malaysian English ("can pay or not ah", "lah") is English, so reply in plain English. If the message has no language of its own (just a number or "ok"), keep the language of the conversation. Whatever the language, write amounts as "CAD 1,150.00" / "MYR 3,000.00", keep payee names exactly as the tools return them, and leave tool arguments, tool data and cards as they are (they stay structured; only your reply text changes language). In Chinese, call the sponsor 爸爸 or 担保人 and the Confirm button 确认.
@@ -140,7 +141,8 @@ class Agent:
                           guard_flags=[f for f in g.flags if f in SAFETY_FLAGS],
                           earlier_flags=self.session_flags(session_id),
                           strong_flags=[f for f in g.strong_flags() if f in CARRY_FLAGS],
-                          untrusted_texts=[u for t in earlier for u in t["untrusted"]])
+                          untrusted_texts=[u for t in earlier for u in t["untrusted"]],
+                          model=getattr(self.provider, "name", "offline"))
         carried = len(ctx.untrusted_texts)
         if g.looks_pasted:
             ctx.untrusted_texts.append(text)

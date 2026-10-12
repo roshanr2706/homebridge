@@ -186,6 +186,23 @@ REMIT_STATUS_RE = (
     r"\b(duit|wang) (ayah|bapa|abah)\b.{0,12}\b(masuk|sampai|tiba)\b|\b(ayah|bapa|abah) (dah|sudah) "
     r"(hantar|kirim|transfer)\b|"
     r"(爸爸|父亲|爸)(的|汇的|转的|打的|寄的)?钱.{0,4}(到了|到账|到没|收到|来了)|(爸爸|父亲)(汇|转|打)钱了|汇款(到了|到账|状态|进度)")
+# Privacy questions: someone else seeing her data, or where her data and chat go.
+_PRIV_TARGET = (r"(data|transactions?|spend\w*|purchases?|messages?|chats?|accounts?|balances?|money|history|buy|"
+                r"bought|wages?|salary|food)")
+PRIVACY_WHO_RE = (
+    r"\b(who|anyone|anybody|someone|(my )?(dad|father|sponsor|parents?|mum|mom|family)|homebridge|the bank)\b"
+    r"(?! (send|sent|transfer))[^.?]{0,25}\b(see|sees|view|access|read|track|monitor|know)\b[^.?]{0,40}\b"
+    + _PRIV_TARGET + r"\b|"
+    r"(谁|爸爸|父亲|我爸|家长|担保人|别人).{0,8}(看到|看得到|看见|查看|知道).{0,10}(消费|开销|花销|记录|数据|聊天|余额|交易|账户)|"
+    r"(siapa|ayah|bapa|penaja|ibu bapa).{0,25}(nampak|tengok|lihat|tahu|baca).{0,30}"
+    r"(perbelanjaan|belanja|transaksi|data|mesej|chat|akaun|baki)")
+PRIVACY_DATA_RE = (
+    r"\b(my|our|the) (data|information|info|chats?|messages|conversations?|details)\b[^.]{0,30}\b(sent|send|go(es)?|"
+    r"stored|shared|leave|leaves|processed|kept|safe|private)\b|\bprivacy\b|"
+    r"\b(deepseek|qwen|china|chinese servers?)\b.{0,40}\b(data|chats?|see|read|servers?)\b|"
+    r"\b(data|chats?)\b.{0,40}\b(china|deepseek|qwen)\b|"
+    r"(数据|信息|聊天记录|聊天内容).{0,10}(发送|传到|存在|存到|发到|上传|去哪|给谁|出境|中国)|隐私|"
+    r"data saya.{0,30}(hantar|dihantar|simpan|disimpan|china|cina)|privasi")
 # Emergency lock, in any wording: "freeze my account", "冻结账户", "快帮我冻结账户", "锁定付款", "kunci akaun".
 LOCK_RE = (r"\b(freeze|lock|block)\s+(my|all|everything|the account|payments)\b|"
            r"(?<!解)(冻结|锁定|锁住|锁上|锁)(一下)?(我的)?(账户|账号|钱包|付款|支付|银行卡|卡|钱)|"
@@ -985,6 +1002,10 @@ class OfflineEngine:
         last = res[-1][1] if res else {}
         pays = bool(re.search(r"\b(pay|bayar|convert|tukar|send|transfer)\b", low))
 
+        # Privacy: "can my dad see what I spend?", "who can see my transactions?", "is my data sent to China?"
+        if re.search(PRIVACY_WHO_RE, raw) or re.search(PRIVACY_DATA_RE, raw):
+            return self._privacy(raw, res, done)
+
         if re.search(PENDING_RE, low):
             if "get_pending_actions" not in done:
                 return _call("get_pending_actions")
@@ -1079,6 +1100,38 @@ class OfflineEngine:
                         "and only invest money they won't need for years. I can show what's left after your bills: "
                         "ask 'will I run out of money before tuition?'")
         return None
+
+    def _privacy(self, raw: str, res, done) -> Dict[str, Any]:
+        """Who sees her data and where the chat goes, from get_data_sharing (the same scope the app enforces)."""
+        if "get_data_sharing" not in done:
+            return _call("get_data_sharing")
+        d = _result(res, "get_data_sharing")
+        L = self._lang
+        sp, model = d["sponsor"], d["model"]
+        about_sponsor = re.search(PRIVACY_WHO_RE, raw)
+        about_model = re.search(PRIVACY_DATA_RE, raw) or re.search(r"^who\b|谁|siapa", raw)
+        china = re.search(r"china|chinese|中国|大陆|境外|出境|\bcina\b|\bchina\b", raw)
+        msg = ""
+        if about_sponsor:
+            private = re.search(r"spend|food|buy|bought|purchase|transaction|chat|message|wage|salary|everyday|"
+                                r"消费|开销|花销|记录|聊天|工资|交易|belanja|perbelanjaan|transaksi|mesej|gaji", raw)
+            dad = re.search(r"dad|father|sponsor|parent|mum|mom|爸|父亲|家长|担保人|ayah|bapa|penaja", raw)
+            if private and dad:
+                msg += self._t("privacy_no")
+            funded = i18n.comma(L).join(i18n.account(a, L) for a in sp["funded_accounts"]) or "-"
+            msg += self._t("privacy_sponsor", funded=funded)
+        if about_model or not about_sponsor:
+            if china and not msg:
+                msg += self._t("privacy_yes" if model["region"] == "cn" else "privacy_not_china").strip() + (
+                    "" if L == "zh" else " ")
+            if model["leaves_server"]:
+                part = self._t("privacy_cloud", model=model["label"], region=self._t("region_" + model["region"]))
+            else:
+                part = self._t("privacy_offline")
+            if china and model["region"] != "cn":
+                part += self._t("privacy_china_option")
+            msg += part + self._t("privacy_log")
+        return _say(re.sub(r" {2,}", " ", msg).strip())
 
     def _remit_reply(self, r: Dict[str, Any]) -> str:
         """The latest money request's stage in one or two sentences; the action card under it has the timeline."""

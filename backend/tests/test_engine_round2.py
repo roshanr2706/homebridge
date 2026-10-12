@@ -184,6 +184,61 @@ def test_english_jailbreak_gets_an_english_refusal():
     assert not r.actions and r.reply.startswith("I can't")
 
 
+# ------------------------------------------------------ 4. who sees my data
+@pytest.mark.parametrize("msg,lead", [
+    ("Can my dad see what I spend on food?", "No. Your dad sees only"),
+    ("who can see my transactions", "Your dad sees only"),
+    ("爸爸能看到我的消费吗？", "看不到。爸爸只能看到"),
+    ("我爸能看到我的消费记录吗？", "看不到。"),
+    ("Ayah boleh nampak perbelanjaan saya?", "Tidak. Ayah anda hanya nampak"),
+])
+def test_sponsor_scope_answers(msg, lead):
+    st = fresh()
+    r = run(st, msg)
+    assert tools(r) == ["get_data_sharing"] and not r.actions, (msg, tools(r))
+    assert r.reply.startswith(lead), r.reply
+    assert not r.guard.get("session_flags")
+    # Never answered with her spending or transactions
+    assert "CAD 214.10" not in r.reply and "Late Night Pizza" not in r.reply
+
+
+def test_sponsor_scope_names_the_funded_accounts_from_the_bank():
+    r = run(fresh(), "Can my dad see what I spend on food?")
+    assert "MYR Wallet" in r.reply and "CAD Tuition Fund" in r.reply and "CAD Everyday account" in r.reply
+
+
+def test_data_to_china_offline():
+    r = run(fresh(), "Is my data sent to China?")
+    assert tools(r) == ["get_data_sharing"]
+    assert r.reply.startswith("No. ") and "nothing you type leaves our server" in r.reply
+    assert "DeepSeek" in r.reply and "Singapore" in r.reply and "never your message text" in r.reply
+
+
+@pytest.mark.parametrize("provider,region", [("deepseek", "mainland China"), ("qwen", "Singapore")])
+def test_data_flow_names_the_configured_cloud_model(provider, region):
+    st = fresh()
+    st.agent.provider.name = provider   # the offline engine answers; the tool reports the configured route
+    r = run(st, "Is my data sent to China?")
+    assert region in r.reply and "masked" in r.reply
+    assert r.reply.startswith("Yes. " if provider == "deepseek" else "No. ")
+
+
+def test_data_sharing_tool_matches_the_app_sharing_block():
+    from app.main import SHARING
+    from app.tools import ToolContext, get_data_sharing
+    st = fresh()
+    ctx = ToolContext(user_id=STUDENT, role="student", session_id="t", bank=st.bank, fx=st.fx, policy=st.policy,
+                      audit=st.audit, today=st.agent.today)
+    d = get_data_sharing(ctx, {})
+    assert d["sponsor"]["sees"] == SHARING["sponsor_sees"] and "chat" in d["sponsor"]["never_sees"]
+    assert d["model"]["leaves_server"] is False and "full_account_numbers" in d["model"]["model_never_sees"]
+
+
+def test_privacy_words_do_not_steal_her_own_lookups():
+    assert tools(run(fresh(), "show my transactions")) == ["list_transactions"]
+    assert tools(run(fresh(), "can i see my spending this month")) == ["budget_summary"]
+
+
 def test_who_are_you_in_chinese():
     r = run(fresh(), "你是谁？你能做什么？")
     assert r.reply.startswith("你好") and "我没听懂" not in r.reply

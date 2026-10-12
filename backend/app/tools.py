@@ -20,6 +20,7 @@ from .fx import FxMarket, FxUnavailable
 from .guard import SCAM_SUSPICIOUS_CONFIDENCE, check as guard_check
 from .classifier import shared as shared_classifier
 from .policy import PendingAction, PolicyEngine, PolicyError
+from .privacy import SHARING, data_flow
 
 
 @dataclass
@@ -37,6 +38,7 @@ class ToolContext:
     strong_flags: List[str] = field(default_factory=list)    # this turn's flags that will carry to later turns
     untrusted_texts: List[str] = field(default_factory=list)
     created_actions: List[PendingAction] = field(default_factory=list)
+    model: str = "offline"   # the provider answering this chat (privacy.data_flow says where its text goes)
 
     def flags(self) -> List[str]:
         return list(dict.fromkeys(self.guard_flags + self.earlier_flags))
@@ -414,6 +416,21 @@ def get_limits(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
         },
         "changed_by": "Only the sponsor can change these limits, in their own app.",
     }
+
+
+@tool("get_data_sharing",
+      "Who can see the student's data and where the chat goes: what the sponsor sees (only the accounts he funds, "
+      "requests sent to him, safety alerts and a daily activity count; never her own account, wages, spending or "
+      "chat), which language model answers and in which region, and what that model can and cannot see. Use it "
+      "for privacy questions ('can my dad see my spending?', 'is my data sent to China?'). Read-only.", {})
+def get_data_sharing(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
+    funded = [x["label"] for x in ctx.bank.accounts(ctx.user_id) if x["sponsor_funded"]]
+    user = ctx.bank.user(ctx.user_id) or {}
+    sponsor = ctx.bank.user(user.get("sponsor_id") or "") or {}
+    return {"sponsor": {"name": sponsor.get("name", ""), "sees": SHARING["sponsor_sees"],
+                        "never_sees": SHARING["sponsor_never_sees"], "funded_accounts": funded,
+                        "consented_at_onboarding": SHARING["consented_at_onboarding"]},
+            "model": data_flow(ctx.model)}
 
 
 # ---------------------------------------------------------------- T1 writes

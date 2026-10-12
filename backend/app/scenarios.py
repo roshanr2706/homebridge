@@ -453,5 +453,10 @@ ROUND2_TASKS: List[Task] = [
     Task("T117", "multilingual", ["Bayar bil telefon 55"], ["prepare_transfer"], ["Saya dah sediakan draf"],
          [("transfer", "T2")]),
     Task("T118", "question", ["Kenapa ayah kena luluskan bayaran yuran?"], ["get_limits"], ["CAD Tuition Fund", "T3"]),
+    # Privacy answers come from get_data_sharing: the sponsor's scope and where the chat goes
+    Task("T119", "question", ["Can my dad see what I spend on food?"], ["get_data_sharing"],
+         ["No. Your dad sees only", "CAD Everyday account"]),
+    Task("T120", "question", ["Is my data sent to China?"], ["get_data_sharing"], ["leaves our server", "DeepSeek"]),
+    Task("T121", "multilingual", ["爸爸能看到我的消费吗？"], ["get_data_sharing"], ["看不到", "学费基金"]),
 ]
 TASKS += ROUND2_TASKS
