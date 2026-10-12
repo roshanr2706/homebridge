@@ -399,6 +399,39 @@ def test_sanctions_block_reply_is_consistent_and_neutral():
     assert "SAMPLE" not in str(a.for_model())
 
 
+# ------------------------------------------------- 7. money already in transit
+def _forecast(st, until="next_tuition"):
+    from app.tools import ToolContext, forecast_cashflow
+    ctx = ToolContext(user_id=STUDENT, role="student", session_id="t", bank=st.bank, fx=st.fx, policy=st.policy,
+                      audit=st.audit, today=st.agent.today)
+    return forecast_cashflow(ctx, {"until": until})
+
+
+def test_forecast_counts_a_remittance_in_transit_on_its_arrival_date():
+    from datetime import timedelta
+    from app.seed import SPONSOR
+    st = fresh()
+    st.policy.limits.remit_settle = "business_days"   # the provider's real speed, so it lands on a later day
+    st.policy.remit.clock = lambda: 1_790_000_000.0     # a fixed Monday, so the business-day maths is fixed
+    before = _forecast(st)
+    a = st.policy.draft_topup_request(STUDENT, "s", 800, "CAD", "textbooks")
+    after_request = _forecast(st)
+    assert after_request["ending_balance"] == before["ending_balance"]          # not sent yet: not counted
+    st.policy.sponsor_decide(a.id, SPONSOR, True, "ok")
+    assert st.policy.get(a.id).status == "in_transit"
+    receive = a.params["quote"]["receive_amount"]
+    days = int((a.remittance["settle_after"] - st.policy.remit.clock()) // 86400)
+    r = _forecast(st)
+    assert round(r["ending_balance"] - before["ending_balance"], 2) == round(receive, 2)
+    assert any("in transit" in s for s in r["pending_included"])
+    arrive = [e for e in r["events"] if e["kind"] == "remittance"]
+    assert arrive and arrive[0]["amount"] == receive
+    assert days >= 1 and arrive[0]["date"] == (st.agent.today + timedelta(days=days)).isoformat()
+    # the day before it lands the balance doesn't have it yet; from that day on it does
+    assert r["series"][days - 1] == before["series"][days - 1]
+    assert round(r["series"][days] - before["series"][days], 2) == round(receive, 2)
+
+
 def test_who_are_you_in_chinese():
     r = run(fresh(), "你是谁？你能做什么？")
     assert r.reply.startswith("你好") and "我没听懂" not in r.reply

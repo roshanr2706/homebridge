@@ -716,6 +716,25 @@ def forecast_cashflow(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
             continue
         included.append(act.summary)
 
+    # Money the sponsor has already sent (a remittance in transit, remit.py) counts on its expected arrival date,
+    # at the locked amount. Reading the action also settles it if it has already arrived (then it's in `bal`).
+    arrivals: List[Tuple[date, Dict[str, Any]]] = []
+    for act in ctx.policy.list_for(uid, ["in_transit"]):
+        q, acc_id = act.params.get("quote") or {}, act.params.get("to_account_id")
+        if act.kind != "topup" or not q or acc_id not in bal:
+            continue
+        secs = max(0.0, float(act.remittance.get("settle_after") or 0) - ctx.policy.remit.clock())
+        arrive = today + timedelta(days=int(secs // 86400))
+        item = {"account_id": acc_id, "amount": float(q["receive_amount"]), "currency": q["receive_currency"],
+                "label": f"Arriving: {act.summary}"}
+        if arrive <= today:
+            bal[acc_id] += item["amount"]
+            events.append({"date": today.isoformat(), "label": item["label"], "amount": item["amount"],
+                           "currency": item["currency"], "account": labels[acc_id], "kind": "remittance"})
+        elif arrive <= end:
+            arrivals.append((arrive, item))
+        included.append(f"{act.summary} (in transit, arriving {arrive.isoformat()})")
+
     # Day-to-day spending: the last 30 days of spending-account outflows that are not recurring items.
     recurring = [r for r in ctx.bank.recurring(uid) if r["account_id"] in bal]
     fixed = {r["counterparty"] for r in recurring}
@@ -734,6 +753,8 @@ def forecast_cashflow(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
         due = date.fromisoformat(t["due"])
         if today < due <= end and t["id"] not in covered:
             schedule.setdefault(due, []).append(("tuition", t))
+    for d, item in arrivals:
+        schedule.setdefault(d, []).append(("remittance", item))
 
     series = [round(bal[spend_id], 2)]
     myr_series = [bal[wallet["id"]] if wallet else 0.0]
@@ -742,6 +763,11 @@ def forecast_cashflow(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
         d = today + timedelta(days=i)
         bal[spend_id] -= daily_spend
         for what, x in schedule.get(d, []):
+            if what == "remittance":
+                bal[x["account_id"]] += x["amount"]
+                events.append({"date": d.isoformat(), "label": x["label"], "amount": x["amount"],
+                               "currency": x["currency"], "account": labels[x["account_id"]], "kind": "remittance"})
+                continue
             if what == "recurring":
                 bal[x["account_id"]] += x["amount"]
                 kind = "bill" if x["amount"] < 0 else ("allowance" if x["category"] == "allowance" else "income")
@@ -833,7 +859,8 @@ def forecast_cashflow(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
         "suggestions": suggestions[:3],
         "assumptions": ["Day-to-day spending continues at the last 30 days' average.",
                         "Recurring pay, allowance, rent and bills follow your schedule.",
-                        "Pending drafts count as if confirmed today; sponsor top-up requests do not.",
+                        "Pending drafts count as if confirmed today; sponsor top-up requests do not until he "
+                        "sends them, and money he has sent counts on its expected arrival date.",
                         "The sponsor allowance arrives in MYR and stays in the MYR Wallet unless converted."],
         "disclosure": "An estimate, not a guarantee or financial advice. This forecast does not move money.",
     }
