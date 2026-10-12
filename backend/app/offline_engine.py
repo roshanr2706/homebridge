@@ -10,6 +10,9 @@ It is intentionally narrow. It refuses anything the safety check flagged, asks a
 or amount is missing or odd, and never drafts a payment for a question. Parsing (amounts, currencies, payees,
 dates) lives in offline_nlu.py.
 
+Replies come in the language the user wrote in (English, Chinese or Malay; see i18n.py for detection and the
+template table). Amounts, payee names and tool calls are the same in every language.
+
 Multi-turn state: a reply may carry "_hb_state" (a pending question such as "which payee?", whether it drafted
 something, or an offer such as "say X and I'll draft it"). The agent keeps that reply in the session history,
 the next turn reads it back, and llm.to_wire drops the key, so a real model never sees it. It holds nothing
@@ -25,6 +28,8 @@ import uuid
 from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
+from . import i18n
+from .i18n import t
 from .offline_nlu import (PAYEE_NAMES, amount_issue, currencies, first_amount, is_question, nice_date,
                           parse_amounts, parse_date, payee_keys, payment_clauses, short_date)
 
@@ -44,18 +49,26 @@ INTENT_WORDS = [
     (r"余额|多少钱|还剩|还有多少|baki|duit saya", "balance"),
     (r"房租|租金|sewa", "rent landlord"),
     (r"房东|tuan rumah", "landlord"),
-    (r"(交|付|缴)(房租|租金|学费|电费|话费|水电|钱|款)|支付(?!宝)|转账|转(?!换).{0,12}给|汇给|打钱给|bayar", "pay"),
+    (r"(交|付|缴)(房租|租金|学费|电费|话费|水电|钱|款)|支付(?!宝)|转账|转(?!换).{0,12}给|汇给|打钱给|付给|付(?=\s*\d)|"
+     r"bayar", "pay"),
     (r"学费|yuran", "tuition"),
     (r"诈骗|骗局|骗子|是真的吗|是不是真的|scam ke|tipu", "scam"),
-    (r"兑换|换成|换钱|tukar", "convert"),
+    (r"兑换|换成|换钱|tukar(?!an)", "convert"),
     (r"令吉|马币|ringgit", "myr"),
     (r"加币|加元|dolar kanada", "cad"),
     (r"最便宜|最划算|paling murah", "cheapest"),
     (r"信用", "credit"),
     (r"花了|开销|消费|belanja", "spent"),
     (r"预算|bajet", "budget"),
+    # "ask" before "dad", so "问爸爸要500" and "minta ayah 500" read as "ask ... dad"
+    (r"(问|向|跟|找).{0,6}要|minta", "ask"),
     (r"爸爸|父亲|ayah|bapa", "dad"),
-    (r"问.{0,6}要|minta", "ask"),
+    # Spending categories, so "我这个月交通花了多少？" answers for transport
+    (r"交通|车费|公交|地铁", "transport"),
+    (r"餐饮|吃饭|外卖|下馆子", "dining"),
+    (r"买菜|杂货|超市", "groceries"),
+    # "用马币钱包补上学费缺口" / "tampung kekurangan yuran": cover the tuition shortfall
+    (r"补.{0,8}(缺口|差额)|\btampung\b", "cover the shortfall"),
     # Credit Builder
     (r"信用卡|kad kredit", "credit card"),
     (r"还(信用卡|卡|款)|还清", "pay"),
@@ -105,14 +118,15 @@ def _account(bal: Dict[str, Any], word: str) -> Optional[Dict[str, Any]]:
     return next((a for a in bal.get("accounts", []) if word.lower() in a["label"].lower()), None)
 
 
-def _action_text(a: Dict[str, Any]) -> str:
+def _action_text(a: Dict[str, Any], lang: str = "en") -> str:
+    what = i18n.summary(a["summary"], lang)
     if a.get("status") == "awaiting_sponsor":
-        return f"I've sent this to your sponsor for approval: {a['summary']}."
-    s = f"I've drafted it: {a['summary']}. Please check the payee and amount on the confirmation card and tap Confirm."
+        return t("sent_to_sponsor", lang, summary=what)
+    s = t("drafted_it", lang, summary=what)
     if a.get("needs_sponsor_approval"):
-        s += " After you confirm, your sponsor also needs to approve it."
+        s += t("then_sponsor", lang)
     if a.get("warnings"):
-        s += " Note: " + " ".join(a["warnings"])
+        s += t("note", lang, text=("" if lang == "zh" else " ").join(i18n.warning(w, lang) for w in a["warnings"]))
     return s
 
 
@@ -128,9 +142,9 @@ _ACK = r"yes|yeah|yea|yep|yup|ya|ok|okay|k|sure|alright|right|correct|great|cool
 _CONFIRM_VERB = (r"confirm|approve|go ahead|proceed|do it|do that|send it|pay it|execute|make it happen|carry on|"
                  r"teruskan|sahkan|确认|批准|继续|执行")
 CHATTER_RE = re.compile(
-    rf"^(?:(?:{_ACK})[\s,.!]*)*(?:(?:please|pls|plz|just|now|then|can|you can)\s+)*(?P<verb>{_CONFIRM_VERB})?"
+    rf"^(?:(?:{_ACK})[\s,.!，、。！]*)*(?:(?:please|pls|plz|just|now|then|can|you can)\s+)*(?P<verb>{_CONFIRM_VERB})?"
     r"(?:\s*(?:it|that|this|them|all|now|please|pls|lah|la|for me|already|then|the (?:payment|transfer|draft|"
-    r"conversion)))*[\s.!。！]*$")
+    r"conversion)|吧|一下|啦|了|这笔|它))*[\s.!。！]*$")
 ACCEPT_VERBS = (None, "do it", "do that", "go ahead", "proceed", "carry on", "pay it", "send it", "teruskan", "继续")
 DRAFT_TOOLS = {"prepare_transfer", "prepare_conversion", "prepare_card_payment", "add_payee", "request_sponsor_topup"}
 
@@ -224,8 +238,71 @@ def _forecast_reply(r: Dict[str, Any]) -> str:
     return msg
 
 
+def _forecast_reply_local(r: Dict[str, Any], lang: str) -> str:
+    """The same verdict and picks as _forecast_reply, in Chinese or Malay. The tool's suggestion text is English,
+    so each suggestion is rebuilt from its fields."""
+    d = lambda iso: i18n.date(iso, lang)  # noqa: E731
+    m = lambda v: _money(v, "CAD")  # noqa: E731
+    lo = r["lowest"]
+    gaps = [g for g in r["tuition"] if g["gap"] > 0]
+    short = r["first_shortfall_date"]
+    acct = i18n.account(r["account"], lang)
+    if short:
+        msg = t("fc_short", lang, account=acct, date=d(short), lowest=m(lo["balance"]), low_date=d(lo["date"]))
+    else:
+        msg = t("fc_ok", lang, verdict=t("fc_mostly" if gaps else "fc_yes", lang), end=d(r["end_date"]),
+                lowest=m(lo["balance"]), low_date=d(lo["date"]))
+    if gaps:
+        msg += t("fc_gap", lang, join=t("fc_and" if short else "fc_but", lang), gap=m(gaps[0]["gap"]),
+                 term=i18n.term(gaps[0]["term"], lang), due=d(gaps[0]["due"]))
+        msg += (t("fc_gap2", lang, term=i18n.term(gaps[1]["term"], lang), due=d(gaps[1]["due"])) if len(gaps) > 1
+                else ("。" if lang == "zh" else "."))
+    elif r["tuition"]:
+        msg += t("fc_covered", lang, due=d(r["tuition"][0]["due"]))
+    else:
+        msg += "。" if lang == "zh" else "."
+    tips = r["suggestions"]
+    picks = tips[:1] if gaps else []
+    if short:
+        picks += [s for s in tips[len(picks):] if s["kind"] in ("cut_spending", "convert")][:1]
+    for s in picks or [x for x in tips[:1] if x["kind"] != "on_track"]:
+        if s["kind"] == "convert":
+            dest = t("fc_why_gap", lang, gap=f"{s['receive_cad']:,.2f}") if s["destination"] == "tuition" else \
+                t("fc_why_zero", lang)
+            tip = t("fc_tip_convert", lang, myr=f"{s['amount']:,.0f}", by=d(s["by_date"]), why=dest,
+                    dest=i18n.account("Tuition Fund" if s["destination"] == "tuition" else "CAD Everyday", lang),
+                    provider=i18n.provider(s["provider"], lang), pct=s["true_cost_pct"])
+        elif s["kind"] == "cut_spending":
+            tip = t("fc_tip_cut_dining" if s["category"] == "dining" else "fc_tip_cut_all", lang,
+                    n=math.ceil(s["weekly_cut_cad"]))
+        elif s["kind"] == "ask_sponsor" and short:
+            tip = t("fc_tip_ask", lang, date=d(short))
+        elif s["kind"] == "buffer":
+            tip = t("fc_tip_buffer", lang, lowest=m(lo["balance"]), low_date=d(lo["date"]))
+        else:
+            continue
+        msg += tip if lang == "zh" else " " + tip
+    if any(s["kind"] == "convert" for s in picks):
+        msg += (t("fc_end_offer", lang, offer=i18n.offer("cover the tuition shortfall from my MYR wallet", lang))
+                if gaps else t("fc_end_ask", lang))
+    else:
+        msg += t("fc_end", lang)
+    return msg
+
+
 class OfflineEngine:
     name = "offline"
+    _lang = "en"
+
+    def _t(self, key: str, **kw: Any) -> str:
+        """A reply template in the language of this turn."""
+        return t(key, self._lang, **kw)
+
+    def _act(self, a: Dict[str, Any]) -> str:
+        return _action_text(a, self._lang)
+
+    def _forecast(self, r: Dict[str, Any]) -> str:
+        return _forecast_reply(r) if self._lang == "en" else _forecast_reply_local(r, self._lang)
 
     # ------------------------------------------------------------------ main
     def chat(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -249,6 +326,8 @@ class OfflineEngine:
         nm = re.search(r"You are helping (.+?) \(role", system)
         self._today = date.fromisoformat(dm.group(1)) if dm else date.today()
         self._name = nm.group(1).split()[0] if nm else ""
+        # Reply in the user's language; "300" or "ok" keeps the language of the conversation.
+        self._lang = i18n.conversation_lang(text, prev_user)
         out = self._plan(text, low, note, results, prev_user, state)
         if not out.get("tool_calls") and any(n in DRAFT_TOOLS and "action" in r for n, r in results):
             out.setdefault("_hb_state", {})["drafted"] = True
@@ -261,12 +340,12 @@ class OfflineEngine:
         raw = text.lower().strip()
         done = [n for n, _ in res]
         last = res[-1][1] if res else {}
+        L = self._lang
         if last.get("error") and not last.get("saved_payees"):
-            drafted = [r["action"]["summary"] for _, r in res if "action" in r]
+            drafted = [i18n.summary(r["action"]["summary"], L) for _, r in res if "action" in r]
             if drafted:
-                return _say(f"I've drafted: {'; '.join(drafted)}. Tap Confirm on each card you want to go ahead. "
-                            f"I couldn't do the rest: {last['error']}")
-            return _say(f"I couldn't do that: {last['error']}")
+                return _say(self._t("drafted_partial", drafted=i18n.sep(L).join(drafted), error=last["error"]))
+            return _say(self._t("couldnt", error=last["error"]))
 
         # 0. Emergency lock and unlock requests (locking only adds friction, so it runs even in a flagged turn)
         lock = self._lock_request(low, done)
@@ -274,18 +353,25 @@ class OfflineEngine:
             return lock
 
         # 1. Scam check of a pasted or quoted message
+        pasted = state.get("slot") == "scam_text" and len(text.strip()) >= 12
         if re.search(r"scam|is this (real|legit)|legit ke|real or not|should i pay this", low) or (
-                "scam" in note.lower()):
+                "scam" in note.lower()) or pasted:
             if "check_message_for_scam" not in done:
+                # "Is this a scam?" with nothing to check: ask for the message, and check the next one.
+                if not pasted and "scam" not in note.lower() and i18n.is_bare_request(text):
+                    return _say(self._t("scam_paste"), state={"slot": "scam_text"})
                 return _call("check_message_for_scam", text=text)
             r = last
             if r["verdict"] == "no_known_pattern":
-                return _say("I don't see common scam signs in that message. It still makes sense to check it "
-                            "against the organisation's official website or app before paying anything.")
-            lead = "This looks like a scam" if r["verdict"] == "likely_scam" else "This has some warning signs"
-            why = f" {r['explanation']}" if r.get("explanation") else ""
-            return _say(f"{lead}.{why} Don't pay or share any codes, and contact the organisation through its "
-                        "official website instead. I won't set up any payment for it.")
+                return _say(self._t("scam_none"))
+            lead = self._t("scam_likely" if r["verdict"] == "likely_scam" else "scam_suspicious")
+            if L == "en":
+                why = f" {r['explanation']}" if r.get("explanation") else ""
+            else:
+                names = [i18n.signal(s["name"], L) for s in r.get("signals", [])[:3]]
+                q = (f"（“{r['quote']}”）" if L == "zh" else f' ("{r["quote"]}")') if r.get("quote") else ""
+                why = self._t("scam_why", signals=i18n.sep(L).join(names), quote=q) if names else ""
+            return _say(self._t("scam_verdict", lead=lead, why=why))
 
         lowered_note = note.lower()
         flagged = any(k in lowered_note for k in ("injection", "extraction", "escalation"))
@@ -301,15 +387,13 @@ class OfflineEngine:
 
         # 2. Anything the guard flagged as manipulation gets a refusal, no tools
         if flagged or ("scam" in lowered_note and not re.search(r"\b(check|scam)\b", low)):
-            return _say(self._refusal(lowered_note))
+            return _say(self._refusal(lowered_note, L))
 
         # 2b. "approve it yourself": only the sponsor's own app approves
         if re.search(r"\bapprove\b.{0,40}\b(yourself|for (me|him|her|them)|on (his|her|my) behalf)\b|"
                      r"\byou (can |could |should )?approve\b|\b(pretend|act) (to be|you are|as) (my )?(dad|father|sponsor)",
                      raw):
-            return _say("I can't approve anything, and nothing typed in this chat can. Approvals happen in your "
-                        "dad's own app with his own login. If he's happy with it, he can approve it there in a few "
-                        "seconds.")
+            return _say(self._t("refuse_approve"))
 
         # 2c. Answer to the question the previous reply asked ("Who would you like to pay?" -> "the landlord")
         slot = self._slot_answer(text, raw, state, today)
@@ -336,7 +420,7 @@ class OfflineEngine:
             if "prepare_transfer" not in done:
                 m = re.search(r"to (.+?) from", res[1][1]["action"]["summary"])
                 return _call("prepare_transfer", payee=m.group(1) if m else "", amount=_amount(text))
-            return _say("I cancelled the earlier draft. " + _action_text(last["action"]))
+            return _say("I cancelled the earlier draft. " + self._act(last["action"]))
 
         # 3b. Cancel a draft, but only when the text points at one; merchants' subscriptions are not ours to cancel
         if re.search(CANCEL_RE, low) or re.search(r"\brefund\b", raw):
@@ -350,14 +434,13 @@ class OfflineEngine:
         if re.search(FORECAST_WORDS, low) and not re.search(r"\b(pay|convert|transfer|send|bayar|tukar)\b", low):
             if "forecast_cashflow" not in done:
                 return _call("forecast_cashflow", **_forecast_horizon(low))
-            return _say(_forecast_reply(last), state=self._forecast_state(last))
+            return _say(self._forecast(last), state=self._forecast_state(last))
 
         # 3e. "Can I afford a $1,200 laptop?" and "how should I fund it?" (advice only)
         if re.search(AFFORD_RE, low):
             amt = _amount(text)
             if amt is None:
-                return _say("How much does it cost? I'll check it against your balance and upcoming bills.",
-                            state={"slot": "afford_amount", "item": self._afford_item(raw)})
+                return _say(self._t("ask_afford"), state={"slot": "afford_amount", "item": self._afford_item(raw)})
             return self._afford(amt, self._afford_item(raw), res, done)
         if re.search(r"how (should|do|can|would) i (fund|cover|pay for|afford)|\bfund (it|this|that)\b", raw):
             if "forecast_cashflow" not in done:
@@ -373,18 +456,20 @@ class OfflineEngine:
         # 5. Sponsor top-up request
         m = re.search(r"\b(ask|request).{0,20}(dad|father|mum|mom|parent|sponsor|ayah|papa)", low)
         if m:
-            issue = amount_issue(text)
+            issue = amount_issue(text, L)
             if issue:
                 return _say(issue)
             amt = _amount(text)
             if amt is None:
-                return _say("How much would you like to ask for, and what is it for?",
-                            state={"slot": "topup_amount"})
+                return _say(self._t("ask_topup"), state={"slot": "topup_amount"})
             if "request_sponsor_topup" not in done:
                 reason = re.sub(r".*\bfor\b", "", text, count=1).strip() if " for " in low else "student expenses"
+                why = re.search(r"(买|交|付|用来|用于|为了).+|\buntuk\b.+", text)   # "…要500买课本", "… untuk buku"
+                if " for " not in low and why:
+                    reason = re.sub(r"^untuk\s+", "", why.group(0)).strip(" 。.!！")
                 cur = "MYR" if "MYR" in _currencies(text) else "CAD"
                 return _call("request_sponsor_topup", amount=amt, currency=cur, reason=reason[:80] or "student expenses")
-            return _say(_action_text(last["action"]) + " You'll see the money once they approve.")
+            return _say(self._act(last["action"]) + self._t("topup_sent"))
 
         # 6. Summary for the sponsor
         if re.search(r"summary|report", low) and re.search(r"dad|father|parent|sponsor|send", low):
@@ -436,9 +521,7 @@ class OfflineEngine:
         question = is_question(text)
         if re.search(r"\bpay\b", low) and re.search(r"tuition|school fees|yuran", low) and not question:
             if re.search(r"from (my |the )?(myr|ringgit|rm|malaysian|wallet)|马币|令吉", raw):
-                return self._cover_tuition(low, res, done, pay=True,
-                                           lead="UBC is paid in CAD, so money from your MYR Wallet has to go "
-                                                "through your Tuition Fund first. ")
+                return self._cover_tuition(low, res, done, pay=True, lead=self._t("cover_lead_myr"))
             if "get_tuition_schedule" not in done:
                 return _call("get_tuition_schedule")
             if "prepare_transfer" not in done:
@@ -450,12 +533,12 @@ class OfflineEngine:
             act = dict(r["action"])
             if sched["next_shortfall_cad"] > 0:  # the heads-up below says it better than the generic warning
                 act["warnings"] = [w for w in act.get("warnings", []) if "lower than this amount" not in w]
-            msg = _action_text(act)
+            msg = self._act(act)
             if sched["next_shortfall_cad"] > 0:
-                msg += (f" Heads up: the tuition fund is CAD {sched['next_shortfall_cad']:,.2f} short, so it would fail "
-                        "today. Say 'cover the tuition shortfall from my MYR wallet' and I'll draft that conversion, "
-                        "or ask your dad for a top-up.")
-                return _say(msg, state={"offer": "cover the tuition shortfall from my MYR wallet"})
+                offer = "cover the tuition shortfall from my MYR wallet"
+                msg += self._t("tuition_heads_up", short=_money(sched["next_shortfall_cad"], "CAD"),
+                               offer=i18n.offer(offer, L))
+                return _say(msg, state={"offer": offer})
             return _say(msg)
 
         # 8. Tuition questions / planning
@@ -479,10 +562,8 @@ class OfflineEngine:
             if "get_fx_history" not in done:
                 return _call("get_fx_history", from_currency=src, to_currency=dst)
             h = last
-            return _say(f"I can't predict exchange rates. Over the last {h['days']} days {h['pair']} ranged from "
-                        f"{h['low']} to {h['high']}, and today is {h['today']} (average {h['average']}). If you need "
-                        "the money for a fixed date like tuition, converting in a few smaller amounts over time "
-                        "reduces the risk of a bad day.")
+            return _say(self._t("fx_history", days=h["days"], pair=h["pair"], low=h["low"], high=h["high"],
+                                today=h["today"], avg=h["average"]))
 
         # 9b. Someone else urgently asking for money through the student ("Mom says the emergency needs 1400 to X
         # immediately"): a classic impersonation pattern. Explain and draft nothing; a direct request still works.
@@ -491,9 +572,7 @@ class OfflineEngine:
         if m and _amount(text) and re.search(r"\b(emergency|urgent(ly)?|immediately|right now|asap|tonight)\b", raw):
             keys = payee_keys(raw)
             cmd = f" If you've checked and still want to pay, say 'pay {keys[0]} {_amount(text):g}'." if keys else ""
-            return _say(f"Be careful: an urgent request for money passed on from someone else is a common scam, where "
-                        f"someone pretends to be family or an official. Check with your {m.group(1)} directly on a "
-                        f"number you already know before paying anything. I haven't drafted anything.{cmd}")
+            return _say(self._t("relay_scam", who=m.group(1), cmd=cmd if L == "en" else ""))
 
         # 10. Pay someone
         if re.search(r"\b(pay|send|transfer|bayar|e-?transfer)\b", low):
@@ -505,7 +584,8 @@ class OfflineEngine:
         if m:
             if "set_budget" not in done:
                 return _call("set_budget", category=m.group(1), monthly_amount=float(m.group(2).replace(",", "")))
-            return _say(f"Done. Your {last['category']} budget is now CAD {last['monthly']:,.0f} a month.")
+            return _say(self._t("budget_set", category=i18n.category(last["category"], L),
+                                amount=f"{last['monthly']:,.0f}"))
 
         if re.search(r"spend|spent|where did my money|where .{0,12}money go|budget|too much on|overspend|habis|"
                      r"cut (my )?(costs|spending|back)|save money|saving money|spend less|lost my job|jimat|省钱", low):
@@ -516,13 +596,14 @@ class OfflineEngine:
         if re.search(r"payees?\b|who can i pay", low):
             if "list_payees" not in done:
                 return _call("list_payees")
-            return _say("Your saved payees: " + ", ".join(f"{p['name']} ({p['number']})" for p in last["payees"]) + ".")
+            return _say(self._t("payees_list", list=i18n.comma(L).join(
+                f"{p['name']} ({p['number']})" for p in last["payees"])))
 
         if re.search(r"transactions?|history|statement", low):
             if "list_transactions" not in done:
                 return _call("list_transactions", limit=10)
-            return _say("Recent transactions: " + "; ".join(
-                f"{t['date']} {t['counterparty']} {t['currency']} {t['amount']:,.2f}" for t in last["transactions"][:8]) + ".")
+            return _say(self._t("tx_list", list=i18n.sep(L).join(
+                f"{x['date']} {x['counterparty']} {x['currency']} {x['amount']:,.2f}" for x in last["transactions"][:8])))
 
         if re.search(r"balance|how much (money )?(do i have|left|i have)|baki|berapa|duit|broke|net worth|"
                      r"how much .{0,15}\bin (my|the) .{0,20}(account|wallet|fund)", low):
@@ -530,21 +611,23 @@ class OfflineEngine:
             if "get_balances" not in done:
                 return _call("get_balances", total_currency=cur)
             b = last
-            parts = [f"{a['label']} {_money(a['balance'], a['currency'])}" for a in b["accounts"]]
-            return _say("Your balances: " + "; ".join(parts) + f". Total is about {_money(b['total'], b['total_currency'])}.")
+            parts = [f"{i18n.account(a['label'], L)} {_money(a['balance'], a['currency'])}" for a in b["accounts"]]
+            return _say(self._t("balances", parts=i18n.sep(L).join(parts),
+                                total=_money(b["total"], b["total_currency"])))
 
         if re.search(r"^(thanks|thank you|thx|ty|terima kasih|谢谢)\b", low):
-            return _say("You're welcome.")
+            return _say(self._t("welcome"))
         if CHATTER_RE.match(raw or "x"):
-            return _say("Okay! Anything else I can help with?")
+            return _say(self._t("okay_else"))
 
         return self._fallback(raw)
 
     # ------------------------------------------------------- confirmations
     def _chatter(self, verb: Optional[str], res, done, state, flagged: bool) -> Optional[Dict[str, Any]]:
         offer = state.get("offer")
+        L = self._lang
         if flagged:
-            return _say("Tap Confirm on the card above; I can't confirm or approve payments for you from chat.")
+            return _say(self._t("chatter_flagged"))
         if offer and not state.get("drafted") and verb in ACCEPT_VERBS:
             # Accepting what the previous reply offered ("say X and I'll draft it"): plan X as if typed.
             # Whatever it drafts still waits for the Confirm tap.
@@ -557,19 +640,17 @@ class OfflineEngine:
         mine = [a for a in acts if a["status"] == "awaiting_user"]
         dad = [a for a in acts if a["status"] == "awaiting_sponsor"]
         if mine:
-            what = mine[-1]["summary"] if len(mine) == 1 else f"{len(mine)} drafts are waiting"
-            msg = (f"Tap Confirm on the card above ({what}). I can't confirm payments for you; only your tap in "
-                   "the app does that.")
+            what = (i18n.summary(mine[-1]["summary"], L) if len(mine) == 1 else
+                    self._t("chatter_n_waiting", n=len(mine)))
+            msg = self._t("chatter_mine", what=what)
             if any(a["needs_sponsor_approval"] for a in mine):
-                msg += " After you confirm, it goes to your dad to approve."
+                msg += self._t("chatter_then_dad")
         elif dad:
-            msg = (f"That's already confirmed and waiting for your dad to approve it in his app ({dad[-1]['summary']}). "
-                   "I can't approve it for him.")
+            msg = self._t("chatter_dad", what=i18n.summary(dad[-1]["summary"], L))
         else:
-            msg = ("There's nothing waiting for you to confirm right now. Tell me what you'd like to pay or convert "
-                   "and I'll draft it for you to confirm.")
+            msg = self._t("chatter_none")
         if offer:
-            msg += f" If you'd also like the next step, say '{offer}'."
+            msg += self._t("chatter_offer", offer=i18n.offer(offer, L))
         return _say(msg)
 
     # ------------------------------------------------------------ slots
@@ -583,7 +664,7 @@ class OfflineEngine:
                 amt = first_amount(text) or state.get("amount")
                 return {"intent": "pay", "plan": [(keys[0], amt)]}
         elif slot == "amount":
-            issue = amount_issue(text)
+            issue = amount_issue(text, self._lang)
             if issue:
                 return {"intent": "ask", "text": issue}
             amt = first_amount(text)
@@ -601,25 +682,24 @@ class OfflineEngine:
         elif slot == "topup_amount":
             amt = first_amount(text)
             if amt is not None and len(raw.split()) <= 3:
-                return {"intent": "ask", "text": "What is it for? Say it in one go, for example 'ask my dad for "
-                                                 f"{amt:g} for textbooks', and I'll send him the request."}
+                return {"intent": "ask", "text": self._t("ask_topup_reason", amount=f"{amt:g}")}
         return None
 
     # ---------------------------------------------------------------- pay
     def _pay(self, text: str, low: str, res, done, plan: Optional[List[Tuple[Optional[str], Optional[float]]]] = None
              ) -> Dict[str, Any]:
         raw = text.lower()
+        L = self._lang
         info_only = False
         if plan is None:
             clauses = payment_clauses(raw) or [(None, None, None)]
             keyed = [k for k, _, _ in clauses if k]
-            issue = amount_issue(text)
+            issue = amount_issue(text, L)
             if issue:
                 st = {"slot": "amount", "payee": keyed[0]} if len(set(keyed)) == 1 else None
                 return _say(issue, state=st)
             if len(clauses) > 4:
-                return _say("That's a lot of payments in one message. Please send them two or three at a time so "
-                            "you can check each one.")
+                return _say(self._t("too_many"))
             plan = [(k, a) for k, a, _ in clauses]
             info_only = is_question(text) and not re.search(r"\bhow much\b", raw)
             if not keyed and re.search(PARENT_RE, raw):
@@ -631,26 +711,21 @@ class OfflineEngine:
         # Who?
         if any(k is None for k, _ in plan):
             if len(plan) > 1:
-                return _say("I couldn't tell which payee each amount is for. Could you send them one at a time, "
-                            "for example 'pay hydro 45'?")
+                return _say(self._t("ask_which_each"))
             amt = plan[0][1]
             person = re.search(r"\b(?:to|my friend|friend|pay)\s+([A-Z][a-z]{1,20})\b", text)
             if person and person.group(1).lower() not in ("my", "the", "rent", "hydro", "ubc", "cad", "myr", "rm"):
-                return _say(f"{person.group(1)} isn't one of your saved payees, so I can't pay them from here. To pay "
-                            "someone new, say 'add a new payee' with their name and account number. Your sponsor "
-                            "approves new payees, and then there's a short cooling period before the first payment.")
+                return _say(self._t("not_a_payee", name=person.group(1)))
             if "list_payees" not in done:
                 return _call("list_payees")
             names = [p["name"] for p in _result(res, "list_payees")["payees"]
                      if p.get("status") == "active" and "Card" not in p["name"]]
-            lead = f"Who would you like to pay the {_money(amt, 'CAD')} to?" if amt else "Who would you like to pay?"
-            return _say(f"{lead} Your saved payees are {', '.join(names[:-1])} and {names[-1]}.",
+            lead = self._t("ask_who_amount", amount=_money(amt, "CAD")) if amt else self._t("ask_who")
+            return _say(self._t("ask_who_payees", lead=lead, names=i18n.and_list(names, L)),
                         state={"slot": "payee", "amount": amt})
 
         if re.search(r"from (my |the )?(myr|ringgit|rm|malaysian)( wallet| account)?\b|马币账户", raw):
-            p = PAYEE_NAMES[plan[0][0]]
-            return _say(f"{p} is paid in CAD, so it can't come straight out of your MYR Wallet. Convert some MYR into "
-                        "CAD Everyday first (for example 'convert 500 MYR to CAD'), then ask me to pay it from there.")
+            return _say(self._t("from_myr_wallet", payee=PAYEE_NAMES[plan[0][0]]))
 
         # How much? Last month's rent only when the text says rent; anything else is asked.
         says_rent = bool(re.search(r"\brent\b|\bsewa\b|房租|租金", raw))
@@ -667,10 +742,11 @@ class OfflineEngine:
             k = missing[0]
             if k == "tuition" and len(plan) == 1:
                 return self._tuition_info(text, raw, low, res, done)
-            hint = " If it's this month's rent, say 'pay rent' and I'll use last month's amount." if k == "rent" else ""
-            q = f"How much would you like to send to {PAYEE_NAMES[k]}?{hint}"
             if len(plan) > 1:
-                q = f"How much is the {PAYEE_NAMES[k]} payment? Please send that one with its amount, e.g. 'pay {k} 45'."
+                q = self._t("ask_how_much_each", payee=PAYEE_NAMES[k], key=k)
+            else:
+                q = self._t("ask_how_much_to", payee=PAYEE_NAMES[k],
+                            hint=self._t("rent_hint") if k == "rent" else "")
             return _say(q, state={"slot": "amount", "payee": k} if len(plan) == 1 else None)
 
         # Is there enough money? A payment that would fail gets a plan instead of a doomed draft.
@@ -682,18 +758,19 @@ class OfflineEngine:
         need_everyday = sum(a for k, a in plan if k != "tuition")
         src_note = ""
         if rent_row:
-            src_note = (f"Rent was {_money(abs(rent_row['amount']), rent_row['currency'])} last month "
-                        f"({rent_row['counterparty']}, {short_date(rent_row['date'])})")
+            src_note = self._t("rent_was", amount=_money(abs(rent_row["amount"]), rent_row["currency"]),
+                               payee=rent_row["counterparty"], date=i18n.date(rent_row["date"], L))
         if everyday and need_everyday > everyday["balance"] + 1e-9:
             return self._shortfall(plan, everyday, need_everyday, src_note, res, done)
 
         if info_only:
             k, a = plan[0]
             have = fund if k == "tuition" else everyday
-            lead = (src_note + ". ") if src_note else ""
+            lead = (src_note + ("。" if L == "zh" else ". ")) if src_note else ""
             cmd = f"pay {k} {a:g}"
-            return _say(f"{lead}Yes, you can: {have['label']} has {_money(have['balance'], 'CAD')}, enough for "
-                        f"{_money(a, 'CAD')} to {PAYEE_NAMES[k]}. Say '{cmd}' and I'll draft it for you to confirm.",
+            return _say(self._t("can_pay_offer", lead=lead, account=i18n.account(have["label"], L),
+                                balance=_money(have["balance"], "CAD"), amount=_money(a, "CAD"),
+                                payee=PAYEE_NAMES[k], cmd=cmd),
                         state={"offer": cmd})
 
         n = done.count("prepare_transfer")
@@ -702,46 +779,47 @@ class OfflineEngine:
             return _call("prepare_transfer", payee=k, amount=a)
         acts = [r["action"] for nm, r in res if nm == "prepare_transfer" and "action" in r]
         if len(acts) == 1:
-            msg = _action_text(acts[0])
+            msg = self._act(acts[0])
             if src_note and re.search(r"how much|can (i )?pay|or not|enough|boleh|可以|能不能", raw):
-                return _say(f"{src_note}; you have {_money(everyday['balance'], 'CAD')} in {everyday['label']}, so "
-                            f"yes. {msg}")
+                return _say(self._t("rent_can_pay", note=src_note, balance=_money(everyday["balance"], "CAD"),
+                                    account=i18n.account(everyday["label"], L), msg=msg))
             if src_note:
-                return _say(f"{src_note}, so I used that amount. {msg}")
+                return _say(self._t("rent_used", note=src_note, msg=msg))
             if re.search(r"or not|boleh|can (i )?pay|enough", raw) and everyday:
-                return _say(f"Yes, you have {_money(everyday['balance'], 'CAD')} in {everyday['label']}. {msg}")
+                return _say(self._t("yes_you_have", balance=_money(everyday["balance"], "CAD"),
+                                    account=i18n.account(everyday["label"], L), msg=msg))
             return _say(msg)
-        msg = (f"I've drafted {len(acts)} payments: " + "; ".join(a["summary"] for a in acts) +
-               ". Check each card and tap Confirm on each one you want to go ahead.")
+        msg = self._t("drafted_n", n=len(acts), list=i18n.sep(L).join(i18n.summary(a["summary"], L) for a in acts))
         if src_note:
-            msg = f"{src_note}, so I used that amount for rent. " + msg
+            msg = self._t("rent_used_multi", note=src_note, msg=msg)
         sponsor = [a for a in acts if a.get("needs_sponsor_approval")]
         if sponsor:
-            msg += (f" {'That last one needs' if sponsor == acts[-1:] else 'Some need'} your sponsor's approval too, "
-                    "because together they go over your limits.")
+            msg += self._t("multi_sponsor_last" if sponsor == acts[-1:] else "multi_sponsor_some")
         warns = list(dict.fromkeys(w for a in acts for w in a.get("warnings", [])))
         if warns:
-            msg += " Note: " + " ".join(warns)
+            msg += self._t("note", text=("" if L == "zh" else " ").join(i18n.warning(w, L) for w in warns))
         return _say(msg)
 
     def _shortfall(self, plan, everyday, need: float, src_note: str, res, done) -> Dict[str, Any]:
+        L = self._lang
         short = round(need - everyday["balance"], 2)
         if "get_fx_quotes" not in done:
             return _call("get_fx_quotes", from_currency="MYR", to_currency="CAD", amount=1000, own_wallet=True)
         rate = next(q for q in _result(res, "get_fx_quotes")["quotes"] if q["provider_key"] == "inapp")["rate"]
         myr = math.ceil(short / rate / 10) * 10
         wallet = _account(_result(res, "get_balances"), "Wallet")
-        what = (f"{_money(plan[0][1], 'CAD')} to {PAYEE_NAMES[plan[0][0]]}" if len(plan) == 1 else
-                f"{len(plan)} payments totalling {_money(need, 'CAD')}")
-        msg = (f"{src_note + '. ' if src_note else ''}{everyday['label']} has {_money(everyday['balance'], 'CAD')}, so "
-               f"{what} would leave you {_money(short, 'CAD')} short and the payment would fail. I haven't drafted it. ")
+        what = (self._t("shortfall_one", amount=_money(plan[0][1], "CAD"), payee=PAYEE_NAMES[plan[0][0]])
+                if len(plan) == 1 else self._t("shortfall_many", n=len(plan), total=_money(need, "CAD")))
+        msg = self._t("shortfall", note=(src_note + ("。" if L == "zh" else ". ")) if src_note else "",
+                      account=i18n.account(everyday["label"], L), balance=_money(everyday["balance"], "CAD"),
+                      what=what, short=_money(short, "CAD"))
+        ask = self._t("ask_dad_cmd", n=math.ceil(short))
         if wallet and wallet["balance"] >= myr:
-            msg += (f"You could convert about MYR {myr:,} from your MYR Wallet first (say 'convert {myr} MYR to CAD')"
-                    + (", which your dad approves too as it's over CAD 1,500 of sponsor money" if short > 1500 else "")
-                    + f", then ask me again; or ask your dad for a top-up (say 'ask my dad for {math.ceil(short)} for "
-                      "bills').")
-            return _say(msg, state={"offer": f"convert {myr} MYR to CAD"})
-        msg += f"Ask your dad for a top-up: say 'ask my dad for {math.ceil(short)} for bills'."
+            convert = f"convert {myr} MYR to CAD"
+            msg += self._t("shortfall_convert", myr=f"{myr:,}", convert=i18n.offer(convert, L), ask=ask,
+                           big=self._t("shortfall_big") if short > 1500 else "")
+            return _say(msg, state={"offer": convert})
+        msg += self._t("shortfall_ask", ask=ask)
         return _say(msg)
 
     # ------------------------------------------------------------- cancel
@@ -756,8 +834,7 @@ class OfflineEngine:
                         "through yet, say 'cancel that payment'.")
         target = re.search(CANCEL_TARGET, raw) or payee_keys(raw) or (len(raw.split()) <= 2 and state.get("drafted"))
         if not target:
-            return _say("What would you like me to cancel? I can cancel drafts that haven't gone through yet: say "
-                        "'cancel that payment' or 'cancel the conversion'.")
+            return _say(self._t("ask_cancel_what"))
         if "get_pending_actions" not in done:
             return _call("get_pending_actions")
         acts = [a for a in _result(res, "get_pending_actions")["actions"]
@@ -775,10 +852,11 @@ class OfflineEngine:
         if todo and (every or not cancelled):
             return _call("cancel_pending_action", action_id=todo[-1]["action_id"])
         if cancelled:
-            return _say("Cancelled: " + "; ".join(c["summary"] for c in cancelled) + ".")
+            return _say(self._t("cancelled", list=i18n.sep(self._lang).join(
+                i18n.summary(c["summary"], self._lang) for c in cancelled)))
         extra = (" Payments that have already gone through can't be undone from chat; ask the payee for a refund."
                  if re.search(r"\bundo\b|already", raw) else "")
-        return _say("There's nothing pending to cancel." + extra)
+        return _say(self._t("nothing_to_cancel") + extra)
 
     def _subscriptions(self, res, done, cancel: bool = False) -> Dict[str, Any]:
         if "list_transactions" not in done:
@@ -826,15 +904,15 @@ class OfflineEngine:
             what = re.sub(r"[\s,.!?]+$", "", what).strip() or "Reminder"
             what = what[0].upper() + what[1:]
             if not found:
-                return _say("Sure. When should I remind you? For example 'on the 1st', 'next Friday' or 'Oct 30'.",
-                            state={"slot": "reminder_date", "what": what})
+                return _say(self._t("ask_when"), state={"slot": "reminder_date", "what": what})
             when = found[0]
         if "create_reminder" not in done:
             return _call("create_reminder", due_date=when.isoformat(), text=what[:200])
-        msg = f"Done. I'll remind you on {nice_date(date.fromisoformat(last_due(res)))}: {what}."
+        due = last_due(res)
+        shown = nice_date(date.fromisoformat(due)) if self._lang == "en" else i18n.date(due, self._lang)
+        msg = self._t("reminder_set", date=shown, what=what)
         if re.search(r"\b(pay|bayar|transfer|send)\b|交|付", what.lower()):
-            msg += (f" I haven't drafted any payment; when it's time, say '{what[0].lower() + what[1:]}' and I'll "
-                    "prepare it for you to confirm.")
+            msg += self._t("reminder_no_draft", what=what[0].lower() + what[1:])
         return _say(msg)
 
     # ------------------------------------------------------------- afford
@@ -922,10 +1000,9 @@ class OfflineEngine:
             qs = last["quotes"]
             mid = qs[0]["mid_rate"]
             inapp = next((q for q in qs if q["provider_key"] == "inapp"), qs[0])
-            return _say(f"Today's mid-market rate (sandbox snapshot): 1 {src} = {mid:.4f} {dst}, or 1 {dst} = "
-                        f"{1 / mid:.4f} {src}. So {_money(amt, src)} is about {_money(amt * mid, dst)} at mid-market; "
-                        f"converting in HomeBridge you'd get {_money(inapp['you_receive'], dst)} "
-                        f"({inapp['true_cost_pct']}% margin). I can't predict where rates go next.")
+            return _say(self._t("fx_rate", src=src, dst=dst, mid=f"{mid:.4f}", inv=f"{1 / mid:.4f}",
+                                amount=_money(amt, src), mid_amount=_money(amt * mid, dst),
+                                inapp=_money(inapp["you_receive"], dst), pct=inapp["true_cost_pct"]))
 
         if re.search(r"(bank|account|details?).{0,30}\b(same|changed?|still|different)\b|"
                      r"\b(same|changed?|different)\b.{0,30}\b(bank|account|details?)\b", raw) and payee_keys(raw) \
@@ -945,11 +1022,7 @@ class OfflineEngine:
                 len(raw.split()) <= 4 or re.search(r"what can you do|what do you do|how can you help|what are you|"
                                                    r"what('?s| is) homebridge|^help\??$", raw):
             name = getattr(self, "_name", "")
-            return _say(f"Hi{' ' + name if name else ''}! I can check your balances and spending, compare the true "
-                        "cost of moving money between MYR and CAD, plan for tuition, and draft payments, conversions "
-                        "and requests to your dad, which you always confirm yourself in the app. I can also set "
-                        "reminders, help you build credit and check suspicious messages. Try 'pay rent', 'cheapest way "
-                        "to send 3,000 MYR to CAD' or 'will I run out of money before tuition?'")
+            return _say(self._t("hello", name=(("，" if self._lang == "zh" else " ") + name) if name else ""))
 
         if re.search(r"\btax(es)?\b|\bcukai\b|报税", raw):
             return _say("I can't file taxes for you. In general, international students in Canada file a return each "
@@ -978,23 +1051,23 @@ class OfflineEngine:
             what = PAYEE_NAMES[keys[0]]
             return (f"I don't see a payment to {what} in progress. Say 'pay my {keys[0]}' to draft one"
                     + ("; after you confirm it, it goes to your dad to approve." if keys[0] == "tuition" else "."))
+        L = self._lang
+        lst = lambda xs: i18n.sep(L).join(i18n.summary(a["summary"], L) for a in xs)  # noqa: E731
+        about_dad = re.search(r"dad|sponsor|approv|爸爸|批准|审批|ayah|lulus", raw)
         parts = []
         if mine:
-            parts.append("Waiting for you to confirm: " + "; ".join(a["summary"] for a in mine) +
-                         " (tap Confirm on its card)")
+            parts.append(self._t("pending_mine", list=lst(mine)))
         if dad:
-            parts.append("Waiting for your dad to approve in his app: " + "; ".join(a["summary"] for a in dad))
+            parts.append(self._t("pending_dad", list=lst(dad)))
         if approved:
-            parts.append("Approved by your dad and done: " + "; ".join(a["summary"] for a in approved))
+            parts.append(self._t("pending_approved", list=lst(approved)))
         if rejected:
-            parts.append("Declined by your dad: " + "; ".join(a["summary"] for a in rejected))
-        if done_ and not re.search(r"dad|sponsor|approv", raw):
-            parts.append("Done: " + "; ".join(a["summary"] for a in done_[-3:]))
+            parts.append(self._t("pending_rejected", list=lst(rejected)))
+        if done_ and not about_dad:
+            parts.append(self._t("pending_done", list=lst(done_[-3:])))
         if not parts:
-            if re.search(r"dad|sponsor|approv", raw):
-                return "Your dad hasn't approved anything recently, and nothing is waiting for him."
-            return "Nothing is pending: no drafts waiting for you and nothing waiting for your dad."
-        return ". ".join(parts) + "."
+            return self._t("pending_none_dad" if about_dad else "pending_none")
+        return ("。".join(parts) + "。") if L == "zh" else (". ".join(parts) + ".")
 
     @staticmethod
     def _limits_reply(raw: str, L: Dict[str, Any]) -> str:
@@ -1079,7 +1152,7 @@ class OfflineEngine:
             return _call("get_tuition_schedule")
         s = _result(res, "get_tuition_schedule")
         if not s["installments"]:
-            return _say("You have no unpaid tuition installments.")
+            return _say(self._t("tuition_none"))
         nxt = s["installments"][0]
         short = s["next_shortfall_cad"]
         gap = (f"Your Tuition Fund has {_money(s['tuition_fund_cad'], 'CAD')}, so the next installment is "
@@ -1124,26 +1197,28 @@ class OfflineEngine:
                         "wallet') or ask your dad for a top-up.")
             return _say(msg + " I haven't drafted anything.",
                         state={"offer": "cover the tuition shortfall from my MYR wallet"} if short > 0 else None)
-        msg = (f"Your next tuition installment is {_money(nxt['amount'], 'CAD')} for {nxt['term']}, due "
-               f"{nxt['due']} ({nxt['days_until_due']} days away). Your tuition fund has "
-               f"{_money(s['tuition_fund_cad'], 'CAD')}.")
+        L = self._lang
+        msg = self._t("tuition_next", amount=_money(nxt["amount"], "CAD"), term=i18n.term(nxt["term"], L),
+                      due=nxt["due"] if L == "en" else i18n.date(nxt["due"], L), days=nxt["days_until_due"],
+                      fund=_money(s["tuition_fund_cad"], "CAD"))
         if short > 0:
             months = max(1, nxt["days_until_due"] // 30)
-            msg += (f" That leaves a shortfall of {_money(short, 'CAD')}. Your MYR wallet is worth "
-                    f"about {_money(s['myr_wallet_value_cad'], 'CAD')}, so converting some of it would cover it, "
-                    f"or you could set aside about {_money(short / months, 'CAD')} a month.")
+            msg += self._t("tuition_short", short=_money(short, "CAD"), myr=_money(s["myr_wallet_value_cad"], "CAD"),
+                           monthly=_money(short / months, "CAD"))
         else:
-            msg += " That covers it."
+            msg += self._t("tuition_covered")
         if re.search(r"plan|ready|prepare|remind", low) and "create_reminder" not in done:
             return _call("create_reminder", due_date=nxt["due"][:8] + "01", text=f"Tuition due {nxt['due']}: "
                          f"top up tuition fund")
         if "create_reminder" in done:
-            msg += f" I've also set a reminder for {res[-1][1]['due_date']}."
+            due = res[-1][1]["due_date"]
+            msg += self._t("tuition_reminder", date=due if L == "en" else i18n.date(due, L))
         return _say(msg, state={"offer": "cover the tuition shortfall from my MYR wallet"} if short > 0 else None)
 
     # ---------------------------------------------------------- conversion
     def _convert(self, text: str, curs: List[str], res, done) -> Dict[str, Any]:
-        issue = amount_issue(text)
+        L = self._lang
+        issue = amount_issue(text, L)
         if issue:
             return _say(issue)
         amt = _amount(text)
@@ -1157,11 +1232,9 @@ class OfflineEngine:
         acc = next((a for a in _result(res, "get_balances")["accounts"] if a["currency"] == src), None)
         if acc and acc["balance"] < amt:
             whole = int(acc["balance"])
-            return _say(f"Your {acc['label']} has {_money(acc['balance'], src)}, so I can't convert {_money(amt, src)}; "
-                        f"it would fail. I haven't drafted it. I can convert up to {_money(whole, src)}"
-                        + (" (more than about CAD 1,500 of sponsor money needs your dad's approval too)"
-                           if acc.get("sponsor_funded") else "")
-                        + ", or you can ask your dad for a top-up.",
+            return _say(self._t("convert_too_much", account=i18n.account(acc["label"], L),
+                                balance=_money(acc["balance"], src), amount=_money(amt, src), whole=_money(whole, src),
+                                sponsor=self._t("convert_sponsor_cap") if acc.get("sponsor_funded") else ""),
                         state={"offer": f"convert {whole} {src} to {dst}"} if whole > 0 else None)
         if "get_fx_quotes" not in done:
             return _call("get_fx_quotes", from_currency=src, to_currency=dst, amount=amt, own_wallet=True)
@@ -1169,8 +1242,8 @@ class OfflineEngine:
             return _call("prepare_conversion", from_currency=src, to_currency=dst, amount=amt)
         q = _result(res, "get_fx_quotes")["quotes"]
         inapp = next(x for x in q if x["provider_key"] == "inapp")
-        return _say(_action_text(res[-1][1]["action"]) + f" The fee is {inapp['true_cost_pct']}% in the exchange "
-                    f"rate (rate {inapp['rate']} against mid-market {inapp['mid_rate']}).")
+        return _say(self._act(res[-1][1]["action"]) + self._t("convert_fee", pct=inapp["true_cost_pct"],
+                                                               rate=inapp["rate"], mid=inapp["mid_rate"]))
 
     def _fx_compare(self, text: str, raw: str, low: str, curs: List[str], amt: Optional[float], res, done):
         last = res[-1][1] if res else {}
@@ -1189,29 +1262,28 @@ class OfflineEngine:
             return _call("get_fx_quotes", from_currency=src, to_currency=dst, amount=amount, own_wallet=not parent)
         r = last
         best, worst = r["quotes"][0], r["quotes"][-1]
+        L = self._lang
         lead = ""
-        if parent and not inbound and re.search(r"\b(send|transfer)\b", raw):
+        if parent and not inbound and re.search(r"\b(send|transfer)\b|汇|寄|kirim|hantar", raw):
             who = re.search(PARENT_RE, raw)
-            lead = (f"{'Your ' + who.group(1) + ' is' if who else 'Family back home are'} not one of your saved "
-                    "payees, so I can't send it from HomeBridge; here's the cheapest way to send it yourself. ")
+            lead = self._t("fx_not_payee", who=self._t("fx_your", who=who.group(1)) if who else self._t("fx_family"))
         if re.search(r"\b(wise|remitly|western union|paypal|instarem|bigpay|moneygram)\b", raw):
-            lead += ("I don't have quotes for named brands; the sandbox compares provider types, and a low-cost "
-                     "transfer service is the Wise-style option. ")
-        example = "" if amt else " (an example amount)"
-        msg = (f"{lead}Cheapest for {_money(amount, src)}{example} is the {best['provider']}: "
-               f"{_money(best['you_receive'], best['receive_currency'])} arrives (true cost "
-               f"{best['true_cost_pct']}%, {best['speed']}). That saves {_money(r['saving_vs_worst'], dst)} "
-               f"compared with the {worst['provider'].lower()}. "
-               + (r["note"] + " " if r.get("note") else "") + "Rates are a sandbox snapshot, not advice.")
+            lead += self._t("fx_brands")
+        note = self._t("fx_cached", note=r["note"]) if "cached" in (r.get("note") or "") else \
+            (r["note"] + " " if r.get("note") and L == "en" else "")
+        msg = self._t("fx_cheapest", lead=lead, amount=_money(amount, src),
+                      example="" if amt else self._t("fx_example"),
+                      best=i18n.provider(best["provider"], L) if L != "en" else best["provider"],
+                      receive=_money(best["you_receive"], best["receive_currency"]), pct=best["true_cost_pct"],
+                      speed=i18n.speed(best["speed"], L), saving=_money(r["saving_vs_worst"], dst),
+                      worst=i18n.provider(worst["provider"], L) if L != "en" else worst["provider"].lower(),
+                      note=note)
         return _say(msg)
 
     def _job_fee(self, text: str, res, done) -> Dict[str, Any]:
         if "check_message_for_scam" not in done:
             return _call("check_message_for_scam", text=text)
-        return _say("Be careful: a job that asks you to pay first (a 'training', 'equipment' or 'registration' fee) "
-                    "is one of the most common scams aimed at students. Real employers in Canada don't charge you "
-                    "to start work. Don't pay or share your banking details; check the company through its official "
-                    "website. I won't set up a payment for it.")
+        return _say(self._t("job_fee"))
 
     # ------------------------------------------------------- own accounts
     @staticmethod
@@ -1243,14 +1315,15 @@ class OfflineEngine:
         return None
 
     def _move(self, text: str, mv: Dict[str, Any], res, done) -> Dict[str, Any]:
-        issue = amount_issue(text)
+        L = self._lang
+        issue = amount_issue(text, L)
         if issue:
             return _say(issue)
         amt = _amount(text)
         if not mv.get("source"):
-            return _say("Which account should the money come from: CAD Everyday or your MYR Wallet?")
+            return _say(self._t("ask_from_account"))
         if amt is None:
-            return _say("How much would you like to move?")
+            return _say(self._t("ask_move_amount"))
         if "get_balances" not in done:
             return _call("get_balances", total_currency="CAD")
         bal = _result(res, "get_balances")
@@ -1259,8 +1332,8 @@ class OfflineEngine:
         if not src or not dst:
             return _say("I couldn't find both of those accounts.")
         if src["balance"] < amt:
-            return _say(f"Your {src['label']} has {_money(src['balance'], src['currency'])}, so moving "
-                        f"{_money(amt, src['currency'])} would fail. I haven't drafted it.")
+            return _say(self._t("move_too_much", account=i18n.account(src["label"], L),
+                                balance=_money(src["balance"], src["currency"]), amount=_money(amt, src["currency"])))
         same = src["currency"] == dst["currency"]
         args = dict(from_currency=src["currency"], to_currency=dst["currency"], amount=amt,
                     destination="tuition" if mv["dest"] == "tuition" else "everyday", source=mv["source"])
@@ -1270,51 +1343,52 @@ class OfflineEngine:
         if "prepare_conversion" not in done:
             return _call("prepare_conversion", **args)
         act = res[-1][1]["action"]
-        msg = _action_text(act)
+        msg = self._act(act)
         if same:
-            msg += " It's a move between your own accounts, so there's no fee."
+            msg += self._t("move_no_fee")
             if mv["source"] == "tuition":
-                msg += " Money leaving the Tuition Fund always needs your dad's approval."
+                msg += self._t("move_from_fund")
         else:
             inapp = next(q for q in _result(res, "get_fx_quotes")["quotes"] if q["provider_key"] == "inapp")
-            msg += (f" The fee is {inapp['true_cost_pct']}% in the exchange rate (rate {inapp['rate']} against "
-                    f"mid-market {inapp['mid_rate']}).")
+            msg += self._t("convert_fee", pct=inapp["true_cost_pct"], rate=inapp["rate"], mid=inapp["mid_rate"])
         return _say(msg)
 
     # ------------------------------------------------------------- spending
-    @staticmethod
-    def _spending_reply(low: str, b: Dict[str, Any]) -> str:
+    def _spending_reply(self, low: str, b: Dict[str, Any]) -> str:
+        L = self._lang
+        cat = lambda c: i18n.category(c["category"], L)  # noqa: E731
         over = [c for c in b["categories"] if c["over_budget"]]
         focus = next((c for c in b["categories"] if c["category"] in low), None)
         if focus or re.search(r"food|makan|eat", low):
             cats = [c for c in b["categories"] if c["category"] in ("dining", "groceries")] if not focus else [focus]
-            parts = [f"{c['category']} CAD {c['spent_cad']:,.2f}" + (
-                f" against a budget of CAD {c['budget_cad']:,.0f}" if c["budget_cad"] else "") for c in cats]
-            msg = "In the last 30 days: " + "; ".join(parts) + "."
+            parts = [f"{cat(c)} CAD {c['spent_cad']:,.2f}" + (
+                self._t("spent_against", budget=f"CAD {c['budget_cad']:,.0f}") if c["budget_cad"] else "")
+                for c in cats]
+            msg = self._t("spent_focus", parts=i18n.sep(L).join(parts))
             if any(c["over_budget"] for c in cats):
-                msg += " Dining is over budget. Cutting two takeaway meals a week would bring it back in line."
+                msg += self._t("spent_dining_over")
             return msg
         if re.search(r"cut (my )?(costs|spending|back)|save money|saving money|spend less|lost my job|jimat|省钱", low):
             fixed = {"rent", "phone", "utilities", "tuition", "family"}
             flex = [c for c in b["categories"] if c["category"] not in fixed][:3]
-            msg = (f"In the last 30 days you spent CAD {b['total_spent_cad']:,.2f}. The easiest places to cut: " +
-                   ", ".join(f"{c['category']} (CAD {c['spent_cad']:,.2f}" + (", over budget)" if c["over_budget"]
-                                                                            else ")") for c in flex) + ".")
+            op, cp = ("（", "）") if L == "zh" else (" (", ")")
+            items = [f"{cat(c)}{op}CAD {c['spent_cad']:,.2f}" +
+                     (self._t("spent_over_tag") if c["over_budget"] else "") + cp for c in flex]
+            msg = self._t("spent_cut", total=f"CAD {b['total_spent_cad']:,.2f}", list=i18n.comma(L).join(items))
             if b["possible_duplicate_charges"]:
-                msg += (" You were also charged twice by " + ", ".join(b["possible_duplicate_charges"]) +
-                        "; ask for one back.")
+                msg += self._t("spent_twice", list=i18n.comma(L).join(b["possible_duplicate_charges"]))
             if "lost my job" in low:
                 msg += (" Tell your dad early, and ask me 'will I run out of money before tuition?' to see how long "
                         "your money lasts.")
             return msg
-        top = ", ".join(f"{c['category']} CAD {c['spent_cad']:,.2f}" for c in b["categories"][:5])
-        msg = f"In the last 30 days you spent CAD {b['total_spent_cad']:,.2f}. Biggest categories: {top}."
+        top = i18n.comma(L).join(f"{cat(c)} CAD {c['spent_cad']:,.2f}" for c in b["categories"][:5])
+        msg = self._t("spent_total", total=f"CAD {b['total_spent_cad']:,.2f}", top=top)
         if over:
-            msg += " Over budget: " + ", ".join(c["category"] for c in over) + "."
+            msg += self._t("spent_over", list=i18n.comma(L).join(cat(c) for c in over))
         if b["possible_duplicate_charges"]:
-            msg += " Possible duplicate charge from " + ", ".join(b["possible_duplicate_charges"]) + "; worth checking."
+            msg += self._t("spent_dupe", list=i18n.comma(L).join(b["possible_duplicate_charges"]))
         if re.search(r"\b(make|create|plan|set up)\b.{0,12}budget", low):
-            msg += " To set one, say for example 'set a dining budget of 150'."
+            msg += self._t("spent_set_budget")
         return msg
 
     # ------------------------------------------------------------- fallback
@@ -1326,14 +1400,16 @@ class OfflineEngine:
             if hit:
                 votes[vocab[hit[0]]] = votes.get(vocab[hit[0]], 0) + 1
         best = max(votes, key=lambda i: (votes[i], -i)) if votes else None
+        L = self._lang
+        if L != "en":   # the closest-intent guess works on English words; other languages get local examples
+            return _say(self._t("fallback", tries=i18n.or_list(i18n.FALLBACK_EXAMPLES[L][:3], L)))
         others = [ex for i, (ex, _) in enumerate(SUGGESTIONS) if i != best and i in (0, 2, 4, 6)][:3]
-        tries = ", ".join(f"'{o}'" for o in others[:-1]) + f" or '{others[-1]}'"
+        tries = i18n.or_list(others, L)
         if best is not None:
             ex = SUGGESTIONS[best][0]
             state = {"offer": ex} if "<" not in ex else None
-            return _say(f"I didn't catch that. Did you mean '{ex.rstrip('?')}'? You can also try {tries}.", state=state)
-        return _say("I didn't catch that. I can help with balances, spending, tuition, exchange rates, payments, "
-                    f"credit and suspicious messages. Try {tries}.")
+            return _say(self._t("fallback_guess", guess=ex.rstrip("?"), tries=tries), state=state)
+        return _say(self._t("fallback", tries=tries))
 
     def _forecast_state(self, r: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         if any(t["gap"] > 0 for t in r.get("tuition", [])):
@@ -1356,7 +1432,7 @@ class OfflineEngine:
                     return _call("prepare_card_payment", target="statement_balance")
                 if re.search(r"\boff\b|\bfull\b|whole|entire|everything|all of it|clear|还清", low):
                     return _call("prepare_card_payment", target="full_balance")
-                issue = amount_issue(text)
+                issue = amount_issue(text, self._lang)
                 if issue:
                     return _say(issue)
                 amt = _amount(text)
@@ -1367,58 +1443,55 @@ class OfflineEngine:
                 return _say(f"{last['note'][0].upper()}{last['note'][1:]} Your card is at {last['utilization_pct']}% "
                             "of its limit.")
             after = last["card_after"]
-            msg = _action_text(last["action"])
-            msg += (f" Once it goes through, your card balance drops to CAD {after['balance']:,.2f}, "
-                    f"{after['utilization_pct']}% of your limit")
-            if after["utilization_pct"] < 30:
-                msg += f", under the 30% mark before your statement closes on {last['next_statement_date']}."
-            else:
-                msg += (f". That is still above 30%; paying a bit more before {last['next_statement_date']} "
-                        "would help your utilization.")
+            close = last["next_statement_date"]
+            close = close if self._lang == "en" else i18n.date(close, self._lang)
+            msg = self._act(last["action"])
+            msg += self._t("card_after", balance=f"{after['balance']:,.2f}", util=after["utilization_pct"])
+            msg += self._t("card_under30" if after["utilization_pct"] < 30 else "card_over30", close=close)
             if last.get("target") == "minimum":
-                msg += " The minimum keeps your on-time record, but interest is charged on the rest of the statement."
+                msg += self._t("card_minimum")
             return _say(msg)
 
         if "get_credit_profile" not in done:
             return _call("get_credit_profile")
         prof = res[0][1]
+        L = self._lang
         build = re.search(r"\bbuild|start|establish|from scratch|nothing|no (credit )?history|secured card|"
                           r"get a (credit )?card|new to canada", low)
         if build and "credit_building_plan" not in done:
             return _call("credit_building_plan", has_credit_card=bool(prof.get("has_card")), has_sin=True)
+        disclosure = last.get("disclosure", "") if L == "en" else self._t("credit_disclosure")
+        steps = lambda n: (" " if L != "zh" else "").join(  # noqa: E731
+            f"({i + 1}) {i18n.credit_step(s, L)}" for i, s in enumerate(last["steps"][:n]))
         if not prof.get("has_card"):
-            return _say("Here's how to build credit from scratch: " + " ".join(
-                f"({i + 1}) {s}" for i, s in enumerate(last["steps"][:5])) + " " + last["disclosure"])
+            return _say(self._t("credit_scratch", steps=steps(5), disclosure=disclosure))
         c, st = prof["card"], prof.get("statement") or {}
         rec = prof["recommended_payment"]
+        card = i18n.account(c["label"], L)
         if build:
-            msg = (f"You already have the usual first step: your {c['label']}, a secured card with a CAD "
-                   f"{c['credit_limit']:,.0f} limit backed by your deposit, reporting to the bureaus. You've paid "
-                   f"{prof['on_time_streak']} statements on time over {prof['months_of_history']} months. "
-                   "From here: " + " ".join(f"({i + 1}) {s}" for i, s in enumerate(last["steps"][:3])))
+            msg = self._t("credit_have_card", card=card, limit=f"{c['credit_limit']:,.0f}",
+                          streak=prof["on_time_streak"], months=prof["months_of_history"], steps=steps(3))
             if prof["utilization_pct"] >= 30:
-                msg += (f" Right now you're at {prof['utilization_pct']}% of your limit, so paying CAD "
-                        f"{rec['amount']:,.2f} would bring you to {rec['utilization_after_pct']}%.")
-            return _say(msg + " " + last["disclosure"])
+                msg += self._t("credit_util_now", util=prof["utilization_pct"], amount=f"{rec['amount']:,.2f}",
+                               after=rec["utilization_after_pct"])
+            return _say(msg + ("" if L == "zh" else " ") + disclosure)
         lead = ""
         if re.search(r"\bscore\b|评分|分数", low) and not re.search(r"improve|raise|increase|boost|build|naik|提高", low):
-            lead = ("I can't see your credit score: HomeBridge doesn't pull a bureau score, and you can get yours free "
-                    "from Equifax or TransUnion Canada. Here's what I can see from your secured card. ")
-        msg = (f"{lead}Your {c['label']} is at {prof['utilization_pct']}% utilization (CAD {c['balance']:,.2f} of "
-               f"CAD {c['credit_limit']:,.0f}); your last statement reported {prof['utilization_reported_pct']}%. "
-               f"You've paid {prof['on_time_streak']} statements on time in a row.")
+            lead = self._t("credit_score_lead")
+        day = (lambda iso: iso) if L == "en" else (lambda iso: i18n.date(iso, L))  # noqa: E731
+        msg = self._t("credit_now", lead=lead, card=card, util=prof["utilization_pct"], balance=f"{c['balance']:,.2f}",
+                      limit=f"{c['credit_limit']:,.0f}", reported=prof["utilization_reported_pct"],
+                      streak=prof["on_time_streak"])
         if st.get("status") == "due" and st.get("remaining"):
-            msg += (f" Your CAD {st['remaining']:,.2f} statement is due {st['due_date']} (minimum CAD "
-                    f"{st['minimum_due']:,.2f}).")
+            msg += self._t("credit_due", remaining=f"{st['remaining']:,.2f}", due=day(st["due_date"]),
+                           minimum=f"{st['minimum_due']:,.2f}")
         if rec["amount"] > 0:
-            msg += (f" Paying CAD {rec['amount']:,.2f} now covers it and keeps what's reported under 30% "
-                    f"({rec['utilization_after_pct']}%) when the statement closes on {prof['next_statement_date']}. "
-                    "Say 'pay my card' and I'll draft it.")
+            msg += self._t("credit_pay_rec", amount=f"{rec['amount']:,.2f}", after=rec["utilization_after_pct"],
+                           close=day(prof["next_statement_date"]), cmd=i18n.offer("pay my card", L))
         else:
-            msg += " Keep the balance under 30% of the limit when the statement closes, and keep paying on time."
-        msg += (f" Simulated credit health: {prof['credit_health']['label']}. This is not a credit score; "
-                "it's general information from your sandbox card, not personalised advice, and HomeBridge is not "
-                "a licensed adviser.")
+            msg += self._t("credit_keep")
+        msg += self._t("credit_health", label=i18n.health(prof["credit_health"]["key"],
+                                                          prof["credit_health"]["label"], L))
         return _say(msg, state={"offer": "pay my card"} if rec["amount"] > 0 else None)
 
     # --------------------------------------------------------------- helpers
@@ -1427,50 +1500,34 @@ class OfflineEngine:
         keys = payee_keys(low)
         return keys[0] if keys else None
 
-    @staticmethod
-    def _lock_request(low: str, done: List[str]) -> Optional[Dict[str, Any]]:
+    def _lock_request(self, low: str, done: List[str]) -> Optional[Dict[str, Any]]:
         """'Lock my account' calls freeze_payments. Unlocking is never done from chat."""
         if re.search(r"\b(freeze|lock|block)\s+(my|all|everything)\b|(冻结|锁定|锁住)我的|(kunci|bekukan|sekat) akaun", low):
             if "freeze_payments" not in done:
                 return _call("freeze_payments", reason="user asked to lock payments")
-            return _say("Done: I've locked your payments. Drafts stay, but nothing can be confirmed or approved until "
-                        "they're unlocked, and your dad has been alerted. If you think you've been scammed, don't send "
-                        "anything else, call your bank, and report it to the Canadian Anti-Fraud Centre. You can "
-                        "unlock your own money later in the Wallet tab; money your dad funds stays locked until he "
-                        "unlocks it.")
+            return _say(self._t("frozen"))
         if re.search(r"\b(unfreez\w*|unlock\w*|unblock\w*)\b|\blift (the )?(freeze|lock)\b|解冻|解锁|buka (kunci|semula)",
                      low) and not re.search(r"scam|is this (real|legit)|legit ke", low):
-            return _say("I can't unlock payments from chat, whoever asks. You can unlock your own money in the Wallet "
-                        "tab of the app, and only your dad can unlock the money he funds, from his own app. If someone "
-                        "is pushing you to unlock and pay quickly, that's a warning sign.")
+            return _say(self._t("refuse_unlock"))
         return None
 
     @staticmethod
-    def _refusal(note: str) -> str:
+    def _refusal(note: str, lang: str = "en") -> str:
         if "extraction" in note:
-            return ("I can't share that. I only ever see the last 4 digits of account numbers, and I don't share "
-                    "internal instructions, confirmation codes or anyone else's information. If you need your full "
-                    "account number for a form, it's in your bank's official app.")
+            return t("refuse_extraction", lang)
         if "escalation" in note:
-            return ("I can't do that from chat, and I can't approve anything. Approvals, limits and roles come from "
-                    "each person's own login: payments are confirmed by you in the app, only your sponsor can "
-                    "approve, from their own app, and only your sponsor can change limits.")
+            return t("refuse_escalation", lang)
         if "scam" in note:
-            return ("This has the hallmarks of a scam (pressure, threats or unusual payment methods), so I won't "
-                    "set up that payment. If you're unsure, contact the organisation using contact details from its "
-                    "official website.")
-        return ("I noticed instructions in that message that try to change how I work, so I'm ignoring them. "
-                "Payments can only be confirmed by you in the app. What would you like to do?")
+            return t("refuse_scam", lang)
+        return t("refuse_injection", lang)
 
-    @staticmethod
-    def _add_payee(text: str, low: str) -> Dict[str, Any]:
+    def _add_payee(self, text: str, low: str) -> Dict[str, Any]:
         number = re.search(r"\b\d{4}-\d{4}-\d{4}\b|\b\d{8,16}\b", text)
         quoted = re.search(r"['\"“]([^'\"”]{2,60})['\"”]", text)
         named = re.search(r"payee(?: called| named)?\s+([A-Z][\w&.' -]{1,58}?)(?:,| with| for| account|$)", text)
         name = (quoted or named).group(1).strip() if (quoted or named) else ""
         if not name or not number:
-            return _say("Sure. What's the payee's name, and their account number? For example: add payee "
-                        "Campus Books, business, CAD, account 1111-2222-3333.")
+            return _say(self._t("ask_payee_details"))
         kinds = ["rent", "tuition", "utilities", "phone", "individual", "business", "crypto", "gift_card"]
         kind = next((k for k in kinds if k.replace("_", " ") in low), "unknown")
         cur = next((c for c in _currencies(text) if c in ("CAD", "MYR", "USD")), "CAD")
@@ -1485,7 +1542,7 @@ class OfflineEngine:
         if pay is None:
             pay = bool(re.search(r"\b(then|and) pay\b|pay (it|the tuition|my tuition)", low))
         if short <= 0 and not pay:
-            return _say("Your tuition fund already covers the next installment, so there's nothing to top up.")
+            return _say(self._t("cover_nothing"))
         if short > 0 and "get_fx_quotes" not in done:
             return _call("get_fx_quotes", from_currency="MYR", to_currency="CAD", amount=1000, own_wallet=True)
         if short > 0 and "prepare_conversion" not in done:
@@ -1496,17 +1553,14 @@ class OfflineEngine:
         if pay and nxt and "prepare_transfer" not in done:
             return _call("prepare_transfer", payee="UBC Student Financial Services", amount=nxt["amount"],
                          memo=nxt["term"])
-        drafted = [r["action"]["summary"] for n, r in res if n in ("prepare_conversion", "prepare_transfer")
-                   and "action" in r]
-        msg = lead + "I've drafted: " + "; then ".join(drafted) + "."
+        drafted = [i18n.summary(r["action"]["summary"], self._lang) for n, r in res
+                   if n in ("prepare_conversion", "prepare_transfer") and "action" in r]
+        msg = lead + self._t("cover_drafted", list=self._t("then").join(drafted))
         if short > 0:
-            msg += f" That covers the CAD {short:,.2f} shortfall."
+            msg += self._t("cover_short", short=f"{short:,.2f}")
         elif lead:
-            msg += " Your Tuition Fund already covers it, so no conversion is needed."
-        if pay:
-            msg += " Confirm them in that order in the app. The tuition payment then goes to your dad for approval."
-        else:
-            msg += " Confirm it in the app, then ask me to pay your tuition."
+            msg += self._t("cover_no_conversion")
+        msg += self._t("cover_in_order" if pay else "cover_then_pay")
         return _say(msg)
 
     def _convert_then_rent(self, res, done):

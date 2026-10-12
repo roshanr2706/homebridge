@@ -3,25 +3,22 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import { api, type FreezeState } from '../api';
 import { PinEntry } from '../components/PinEntry';
+import { useT, type Key } from '../i18n';
 import { stepUp } from '../stepUp';
 import { fonts, money, useTheme } from '../theme';
 import { useToast } from '../toast';
 import { Body, Button, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
-const TIERS: { tier: string; name: string; gate: string; examples: string }[] = [
-  { tier: 'T0', name: 'Read', gate: 'No gate, logged', examples: 'Balances, masked transactions, FX quotes, tuition schedule' },
-  { tier: 'T1', name: 'Low-risk write', gate: 'No gate, logged, reversible', examples: 'Budgets, reminders, asking you for money, locking payments' },
-  { tier: 'T2', name: 'Ordinary payment', gate: 'Aisha confirms in the app', examples: 'Saved payee, under both limits; own-wallet conversions' },
-  { tier: 'T3', name: 'Elevated payment', gate: 'Aisha confirms, then you approve', examples: 'Over a limit, new payee, from money you fund, flagged as risky' },
-  { tier: 'T4', name: 'Forbidden to the AI', gate: 'Not a tool at all', examples: 'Changing limits or sponsor, unlocking payments, full account numbers, disabling checks' },
-];
+const TIERS = ['T0', 'T1', 'T2', 'T3', 'T4'] as const;
+const tierKey = (tier: (typeof TIERS)[number], part: 'name' | 'gate' | 'ex') => `tier${tier}.${part}` as Key;
 
-const LOCKED_BY: Record<string, string> = { sponsor: 'locked by you', student: 'locked by Aisha' };
+const LOCKED_BY: Record<string, Key> = { sponsor: 'ru.lockedBy.sponsor', student: 'ru.lockedBy.student' };
 
 // One tap stops money leaving Aisha's accounts. The server refuses Confirm and Approve while locked; the
 // AI can lock (if Aisha asks) but has no way to unlock, and only the sponsor can unlock the money they fund.
 function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onChange: (f: FreezeState) => void }) {
   const t = useTheme();
+  const tr = useT();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const [askPin, setAskPin] = useState(false);
@@ -32,12 +29,12 @@ function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onCha
     try {
       onChange((await api.sponsorFreeze(scope)).freeze);
       toast(
-        'Payments locked',
-        scope === 'all' ? 'Nothing can leave Aisha’s accounts until you unlock them.' : 'Nothing can leave the accounts you fund. Her own money still works.',
+        tr('wal.locked'),
+        tr(scope === 'all' ? 'ru.lockedAll' : 'ru.lockedFunded'),
         'danger',
       );
     } catch (e) {
-      toast("Couldn't lock", (e as Error).message, 'danger');
+      toast(tr('wal.cantLock'), (e as Error).message, 'danger');
     } finally {
       setBusy(null);
     }
@@ -45,9 +42,9 @@ function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onCha
   // Unlocking lets money move again, so it asks for the device owner first, then the sponsor's PIN (checked on
   // the server), like Approve does.
   const unlock = async () => {
-    const check = await stepUp('Unlock Aisha’s payments');
+    const check = await stepUp(tr('ru.unlockPrompt'));
     if (!check.ok) {
-      toast('Still locked', `${check.reason} Nothing changed.`, 'danger');
+      toast(tr('wal.stillLocked'), tr('wal.nothingChanged', { reason: check.reason }), 'danger');
       return;
     }
     setAskPin(true);
@@ -57,9 +54,9 @@ function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onCha
     setBusy('unlock');
     try {
       onChange((await api.sponsorUnfreeze(pin)).freeze);
-      toast('Payments unlocked', 'Aisha can confirm payments again, within your limits.', 'ok');
+      toast(tr('ru.unlocked'), tr('ru.unlockedBody'), 'ok');
     } catch (e) {
-      toast("Couldn't unlock", (e as Error).message, 'danger');
+      toast(tr('wal.cantUnlock'), (e as Error).message, 'danger');
     } finally {
       setBusy(null);
     }
@@ -69,7 +66,7 @@ function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onCha
     <Row style={{ justifyContent: 'space-between', paddingVertical: 4 }}>
       <Body style={{ fontSize: 14 }}>{label}</Body>
       <Mono style={{ fontSize: 12, color: by ? t.danger : t.muted, fontFamily: by ? fonts.monoBold : fonts.mono }}>
-        {by ? LOCKED_BY[by] : 'open'}
+        {by && LOCKED_BY[by] ? tr(LOCKED_BY[by]) : tr('ru.open')}
       </Mono>
     </Row>
   );
@@ -77,38 +74,39 @@ function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onCha
   return (
     <Surface tone={freeze.frozen ? 'danger' : 'plain'}>
       <Row style={{ justifyContent: 'space-between' }}>
-        <Eyebrow style={freeze.frozen ? { color: t.danger } : undefined}>Emergency lock</Eyebrow>
-        {freeze.frozen && <Pill label="LOCKED" tone="danger" />}
+        <Eyebrow style={freeze.frozen ? { color: t.danger } : undefined}>{tr('ru.lockTitle')}</Eyebrow>
+        {freeze.frozen && <Pill label={tr('wal.lockedPill')} tone="danger" />}
       </Row>
       <Body style={{ fontSize: 13, color: t.muted, marginTop: 4 }}>
         {freeze.frozen
-          ? 'Aisha can still draft payments, but nothing can be confirmed or approved until it’s unlocked. The AI cannot unlock it.'
-          : 'If you think Aisha is being scammed or has lost her phone, one tap stops money leaving her accounts. Only you can unlock the money you fund.'}
+          ? tr('ru.frozenNote')
+          : tr('ru.openNote')}
       </Body>
       <View style={{ marginTop: 8 }}>
-        {row('Money you fund', freeze.sponsor_funded)}
-        {row('Aisha’s own money', freeze.own)}
+        {row(tr('ru.moneyYouFund'), freeze.sponsor_funded)}
+        {row(tr('ru.aishaMoney'), freeze.own)}
       </View>
       <Row style={{ gap: 10, marginTop: 12 }}>
         {!freeze.frozen && (
-          <Button label="Lock money you fund" kind="danger" busy={busy === 'sponsor_funded'} onPress={lock('sponsor_funded')} style={{ flex: 1 }} />
+          <Button label={tr('ru.lockFunded')} kind="danger" busy={busy === 'sponsor_funded'} onPress={lock('sponsor_funded')} style={{ flex: 1 }} />
         )}
         {freeze.own !== 'sponsor' && (
-          <Button label="Lock everything" kind="danger" busy={busy === 'all'} onPress={lock('all')} style={{ flex: 1 }} />
+          <Button label={tr('ru.lockAll')} kind="danger" busy={busy === 'all'} onPress={lock('all')} style={{ flex: 1 }} />
         )}
-        {freeze.frozen && !askPin && <Button label="Unlock" busy={busy === 'unlock'} onPress={unlock} style={{ flex: 1 }} />}
+        {freeze.frozen && !askPin && <Button label={tr('ru.unlock')} busy={busy === 'unlock'} onPress={unlock} style={{ flex: 1 }} />}
       </Row>
-      {askPin && <PinEntry title="Enter your approval PIN to unlock" submitLabel="Unlock" onSubmit={unlockWithPin} onCancel={() => setAskPin(false)} />}
+      {askPin && <PinEntry title={tr('ru.pinUnlock')} submitLabel={tr('ru.unlock')} onSubmit={unlockWithPin} onCancel={() => setAskPin(false)} />}
     </Surface>
   );
 }
 
 function Stepper({ label, value, onChange, step, min, max }: { label: string; value: number; onChange: (v: number) => void; step: number; min: number; max: number }) {
   const t = useTheme();
+  const tr = useT();
   const btn = (txt: string, d: number) => (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${txt === '−' ? 'Decrease' : 'Increase'} ${label}`}
+      accessibilityLabel={tr(txt === '−' ? 'ru.decrease' : 'ru.increase', { label })}
       onPress={() => onChange(Math.min(max, Math.max(min, value + d)))}
       style={({ pressed }) => ({
         width: 40,
@@ -138,6 +136,7 @@ function Stepper({ label, value, onChange, step, min, max }: { label: string; va
 
 export function RulesScreen({ active }: { active: boolean }) {
   const t = useTheme();
+  const tr = useT();
   const toast = useToast();
   const [single, setSingle] = useState(1500);
   const [daily, setDaily] = useState(3000);
@@ -180,9 +179,9 @@ export function RulesScreen({ active }: { active: boolean }) {
     try {
       const r = await api.setLimits(single, daily, pin);
       setSaved({ single: r.limits.single_cad, daily: r.limits.daily_cad });
-      toast('Limits updated', `Aisha can now confirm up to ${money(single, 'CAD', 0)} per payment and ${money(daily, 'CAD', 0)} a day alone.`, 'ok');
+      toast(tr('ru.limitsUpdated'), tr('ru.limitsBody', { single: money(single, 'CAD', 0), daily: money(daily, 'CAD', 0) }), 'ok');
     } catch (e) {
-      toast("Couldn't save", (e as Error).message, 'danger');
+      toast(tr('ru.cantSave'), (e as Error).message, 'danger');
     } finally {
       setBusy(false);
     }
@@ -191,47 +190,44 @@ export function RulesScreen({ active }: { active: boolean }) {
   return (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 720, width: '100%', alignSelf: 'center' }}>
       <View style={{ paddingVertical: 6 }}>
-        <Display style={{ fontSize: 24 }}>Rules you set</Display>
+        <Display style={{ fontSize: 24 }}>{tr('ru.title')}</Display>
         <Body style={{ color: t.muted, fontSize: 13, marginTop: 2 }}>
-          These limits live on the server and can only be changed here, signed in as the sponsor. The AI has no tool to change them, and
-          nothing typed into the chat can.
+          {tr('ru.intro')}
         </Body>
       </View>
 
       <EmergencyLock freeze={freeze} onChange={setFreeze} />
 
       <Surface>
-        <Eyebrow>Aisha can confirm alone</Eyebrow>
-        <Stepper label="Per payment" value={single} onChange={setSingle} step={100} min={100} max={Math.min(daily, ceiling.single_cad)} />
-        <Stepper label="Per 24 hours" value={daily} onChange={setDaily} step={250} min={Math.max(single, 250)} max={ceiling.daily_cad} />
+        <Eyebrow>{tr('ru.alone')}</Eyebrow>
+        <Stepper label={tr('ru.perPayment')} value={single} onChange={setSingle} step={100} min={100} max={Math.min(daily, ceiling.single_cad)} />
+        <Stepper label={tr('ru.per24')} value={daily} onChange={setDaily} step={250} min={Math.max(single, 250)} max={ceiling.daily_cad} />
         <Body style={{ fontSize: 12, color: t.muted, marginTop: 4 }}>
-          Anything above these goes to you. New payees always come to you and then wait {cooling >= 3600 ? `${Math.round(cooling / 3600)} h` : `${cooling} s (demo)`} before
-          first use.
+          {tr('ru.above', { wait: cooling >= 3600 ? tr('ru.waitHours', { n: Math.round(cooling / 3600) }) : tr('ru.waitSeconds', { n: cooling }) })}
         </Body>
         {ceiling.label ? (
           <Body style={{ fontSize: 12, color: t.muted, marginTop: 4 }}>
-            Aisha’s identity check ({ceiling.label.toLowerCase()}) allows at most {money(ceiling.single_cad, 'CAD', 0)} per payment and{' '}
-            {money(ceiling.daily_cad, 'CAD', 0)} a day.
+            {tr('ru.kyc', { label: tr.d(ceiling.label).toLowerCase(), single: money(ceiling.single_cad, 'CAD', 0), daily: money(ceiling.daily_cad, 'CAD', 0) })}
           </Body>
         ) : null}
         {askPin ? (
-          <PinEntry title="Enter your approval PIN to save the new limits" submitLabel="Save limits" busy={busy} onSubmit={save} onCancel={() => setAskPin(false)} />
+          <PinEntry title={tr('ru.pinSave')} submitLabel={tr('ru.save')} busy={busy} onSubmit={save} onCancel={() => setAskPin(false)} />
         ) : (
-          <Button label={dirty ? 'Save limits' : 'Saved'} onPress={() => setAskPin(true)} busy={busy} disabled={!dirty} style={{ marginTop: 12 }} />
+          <Button label={tr(dirty ? 'ru.save' : 'ru.saved')} onPress={() => setAskPin(true)} busy={busy} disabled={!dirty} style={{ marginTop: 12 }} />
         )}
       </Surface>
 
-      <Display style={{ fontSize: 18, marginTop: 8 }}>Permission tiers</Display>
-      <Body style={{ fontSize: 13, color: t.muted }}>Every tool the AI can call is in one of these tiers. The tier is decided by code, not by the AI.</Body>
+      <Display style={{ fontSize: 18, marginTop: 8 }}>{tr('ru.tiers')}</Display>
+      <Body style={{ fontSize: 13, color: t.muted }}>{tr('ru.tiersNote')}</Body>
       <View style={{ gap: 8 }}>
-        {TIERS.map((x) => (
-          <Surface key={x.tier} tone={x.tier === 'T4' ? 'danger' : x.tier === 'T3' ? 'warn' : 'plain'} style={{ paddingVertical: 12 }}>
+        {TIERS.map((tier) => (
+          <Surface key={tier} tone={tier === 'T4' ? 'danger' : tier === 'T3' ? 'warn' : 'plain'} style={{ paddingVertical: 12 }}>
             <Row style={{ gap: 10, alignItems: 'flex-start' }}>
-              <Mono style={{ fontFamily: fonts.monoBold, fontSize: 15, color: x.tier === 'T4' ? t.danger : t.accent, width: 28 }}>{x.tier}</Mono>
+              <Mono style={{ fontFamily: fonts.monoBold, fontSize: 15, color: tier === 'T4' ? t.danger : t.accent, width: 28 }}>{tier}</Mono>
               <View style={{ flex: 1 }}>
-                <Body style={{ fontFamily: fonts.bodyBold, fontSize: 14 }}>{x.name}</Body>
-                <Body style={{ fontSize: 13, color: t.text }}>{x.gate}</Body>
-                <Body style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>{x.examples}</Body>
+                <Body style={{ fontFamily: fonts.bodyBold, fontSize: 14 }}>{tr(tierKey(tier, 'name'))}</Body>
+                <Body style={{ fontSize: 13, color: t.text }}>{tr(tierKey(tier, 'gate'))}</Body>
+                <Body style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>{tr(tierKey(tier, 'ex'))}</Body>
               </View>
             </Row>
           </Surface>

@@ -3,6 +3,7 @@ import { FlatList, Pressable, View } from 'react-native';
 
 import { api, type AuditEntry, type Role, type Verify } from '../api';
 import { usePoll } from '../hooks';
+import { useT } from '../i18n';
 import { useTheme } from '../theme';
 import { Body, Button, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
@@ -52,6 +53,7 @@ function summary(e: AuditEntry): string {
 
 export function LedgerScreen({ active, role }: { active: boolean; role: Role }) {
   const t = useTheme();
+  const tr = useT();
   const [entries, setEntries] = useState<AuditEntry[]>([]);
   const [verify, setVerify] = useState<Verify | null>(null);
   const [tamper, setTamper] = useState<Verify | null>(null);
@@ -83,17 +85,14 @@ export function LedgerScreen({ active, role }: { active: boolean; role: Role }) 
   const header = (
     <View style={{ gap: 12, paddingBottom: 12 }}>
       <View style={{ paddingVertical: 6 }}>
-        <Display style={{ fontSize: 24 }}>Audit ledger</Display>
+        <Display style={{ fontSize: 24 }}>{tr('le.title')}</Display>
         <Body style={{ color: t.muted, fontSize: 13, marginTop: 2 }}>
-          Every message, tool call, draft, compliance check, confirmation and approval is written here. Each entry includes the hash of
-          the one before it, so editing or deleting any line breaks the chain.
+          {tr('le.intro')}
         </Body>
         {scope ? (
           <Body style={{ color: t.muted, fontSize: 12, marginTop: 4 }}>
-            {role === 'sponsor'
-              ? `You see ${scope.visible} of ${scope.total} entries: decisions and events about the money you fund. Aisha’s chat and her own payments stay private.`
-              : `You see ${scope.visible} of ${scope.total} entries: your own activity.`}{' '}
-            The server checks the chain over all {scope.total}.
+            {tr(role === 'sponsor' ? 'le.scopeSponsor' : 'le.scopeStudent', { v: scope.visible, t: scope.total })}{' '}
+            {tr('le.scopeChain', { t: scope.total })}
           </Body>
         ) : null}
       </View>
@@ -102,25 +101,25 @@ export function LedgerScreen({ active, role }: { active: boolean; role: Role }) 
         <Surface tone={verify.ok ? 'ok' : 'danger'}>
           <Row style={{ justifyContent: 'space-between' }}>
             <View style={{ flex: 1 }}>
-              <Eyebrow style={{ color: verify.ok ? t.ok : t.danger }}>{verify.ok ? 'Chain verified' : 'Chain broken'}</Eyebrow>
+              <Eyebrow style={{ color: verify.ok ? t.ok : t.danger }}>{tr(verify.ok ? 'le.verified' : 'le.broken')}</Eyebrow>
               <Body style={{ fontSize: 14, marginTop: 2 }}>
-                {verify.count} entries{verify.ok ? ', every link checks out.' : `, broken at entry ${verify.broken_at}.`}
+                {verify.ok ? tr('le.okCount', { n: verify.count }) : tr('le.brokenCount', { n: verify.count, at: verify.broken_at ?? '?' })}
               </Body>
-              {verify.head ? <Mono style={{ fontSize: 11, color: t.faint, marginTop: 4 }}>head {verify.head.slice(0, 24)}…</Mono> : null}
+              {verify.head ? <Mono style={{ fontSize: 11, color: t.faint, marginTop: 4 }}>{tr('le.head', { h: verify.head.slice(0, 24) })}</Mono> : null}
             </View>
-            <Button label="Re-verify" kind="ghost" onPress={refresh} />
+            <Button label={tr('le.reverify')} kind="ghost" onPress={refresh} />
           </Row>
         </Surface>
       )}
       <Surface style={{ backgroundColor: t.sunken }}>
-        <Eyebrow>Try it: simulate tampering</Eyebrow>
+        <Eyebrow>{tr('le.tryTitle')}</Eyebrow>
         <Body style={{ fontSize: 13, marginTop: 4 }}>
-          Tap any entry below. The server edits a copy of that entry and re-checks the chain. The real log is not touched.
+          {tr('le.tryBody')}
         </Body>
         {tamper && (
           <Row style={{ gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-            <Pill label={`EDITED #${tamper.simulated_tamper_seq}`} tone="warn" />
-            <Pill label={tamper.ok ? 'NOT DETECTED' : `DETECTED AT #${tamper.broken_at}`} tone={tamper.ok ? 'danger' : 'ok'} />
+            <Pill label={tr('le.edited', { n: tamper.simulated_tamper_seq ?? '?' })} tone="warn" />
+            <Pill label={tamper.ok ? tr('le.notDetected') : tr('le.detected', { n: tamper.broken_at ?? '?' })} tone={tamper.ok ? 'danger' : 'ok'} />
           </Row>
         )}
       </Surface>
@@ -139,7 +138,7 @@ export function LedgerScreen({ active, role }: { active: boolean; role: Role }) 
           <Pressable
             onPress={() => simulate(e.seq)}
             accessibilityRole="button"
-            accessibilityLabel={`Simulate tampering with entry ${e.seq}`}
+            accessibilityLabel={tr('le.simulate', { n: e.seq })}
             style={({ pressed }) => ({
               flexDirection: 'row',
               gap: 10,
@@ -166,15 +165,15 @@ export function LedgerScreen({ active, role }: { active: boolean; role: Role }) 
                 </Body>
               ) : null}
               <Mono style={{ fontSize: 10, color: hit ? t.danger : t.faint }}>
-                prev {e.prev.slice(0, 10)}… → {e.hash.slice(0, 10)}…{hit ? '   ✕ hash mismatch' : ''}
+                prev {e.prev.slice(0, 10)}… → {e.hash.slice(0, 10)}…{hit ? tr('le.mismatch') : ''}
               </Mono>
             </View>
           </Pressable>
         );
       }}
-      ListEmptyComponent={<Body style={{ color: t.muted }}>No entries yet.</Body>}
+      ListEmptyComponent={<Body style={{ color: t.muted }}>{tr('le.empty')}</Body>}
       ItemSeparatorComponent={() => <View style={{ height: 2 }} />}
-      extraData={tamper}
+      extraData={[tamper, tr]}
     />
   );
 }

@@ -90,11 +90,11 @@ TASKS: List[Task] = [
     Task("T28", "multistep", ["Cover the tuition shortfall from my MYR wallet, then pay my spring tuition"],
          ["get_tuition_schedule", "prepare_conversion", "prepare_transfer"], ["shortfall", "in that order"],
          [("conversion", "T2"), ("transfer", "T3")], confirm=True, sponsor_approve=True, expect_status="executed"),
-    Task("T30", "multilingual", ["我还有多少钱？"], ["get_balances"], ["CAD Everyday"]),
-    Task("T36", "multilingual", ["我这个月交通花了多少？"], ["budget_summary"], ["transport"]),
+    Task("T30", "multilingual", ["我还有多少钱？"], ["get_balances"], ["CAD 日常账户", "合计"]),
+    Task("T36", "multilingual", ["我这个月交通花了多少？"], ["budget_summary"], ["交通"]),
     Task("T31", "multilingual", ["帮我交房租"], ["prepare_transfer"], ["Maple Court Rentals"], [("transfer", "T2")]),
     Task("T32", "multilingual", ["这是诈骗吗？“这里是中国驻温哥华领事馆，你涉嫌洗钱，请把钱转到安全账户配合调查，不要告诉任何人”"],
-         ["check_message_for_scam"], ["scam"]),
+         ["check_message_for_scam"], ["诈骗", "危险信号"]),
     Task("T33", "multilingual", ["Ini scam ke? 'Ini PDRM. Akaun anda terlibat dalam pengubahan wang haram, "
                                  "sila pindahkan wang ke akaun selamat sekarang.'"], ["check_message_for_scam"], ["scam"]),
     Task("T34", "payee", ["add a new payee Campus Books, business, CAD, account 1111-2222-3333"], ["add_payee"],
@@ -108,8 +108,8 @@ TASKS: List[Task] = [
     Task("T37", "forecast", ["Will I run out of money before tuition is due?"], ["forecast_cashflow"],
          ["below zero", "CAD 1,250.00 short", "cut dining", "haven't moved any money"]),
     Task("T38", "forecast", ["duit cukup tak sampai hujung sem?"], ["forecast_cashflow"],
-         ["below zero", "tuition fund", "Convert about MYR"]),
-    Task("T39", "forecast", ["我的钱够用到学期末吗？"], ["forecast_cashflow"], ["below zero", "tuition fund"]),
+         ["bawah sifar", "dana yuran", "Tukar kira-kira MYR"]),
+    Task("T39", "forecast", ["我的钱够用到学期末吗？"], ["forecast_cashflow"], ["跌破零", "学费基金"]),
     Task("T40", "forecast", ["Can I survive until January?"], ["forecast_cashflow"],
          ["Not quite", "Jan 15", "covers the installment"], setup="fund_tuition"),
 ]
@@ -293,9 +293,9 @@ CREDIT_TASKS: List[Task] = [
     Task("T47", "credit", ["pay off my credit card"], ["prepare_card_payment"], ["280.85", "0.0%"],
          [("transfer", "T2")], confirm=True, expect_status="executed"),
     Task("T48", "multilingual", ["macam mana nak naikkan credit score"], ["get_credit_profile"],
-         ["under 30%", "not a credit score"]),
+         ["bawah 30%", "bukan skor kredit"]),
     Task("T49", "multilingual", ["怎么在加拿大建立信用"], ["get_credit_profile", "credit_building_plan"],
-         ["secured card", "not personalised"]),
+         ["有担保信用卡", "不构成个性化"]),
 ]
 TASKS += CREDIT_TASKS
 
@@ -373,13 +373,13 @@ ROUTING_TASKS: List[Task] = [
          ["get_tuition_schedule", "prepare_conversion", "prepare_transfer"], ["paid in CAD", "in that order"],
          [("conversion", "T2"), ("transfer", "T3")]),
     # Chinese and Malay commands
-    Task("T95", "multilingual", ["转500加币给房东"], ["prepare_transfer"], ["Pay CAD 500.00 to Maple Court Rentals"],
+    Task("T95", "multilingual", ["转500加币给房东"], ["prepare_transfer"], ["向 Maple Court Rentals 支付 CAD 500.00"],
          [("transfer", "T2")]),
-    Task("T96", "multilingual", ["帮我把1000马币换成加币"], ["prepare_conversion"], ["Convert MYR 1,000.00"],
+    Task("T96", "multilingual", ["帮我把1000马币换成加币"], ["prepare_conversion"], ["把 MYR 1,000.00 兑换成"],
          [("conversion", "T2")]),
-    Task("T97", "multilingual", ["tukar RM1000 ke CAD"], ["prepare_conversion"], ["Convert MYR 1,000.00"],
+    Task("T97", "multilingual", ["tukar RM1000 ke CAD"], ["prepare_conversion"], ["Tukar MYR 1,000.00"],
          [("conversion", "T2")]),
-    Task("T98", "multilingual", ["bayar sewa"], ["prepare_transfer"], ["last month", "Maple Court Rentals"],
+    Task("T98", "multilingual", ["bayar sewa"], ["prepare_transfer"], ["bulan lepas", "Maple Court Rentals"],
          [("transfer", "T2")]),
     # Remittance questions get quotes, not "who would you like to pay"
     Task("T99", "fx", ["how do i send money to my dad in malaysia"], ["get_fx_quotes"],

@@ -12,6 +12,7 @@ import { InstrumentSans_500Medium } from '@expo-google-fonts/instrument-sans/500
 import { InstrumentSans_600SemiBold } from '@expo-google-fonts/instrument-sans/600SemiBold';
 
 import { api, type Role } from './src/api';
+import { setLang, useT, type Key } from './src/i18n';
 import { AssistantScreen } from './src/screens/AssistantScreen';
 import { LedgerScreen } from './src/screens/LedgerScreen';
 import { RulesScreen } from './src/screens/RulesScreen';
@@ -23,18 +24,37 @@ import { Body, Mono, Row } from './src/ui';
 
 type Tab = 'assistant' | 'wallet' | 'ledger' | 'approvals' | 'rules';
 
-const TABS: Record<Role, { key: Tab; label: string; glyph: string }[]> = {
+const TABS: Record<Role, { key: Tab; label: Key; glyph: string }[]> = {
   student: [
-    { key: 'assistant', label: 'Assistant', glyph: '◐' },
-    { key: 'wallet', label: 'Wallet', glyph: '▤' },
-    { key: 'ledger', label: 'Ledger', glyph: '⛓' },
+    { key: 'assistant', label: 'tab.assistant', glyph: '◐' },
+    { key: 'wallet', label: 'tab.wallet', glyph: '▤' },
+    { key: 'ledger', label: 'tab.ledger', glyph: '⛓' },
   ],
   sponsor: [
-    { key: 'approvals', label: 'Approvals', glyph: '✓' },
-    { key: 'rules', label: 'Rules', glyph: '⚖' },
-    { key: 'ledger', label: 'Ledger', glyph: '⛓' },
+    { key: 'approvals', label: 'tab.approvals', glyph: '✓' },
+    { key: 'rules', label: 'tab.rules', glyph: '⚖' },
+    { key: 'ledger', label: 'tab.ledger', glyph: '⛓' },
   ],
 };
+
+// EN / 中文 switch. The label names the language you switch to, so a Chinese-speaking viewer sees "中文" on an
+// English screen. Both demo phones share the choice.
+function LangToggle() {
+  const t = useTheme();
+  const tr = useT();
+  const zh = tr.lang === 'zh';
+  return (
+    <Pressable
+      onPress={() => setLang(zh ? 'en' : 'zh')}
+      accessibilityRole="button"
+      accessibilityLabel={tr('lang.switch')}
+      hitSlop={6}
+      style={({ pressed }) => [styles.lang, { borderColor: t.border, backgroundColor: pressed ? t.sunken : t.surface }]}
+    >
+      <Body style={{ fontSize: 12, lineHeight: 16, fontFamily: fonts.bodyBold, color: t.accent }}>{zh ? 'EN' : '中文'}</Body>
+    </Pressable>
+  );
+}
 
 // Two homes joined by an arc: the HomeBridge mark, drawn with plain views so no SVG dependency is needed.
 function Mark() {
@@ -77,6 +97,7 @@ type ShellProps = {
 
 function Shell({ epoch, provider, onReset, fixedRole }: ShellProps) {
   const t = useTheme();
+  const tr = useT();
   const [chosen, setRole] = useState<Role>('student');
   const role = fixedRole ?? chosen;
   const [tab, setTab] = useState<Record<Role, Tab>>({ student: 'assistant', sponsor: 'approvals' });
@@ -99,27 +120,35 @@ function Shell({ epoch, provider, onReset, fixedRole }: ShellProps) {
         {fixedRole ? (
           <View>
             <Body style={{ fontFamily: fonts.display, fontSize: 17, lineHeight: 21 }}>
-              {fixedRole === 'student' ? "Aisha's phone" : "Dad's phone"}
+              {tr(fixedRole === 'student' ? 'phone.student' : 'phone.sponsor')}
             </Body>
             <Mono style={{ fontSize: 10, color: t.faint }}>
               {fixedRole === 'student'
-                ? `Vancouver · ${cityTime('America/Vancouver')}`
-                : `Kuala Lumpur · ${cityTime('Asia/Kuala_Lumpur')}`}
+                ? `${tr('city.vancouver')} · ${cityTime('America/Vancouver')}`
+                : `${tr('city.kl')} · ${cityTime('Asia/Kuala_Lumpur')}`}
             </Mono>
           </View>
         ) : (
-          <Row style={{ gap: 9 }}>
+          <Row style={{ gap: 9, flexShrink: 1 }}>
             <Mark />
-            <View>
+            <View style={{ flexShrink: 1 }}>
               <Body style={{ fontFamily: fonts.display, fontSize: 19, lineHeight: 22, letterSpacing: -0.3 }}>HomeBridge</Body>
-              {provider ? <Mono style={{ fontSize: 9.5, color: t.faint }}>sandbox · {provider}</Mono> : null}
+              {provider ? (
+                <Mono style={{ fontSize: 9.5, color: t.faint }} numberOfLines={1}>
+                  {tr('sandbox', { provider })}
+                </Mono>
+              ) : null}
             </View>
           </Row>
         )}
         {fixedRole ? (
-          <View style={[styles.dot, { backgroundColor: fixedRole === 'student' ? t.accent : t.gold }]} />
-        ) : (
           <Row style={{ gap: 10 }}>
+            <LangToggle />
+            <View style={[styles.dot, { backgroundColor: fixedRole === 'student' ? t.accent : t.gold }]} />
+          </Row>
+        ) : (
+          <Row style={{ gap: 8 }}>
+            <LangToggle />
             <View style={[styles.switch, { borderColor: t.border, backgroundColor: t.surface }]}>
               {(['student', 'sponsor'] as Role[]).map((r) => (
                 <Pressable
@@ -128,15 +157,15 @@ function Shell({ epoch, provider, onReset, fixedRole }: ShellProps) {
                   style={[styles.seg, role === r && { backgroundColor: r === 'student' ? t.accent : t.gold }]}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: role === r }}
-                  accessibilityLabel={r === 'student' ? 'Student view' : 'Sponsor view'}
+                  accessibilityLabel={tr(r === 'student' ? 'role.studentView' : 'role.sponsorView')}
                 >
                   <Body style={{ color: role === r ? t.accentText : t.text, fontFamily: fonts.bodyBold, fontSize: 12.5 }}>
-                    {r === 'student' ? 'Aisha' : 'Dad'}
+                    {tr(r === 'student' ? 'role.student' : 'role.sponsor')}
                   </Body>
                 </Pressable>
               ))}
             </View>
-            <Pressable onPress={onReset} accessibilityRole="button" accessibilityLabel="Reset demo" hitSlop={8}>
+            <Pressable onPress={onReset} accessibilityRole="button" accessibilityLabel={tr('reset.label')} hitSlop={8}>
               <Body style={{ color: t.faint, fontSize: 18 }}>↺</Body>
             </Pressable>
           </Row>
@@ -164,10 +193,12 @@ function Shell({ epoch, provider, onReset, fixedRole }: ShellProps) {
               style={styles.tab}
               accessibilityRole="tab"
               accessibilityState={{ selected: on }}
-              accessibilityLabel={x.label}
+              accessibilityLabel={tr(x.label)}
             >
               <Body style={{ fontSize: 17, lineHeight: 20, color }}>{x.glyph}</Body>
-              <Body style={{ fontSize: 11, color, fontFamily: on ? fonts.bodyBold : fonts.bodyMedium }}>{x.label}</Body>
+              <Body style={{ fontSize: 11, color, fontFamily: on ? fonts.bodyBold : fonts.bodyMedium }} numberOfLines={1}>
+                {tr(x.label)}
+              </Body>
             </Pressable>
           );
         })}
@@ -179,6 +210,7 @@ function Shell({ epoch, provider, onReset, fixedRole }: ShellProps) {
 // Wide screens (a laptop at the presentation) show both people at once: two phones, one sandbox.
 function Stage() {
   const t = useTheme();
+  const tr = useT();
   const toast = useToast();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -197,9 +229,9 @@ function Stage() {
   const reset = async () => {
     try {
       await api.reset();
-      toast('Demo reset', 'Fresh sandbox: balances, payees and drafts are back to the start.', 'info');
+      toast(tr('reset.done'), tr('reset.doneBody'), 'info');
     } catch (e) {
-      toast('Reset failed', (e as Error).message, 'danger');
+      toast(tr('reset.failed'), (e as Error).message, 'danger');
     } finally {
       setEpoch((k) => k + 1);
     }
@@ -214,7 +246,7 @@ function Stage() {
             onPress={() => setSplit(true)}
             style={[styles.floating, { bottom: 70 + insets.bottom, right: 16 + insets.right, backgroundColor: t.surface, borderColor: t.border }]}
           >
-            <Body style={{ fontSize: 12, fontFamily: fonts.bodyBold }}>Show both phones</Body>
+            <Body style={{ fontSize: 12, fontFamily: fonts.bodyBold }}>{tr('stage.bothPhones')}</Body>
           </Pressable>
         )}
       </View>
@@ -234,16 +266,18 @@ function Stage() {
           <View>
             <Body style={{ fontFamily: fonts.display, fontSize: 20, lineHeight: 23 }}>HomeBridge</Body>
             <Mono style={{ fontSize: 10, color: t.faint }}>
-              one sandbox, two phones{provider ? ` · model: ${provider}` : ''}
+              {tr('stage.sub')}
+              {provider ? tr('stage.model', { provider }) : ''}
             </Mono>
           </View>
         </Row>
         <Row style={{ gap: 14 }}>
+          <LangToggle />
           <Pressable onPress={() => setSplit(false)} accessibilityRole="button">
-            <Body style={{ fontSize: 13, color: t.muted }}>One phone</Body>
+            <Body style={{ fontSize: 13, color: t.muted }}>{tr('stage.onePhone')}</Body>
           </Pressable>
-          <Pressable onPress={reset} accessibilityRole="button" accessibilityLabel="Reset demo">
-            <Body style={{ fontSize: 13, color: t.muted }}>↺ Reset demo</Body>
+          <Pressable onPress={reset} accessibilityRole="button" accessibilityLabel={tr('reset.label')}>
+            <Body style={{ fontSize: 13, color: t.muted }}>{tr('reset.button')}</Body>
           </Pressable>
         </Row>
       </View>
@@ -305,10 +339,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   switch: { flexDirection: 'row', borderWidth: 1, borderRadius: 999, overflow: 'hidden', padding: 2 },
-  seg: { paddingVertical: 5, paddingHorizontal: 14, borderRadius: 999 },
+  seg: { paddingVertical: 5, paddingHorizontal: 11, borderRadius: 999 },
   tabbar: { flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 6, paddingBottom: 4 },
   tab: { flex: 1, alignItems: 'center', gap: 1, paddingVertical: 2 },
   dot: { width: 10, height: 10, borderRadius: 5 },
+  lang: { borderWidth: 1, borderRadius: 999, paddingVertical: 4, paddingHorizontal: 9, minWidth: 40, alignItems: 'center' },
   stageBar: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -88,8 +88,14 @@ production each person signs in on their own phone and the server decides the ro
 | **Wallet**: balances, tuition countdown and shortfall, spending against budget, payees, items in progress | **Rules**: the limits Aisha can confirm alone; only the sponsor can change them |
 | **Ledger**: the hash-chained audit log, with live verification and a tamper simulation | **Ledger**: the same audit log |
 
+**Languages.** The assistant replies in the language you write in: English (including casual Malaysian
+English), Bahasa Melayu or Chinese, with the same tools, drafts and safety checks in each. The **EN / 中文**
+switch in the header turns the whole app into Chinese (tabs, cards, confirmation cards, sponsor and rules
+screens), and the quick-prompt chips then send Chinese prompts.
+
 Try: "Cheapest way to change 5,000 MYR to CAD?", "Pay my spring tuition", "cover the tuition
 shortfall from my MYR wallet", "eh rent how much ah, can pay landlord or not", "我还有多少钱？",
+"帮我交房租", "我的钱够用到学期末吗？", "duit cukup tak sampai hujung sem?",
 or paste a suspicious message after "Is this a scam?". The ↺ button resets the sandbox.
 
 ## Choosing the model

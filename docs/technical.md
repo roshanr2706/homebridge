@@ -60,6 +60,7 @@ International students live between two financial systems. Their pain points, wh
 | Agent loop | `backend/app/agent.py` | System prompt, tool-call loop, tool-output scanning, offline fallback, output redaction |
 | Model adapter | `backend/app/llm.py` | One OpenAI-compatible client for DeepSeek and Qwen; offline engine behind the same interface |
 | Offline engine | `backend/app/offline_engine.py` | Deterministic planner for tests, CI and venue fallback |
+| Reply language | `backend/app/i18n.py` | Language detection (English, Chinese, Malay) and the offline engine's reply templates |
 | Tools | `backend/app/tools.py` | 21 tools with JSON schemas, tier labels and masked outputs |
 | Credit Builder | `backend/app/credit.py` | Pure utilization, streak and next-step maths for the secured card |
 | Policy engine | `backend/app/policy.py` | The only path by which money moves: tiers, limits, risk score, tokens, execution |
@@ -70,7 +71,7 @@ International students live between two financial systems. Their pain points, wh
 | Classifier | `backend/app/classifier.py` | Our own scam / injection / benign model (TF-IDF + logistic regression) |
 | Result cards | `backend/app/cards.py` | Turns read-tool results into structured UI cards |
 | Audit log | `backend/app/audit.py` | Append-only, SHA-256 hash-chained JSONL |
-| App | `app/` | Expo (React Native + web) client for both roles |
+| App | `app/` | Expo (React Native + web) client for both roles, in English or Chinese (`app/src/i18n.ts`) |
 
 ### 2.1 Request flow for a payment
 
@@ -109,6 +110,10 @@ Anthropic and OpenAI endpoints are not defaults because they are not reachable f
 **Fallback.** If the provider raises (network, auth, rate limit, 5xx), the loop logs `llm_error` to the audit log and finishes that turn with the offline engine. The response carries `"fallback": true` and the app labels the message "offline fallback". The tests in `tests/test_llm_wire.py` exercise the real client against a mocked HTTP transport: the tool-call round trip, malformed tool arguments, the fallback, and that masked numbers are the only numbers sent to the provider.
 
 **Offline engine.** A rule-based planner that implements the same `chat(messages, tools)` interface and emits the same tool calls a model would. It understands Malaysian English ("can pay landlord or not"), and maps Malay and Chinese phrases (余额, 房租, 学费, bayar, sewa, tukar…) to intents. It refuses any turn the guard flagged as injection, extraction or escalation. It exists so that (a) the test suite and the evidence run need no network, (b) the demo survives venue Wi-Fi failure, and (c) there is a baseline the LLM must beat.
+
+**Language.** The agent answers in the language the user wrote in. For the LLM this is one rule in the system prompt: reply in the language of the latest message (English, Malay or Simplified Chinese; casual Malaysian English counts as English; a bare "300" or "ok" keeps the conversation's language), keep amounts as `CAD 1,150.00`, and keep payee names, tool arguments and card data unchanged. The offline engine does the same without a model: `i18n.detect` calls a message Chinese if it contains CJK characters, Malay if it has two or more Malay words (or one in a one- or two-word message; words shared with Malaysian English such as "lah" and "boleh" don't count), and English otherwise. Its replies come from a template table (`i18n.TEXT`, English, Chinese and Malay columns, English as the fallback): balances, FX quotes and rates, forecast verdicts and tips, tuition, spending, credit, drafted payments and conversions (the policy engine's summary is translated, e.g. 从 CAD 日常账户 向 Maple Court Rentals 支付 CAD 1,150.00), clarifying questions, confirm chatter, scam verdicts with named warning signs, refusals, the freeze, greeting and fallback. Offers such as "say X and I'll draft it" are phrased in the user's language and still route (用马币钱包补上学费缺口). Only the reply text changes: the tools called, the drafts, the tiers and the safety behaviour are the same in every language, which `tests/test_i18n.py` checks for Chinese and Malay balances, FX, forecast, rent draft, scam check and permission-claim refusal.
+
+**App language.** The header has an EN / 中文 switch (`app/src/i18n.ts`): English and Chinese string tables (the Chinese table is typed against the English keys, so a missing string fails `tsc`), saved in `localStorage` on web. It translates the app's own labels, the quick-prompt chips (Chinese chips send Chinese prompts, so the answer comes back in Chinese) and server vocabulary that maps one to one (account names, categories, FX providers, warning signs, compliance check names, action summaries). Longer server text such as risk and compliance reasons stays English. On web, every font family is a stack ending in PingFang SC, Microsoft YaHei and Noto Sans CJK SC, so Chinese renders in a system Chinese face with no font download.
 
 **Result cards.** For read-only tools, the server attaches structured cards to the chat response, built directly from the tool output: FX comparison, balances, rate history, tuition, budget, transactions, scam verdict, credit checklist and credit profile (utilization gauge with the 30% marker, on-time dots, next steps). The app renders the numbers from the card, labelled "From your HomeBridge ledger, not written by the AI". A model that misreads a number in its prose cannot put a wrong figure in a card. The system prompt tells the model the card exists, so its reply stays short.
 

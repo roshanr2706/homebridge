@@ -4,6 +4,7 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { accountNote, api, type Account, type Action, type Alert, type Digest, type FreezeState } from '../api';
 import { usePoll } from '../hooks';
 import { ActionCard } from '../components/ActionCard';
+import { useT, type Key } from '../i18n';
 import { cityTime, fonts, money, useTheme } from '../theme';
 import { useToast } from '../toast';
 import { Body, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
@@ -18,12 +19,12 @@ const STATUS_TONE: Record<string, 'ok' | 'danger' | 'plain' | 'gold'> = {
   awaiting_user: 'gold',
 };
 
-const ALERT_TITLE: Record<string, string> = {
-  velocity: 'Several payments in an hour',
-  first_large_payment: 'Large first payment to a payee',
-  odd_hours: 'Activity at an unusual hour',
-  failed_confirms: 'Repeated failed confirmations',
-  student_freeze: 'Aisha locked her payments',
+const ALERT_TITLE: Record<string, Key> = {
+  velocity: 'alert.velocity',
+  first_large_payment: 'alert.first_large_payment',
+  odd_hours: 'alert.odd_hours',
+  failed_confirms: 'alert.failed_confirms',
+  student_freeze: 'alert.student_freeze',
 };
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
@@ -38,6 +39,7 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
 
 export function SponsorScreen({ active }: { active: boolean }) {
   const t = useTheme();
+  const tr = useT();
   const toast = useToast();
   const [queue, setQueue] = useState<Action[]>([]);
   const [recent, setRecent] = useState<Action[]>([]);
@@ -62,7 +64,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
       // Announce requests that arrived since the last poll (not the ones already there on first load).
       if (seen.current && activeRef.current) {
         const fresh = q.actions.filter((a) => !seen.current!.has(a.action_id));
-        if (fresh.length) toast('New request from Aisha', fresh[fresh.length - 1].summary, 'info');
+        if (fresh.length) toast(tr('sp.newRequest'), tr.summary(fresh[fresh.length - 1].summary), 'info');
       }
       seen.current = new Set(q.actions.map((a) => a.action_id));
       setQueue(q.actions);
@@ -79,17 +81,17 @@ export function SponsorScreen({ active }: { active: boolean }) {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, tr]);
 
   usePoll(refresh, active ? 3000 : 15000);
 
   const decide = (approve: boolean) => async (a: Action, note: string, pin = '') => {
     try {
       const r = await (approve ? api.approve(a.action_id, note, pin) : api.reject(a.action_id, note));
-      if (r.status === 'failed') toast('Approved, but the bank refused it', String(r.result?.error ?? ''), 'danger');
-      else toast(approve ? 'Approved' : 'Rejected', a.summary, approve ? 'ok' : 'danger');
+      if (r.status === 'failed') toast(tr('sp.bankRefused'), String(r.result?.error ?? ''), 'danger');
+      else toast(tr(approve ? 'sp.approved' : 'sp.rejected'), tr.summary(a.summary), approve ? 'ok' : 'danger');
     } catch (e) {
-      toast('Could not record that', (e as Error).message, 'danger');
+      toast(tr('sp.cantRecord'), (e as Error).message, 'danger');
     }
     refresh();
   };
@@ -100,11 +102,12 @@ export function SponsorScreen({ active }: { active: boolean }) {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}
     >
       <View style={{ paddingVertical: 6 }}>
-        <Eyebrow>Kuala Lumpur · {cityTime('Asia/Kuala_Lumpur')}</Eyebrow>
-        <Display style={{ fontSize: 26, marginTop: 2 }}>Selamat datang, Encik Rahman</Display>
+        <Eyebrow>
+          {tr('city.kl')} · {cityTime('Asia/Kuala_Lumpur')}
+        </Eyebrow>
+        <Display style={{ fontSize: 26, marginTop: 2 }}>{tr('sp.welcome')}</Display>
         <Body style={{ color: t.muted, fontSize: 13, marginTop: 2 }}>
-          Aisha is in Vancouver, where it’s {cityTime('America/Vancouver')}. You approve her large payments, new payees and spending
-          from the money you send.
+          {tr('sp.intro', { time: cityTime('America/Vancouver') })}
         </Body>
       </View>
       {error ? <Body style={{ color: t.danger }}>{error}</Body> : null}
@@ -112,23 +115,22 @@ export function SponsorScreen({ active }: { active: boolean }) {
       {freeze?.frozen && (
         <Surface tone="danger">
           <Row style={{ justifyContent: 'space-between' }}>
-            <Eyebrow style={{ color: t.danger }}>Payments locked</Eyebrow>
-            <Pill label={freeze.sponsor_funded === 'sponsor' || freeze.own === 'sponsor' ? 'BY YOU' : 'BY AISHA'} tone="danger" />
+            <Eyebrow style={{ color: t.danger }}>{tr('wal.locked')}</Eyebrow>
+            <Pill label={tr(freeze.sponsor_funded === 'sponsor' || freeze.own === 'sponsor' ? 'sp.byYou' : 'sp.byAisha')} tone="danger" />
           </Row>
           <Body style={{ fontSize: 13, marginTop: 4 }}>
-            Nothing can be confirmed or approved from {freeze.own ? 'any of Aisha’s accounts' : 'the accounts you fund'} until it’s unlocked in
-            Rules. The AI cannot unlock it.
+            {tr(freeze.own ? 'sp.lockedAll' : 'sp.lockedFunded')}
           </Body>
         </Surface>
       )}
 
       <Row style={{ justifyContent: 'space-between', marginTop: 6 }}>
-        <Display style={{ fontSize: 18 }}>Waiting for you</Display>
+        <Display style={{ fontSize: 18 }}>{tr('sp.waiting')}</Display>
         <Pill label={String(queue.length)} tone={queue.length ? 'gold' : 'plain'} />
       </Row>
       {queue.length === 0 ? (
         <Surface style={{ backgroundColor: t.sunken }}>
-          <Body style={{ color: t.muted, fontSize: 14 }}>Nothing to approve right now. New requests show up here within a few seconds.</Body>
+          <Body style={{ color: t.muted, fontSize: 14 }}>{tr('sp.nothing')}</Body>
         </Surface>
       ) : (
         queue.map((a) => <ActionCard key={a.action_id} action={a} mode="sponsor" onApprove={decide(true)} onReject={decide(false)} />)
@@ -136,23 +138,23 @@ export function SponsorScreen({ active }: { active: boolean }) {
 
       {digest && (
         <>
-          <Display style={{ fontSize: 18, marginTop: 10 }}>Last 24 hours</Display>
+          <Display style={{ fontSize: 18, marginTop: 10 }}>{tr('sp.last24')}</Display>
           <Surface>
             <Row style={{ gap: 8, alignItems: 'flex-start' }}>
-              <Stat label="drafted" value={String(digest.drafted)} />
-              <Stat label="completed" value={String(digest.executed)} tone={t.ok} />
-              <Stat label="stopped" value={String(digest.stopped)} tone={digest.stopped ? t.danger : undefined} />
-              <Stat label={digest.money_out_scope === 'sponsor_funded' ? 'out of your funds' : 'money out'} value={money(digest.money_out_cad, 'CAD', 0)} />
+              <Stat label={tr('sp.drafted')} value={String(digest.drafted)} />
+              <Stat label={tr('sp.completed')} value={String(digest.executed)} tone={t.ok} />
+              <Stat label={tr('sp.stopped')} value={String(digest.stopped)} tone={digest.stopped ? t.danger : undefined} />
+              <Stat label={tr(digest.money_out_scope === 'sponsor_funded' ? 'sp.outFunds' : 'sp.moneyOut')} value={money(digest.money_out_cad, 'CAD', 0)} />
             </Row>
             {digest.flagged.length > 0 && (
               <View style={{ marginTop: 12, gap: 4 }}>
-                <Eyebrow style={{ color: t.danger }}>Flagged as risky</Eyebrow>
+                <Eyebrow style={{ color: t.danger }}>{tr('sp.flagged')}</Eyebrow>
                 {digest.flagged.map((f) => (
                   <Row key={f.action_id} style={{ justifyContent: 'space-between', gap: 10 }}>
                     <Body style={{ flex: 1, fontSize: 13 }} numberOfLines={2}>
-                      {f.summary}
+                      {tr.summary(f.summary)}
                     </Body>
-                    <Mono style={{ fontSize: 11, color: t.danger }}>risk {f.risk_score}</Mono>
+                    <Mono style={{ fontSize: 11, color: t.danger }}>{tr('sp.risk', { n: f.risk_score })}</Mono>
                   </Row>
                 ))}
               </View>
@@ -164,17 +166,17 @@ export function SponsorScreen({ active }: { active: boolean }) {
       {alerts.length > 0 && (
         <Surface tone="warn">
           <Row style={{ justifyContent: 'space-between' }}>
-            <Eyebrow>Unusual activity</Eyebrow>
+            <Eyebrow>{tr('sp.unusual')}</Eyebrow>
             <Pill label={String(alerts.length)} tone="gold" />
           </Row>
           <Body style={{ fontSize: 12, color: t.muted, marginTop: 2 }}>
-            For your information; nothing to approve. For 24 hours, Aisha’s new payments carry extra risk, so more of them come to you.
+            {tr('sp.unusualNote')}
           </Body>
           {alerts.map((a, i) => (
             <View key={a.id} style={{ paddingVertical: 7, borderTopWidth: i ? 1 : 0, borderColor: t.border, marginTop: i ? 0 : 6 }}>
               <Row style={{ justifyContent: 'space-between', gap: 10 }}>
-                <Body style={{ fontFamily: fonts.bodyBold, fontSize: 13, flex: 1 }}>{ALERT_TITLE[a.kind] ?? a.kind}</Body>
-                <Mono style={{ fontSize: 11, color: t.faint }}>{cityTime('America/Vancouver', new Date(a.ts * 1000))} Vancouver</Mono>
+                <Body style={{ fontFamily: fonts.bodyBold, fontSize: 13, flex: 1 }}>{ALERT_TITLE[a.kind] ? tr(ALERT_TITLE[a.kind]) : a.kind}</Body>
+                <Mono style={{ fontSize: 11, color: t.faint }}>{tr('sp.vancouverTime', { time: cityTime('America/Vancouver', new Date(a.ts * 1000)) })}</Mono>
               </Row>
               <Body style={{ fontSize: 12.5, color: t.muted, lineHeight: 18 }}>{a.message}</Body>
             </View>
@@ -182,20 +184,20 @@ export function SponsorScreen({ active }: { active: boolean }) {
         </Surface>
       )}
 
-      <Display style={{ fontSize: 18, marginTop: 10 }}>Accounts you fund</Display>
+      <Display style={{ fontSize: 18, marginTop: 10 }}>{tr('sp.accounts')}</Display>
       <Surface>
         <Row style={{ justifyContent: 'space-between', marginBottom: 6 }}>
-          <Eyebrow>Total, about</Eyebrow>
+          <Eyebrow>{tr('sp.total')}</Eyebrow>
           <Mono style={{ fontFamily: fonts.monoBold }}>{money(total, 'CAD', 0)}</Mono>
         </Row>
         {accounts.map((a) => (
           <Row key={a.id} style={{ justifyContent: 'space-between', paddingVertical: 6 }}>
             <View style={{ flex: 1 }}>
-              <Body style={{ fontSize: 14 }}>{a.label}</Body>
+              <Body style={{ fontSize: 14 }}>{tr.d(a.label)}</Body>
               <Mono style={{ fontSize: 11, color: t.faint }}>
-                {accountNote(a) ? `${accountNote(a)} · ` : ''}
+                {accountNote(a) ? `${tr.d(accountNote(a))} · ` : ''}
                 {a.number}
-                {a.sponsor_funded ? ' · funded by you' : ''}
+                {a.sponsor_funded ? tr('sp.fundedByYou') : ''}
               </Mono>
             </View>
             <Mono style={{ fontSize: 14 }}>{money(a.balance, a.currency)}</Mono>
@@ -203,23 +205,22 @@ export function SponsorScreen({ active }: { active: boolean }) {
         ))}
         {sharing ? (
           <Body style={{ fontSize: 11.5, color: t.muted, marginTop: 6, lineHeight: 16 }}>
-            Aisha agreed to share the accounts you fund, requests sent to you, safety alerts and a daily activity count. Her own CAD
-            Everyday account, wages, spending and chat stay private.
+            {tr('sp.sharing')}
           </Body>
         ) : null}
       </Surface>
 
-      <Display style={{ fontSize: 18, marginTop: 10 }}>Recent activity</Display>
+      <Display style={{ fontSize: 18, marginTop: 10 }}>{tr('sp.recent')}</Display>
       <Surface>
         {recent.length === 0 ? (
-          <Body style={{ color: t.muted, fontSize: 14 }}>No activity yet.</Body>
+          <Body style={{ color: t.muted, fontSize: 14 }}>{tr('sp.noActivity')}</Body>
         ) : (
           recent.slice(0, 10).map((a, i) => (
             <Row key={a.action_id} style={{ justifyContent: 'space-between', gap: 10, paddingVertical: 7, borderTopWidth: i ? 1 : 0, borderColor: t.border }}>
               <Body style={{ flex: 1, fontSize: 13 }} numberOfLines={2}>
-                {a.summary}
+                {tr.summary(a.summary)}
               </Body>
-              <Pill label={a.status.replace('_', ' ').toUpperCase()} tone={STATUS_TONE[a.status] ?? 'plain'} />
+              <Pill label={tr.d(a.status).replace('_', ' ').toUpperCase()} tone={STATUS_TONE[a.status] ?? 'plain'} />
             </Row>
           ))
         )}

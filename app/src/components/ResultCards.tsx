@@ -3,31 +3,34 @@
 import { View } from 'react-native';
 
 import type { Card, CreditCardData, CreditProfile } from '../api';
+import { useT } from '../i18n';
 import { amount, fonts, money, useTheme } from '../theme';
 import { Bar, Body, Divider, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
 function Provenance() {
   const t = useTheme();
+  const tr = useT();
   return (
     <Row style={{ marginTop: 10, gap: 6 }}>
       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: t.accent }} />
-      <Body style={{ fontSize: 11, color: t.faint }}>From your HomeBridge ledger, not written by the AI</Body>
+      <Body style={{ fontSize: 11, color: t.faint }}>{tr('provenance')}</Body>
     </Row>
   );
 }
 
 function FxQuotes({ c }: { c: Extract<Card, { type: 'fx_quotes' }> }) {
   const t = useTheme();
+  const tr = useT();
   const max = Math.max(...c.quotes.map((q) => q.you_receive));
   const ideal = c.quotes[0] ? c.amount * c.quotes[0].mid_rate : max;
   return (
     <Surface>
       <Row style={{ justifyContent: 'space-between', marginBottom: 2 }}>
-        <Eyebrow>True cost comparison</Eyebrow>
-        {c.cached && <Pill label="CACHED QUOTES" tone="warn" />}
+        <Eyebrow>{tr('fx.title')}</Eyebrow>
+        {c.cached && <Pill label={tr('fx.cached')} tone="warn" />}
       </Row>
       <Body style={{ color: t.muted, fontSize: 13 }}>
-        Sending {money(c.amount, c.from_currency)} · mid-market would give {money(ideal, c.to_currency)}
+        {tr('fx.sending', { amount: money(c.amount, c.from_currency), ideal: money(ideal, c.to_currency) })}
       </Body>
       <View style={{ gap: 12, marginTop: 12 }}>
         {c.quotes.map((q, i) => {
@@ -37,18 +40,18 @@ function FxQuotes({ c }: { c: Extract<Card, { type: 'fx_quotes' }> }) {
               <Row style={{ justifyContent: 'space-between', marginBottom: 4 }}>
                 <Row style={{ gap: 6, flex: 1 }}>
                   <Body style={{ fontFamily: best ? fonts.bodyBold : fonts.body, fontSize: 14 }} numberOfLines={1}>
-                    {q.provider}
+                    {tr.d(q.provider)}
                   </Body>
-                  {best && <Pill label="BEST" tone="gold" />}
+                  {best && <Pill label={tr('fx.best')} tone="gold" />}
                 </Row>
                 <Mono style={{ fontFamily: best ? fonts.monoBold : fonts.mono, fontSize: 13 }}>{money(q.you_receive, q.receive_currency)}</Mono>
               </Row>
               <Bar value={q.you_receive} max={max} color={best ? t.gold : t.faint} />
               <Row style={{ justifyContent: 'space-between', marginTop: 3 }}>
                 <Body style={{ fontSize: 11, color: t.muted }}>
-                  fee {money(q.fee, q.fee_currency)} · rate {q.rate} · {q.speed}
+                  {tr('fx.line', { fee: money(q.fee, q.fee_currency), rate: q.rate, speed: tr.d(q.speed) })}
                 </Body>
-                <Mono style={{ fontSize: 11, color: q.true_cost_pct > 3 ? t.danger : t.muted }}>{q.true_cost_pct}% lost</Mono>
+                <Mono style={{ fontSize: 11, color: q.true_cost_pct > 3 ? t.danger : t.muted }}>{tr('fx.lost', { pct: q.true_cost_pct })}</Mono>
               </Row>
             </View>
           );
@@ -56,7 +59,8 @@ function FxQuotes({ c }: { c: Extract<Card, { type: 'fx_quotes' }> }) {
       </View>
       <Divider />
       <Body style={{ fontSize: 13 }}>
-        Best option keeps <Mono style={{ fontFamily: fonts.monoBold, color: t.gold, fontSize: 13 }}>{money(c.saving_vs_worst, c.to_currency)}</Mono> more than the worst.
+        {tr('fx.keeps1')}<Mono style={{ fontFamily: fonts.monoBold, color: t.gold, fontSize: 13 }}>{money(c.saving_vs_worst, c.to_currency)}</Mono>
+        {tr('fx.keeps2')}
       </Body>
       {c.note ? <Body style={{ fontSize: 12, color: t.warn, marginTop: 4 }}>{c.note}</Body> : null}
       <Provenance />
@@ -66,19 +70,20 @@ function FxQuotes({ c }: { c: Extract<Card, { type: 'fx_quotes' }> }) {
 
 function Balances({ c }: { c: Extract<Card, { type: 'balances' }> }) {
   const t = useTheme();
+  const tr = useT();
   return (
     <Surface>
-      <Eyebrow>Balances</Eyebrow>
+      <Eyebrow>{tr('bal.title')}</Eyebrow>
       <Mono style={{ fontFamily: fonts.monoBold, fontSize: 24, marginTop: 4 }}>{money(c.total, c.total_currency)}</Mono>
-      <Body style={{ fontSize: 12, color: t.muted }}>total at mid-market rate</Body>
+      <Body style={{ fontSize: 12, color: t.muted }}>{tr('bal.sub')}</Body>
       <Divider />
       {c.accounts.map((a) => (
         <Row key={a.label} style={{ justifyContent: 'space-between', paddingVertical: 4 }}>
           <View style={{ flex: 1 }}>
-            <Body style={{ fontSize: 14 }}>{a.label}</Body>
+            <Body style={{ fontSize: 14 }}>{tr.d(a.label)}</Body>
             <Mono style={{ fontSize: 11, color: t.faint }}>
               {a.number}
-              {a.sponsor_funded ? '  · sponsor-funded' : ''}
+              {a.sponsor_funded ? tr('bal.sponsorFunded') : ''}
             </Mono>
           </View>
           <Mono style={{ fontSize: 14 }}>{money(a.balance, a.currency)}</Mono>
@@ -91,12 +96,13 @@ function Balances({ c }: { c: Extract<Card, { type: 'balances' }> }) {
 
 function FxHistory({ c }: { c: Extract<Card, { type: 'fx_history' }> }) {
   const t = useTheme();
+  const tr = useT();
   const series = c.series ?? [];
   const lo = Math.min(...series);
   const hi = Math.max(...series);
   return (
     <Surface>
-      <Eyebrow>{c.pair} · last {c.days} days</Eyebrow>
+      <Eyebrow>{tr('hist.title', { pair: c.pair, days: c.days })}</Eyebrow>
       <Row style={{ alignItems: 'flex-end', gap: 2, height: 64, marginTop: 12 }}>
         {series.map((v, i) => (
           <View
@@ -112,11 +118,11 @@ function FxHistory({ c }: { c: Extract<Card, { type: 'fx_history' }> }) {
         ))}
       </Row>
       <Row style={{ justifyContent: 'space-between', marginTop: 8 }}>
-        <Mono style={{ fontSize: 12, color: t.muted }}>low {c.low}</Mono>
-        <Mono style={{ fontSize: 12, color: t.gold }}>today {c.today}</Mono>
-        <Mono style={{ fontSize: 12, color: t.muted }}>high {c.high}</Mono>
+        <Mono style={{ fontSize: 12, color: t.muted }}>{tr('hist.low', { v: c.low })}</Mono>
+        <Mono style={{ fontSize: 12, color: t.gold }}>{tr('hist.today', { v: c.today })}</Mono>
+        <Mono style={{ fontSize: 12, color: t.muted }}>{tr('hist.high', { v: c.high })}</Mono>
       </Row>
-      <Body style={{ fontSize: 12, color: t.muted, marginTop: 6 }}>A range, not a forecast. Nobody can reliably predict tomorrow’s rate.</Body>
+      <Body style={{ fontSize: 12, color: t.muted, marginTop: 6 }}>{tr('hist.note')}</Body>
       <Provenance />
     </Surface>
   );
@@ -124,36 +130,37 @@ function FxHistory({ c }: { c: Extract<Card, { type: 'fx_history' }> }) {
 
 export function TuitionCard({ c, bare }: { c: Extract<Card, { type: 'tuition' }>; bare?: boolean }) {
   const t = useTheme();
+  const tr = useT();
   const next = c.installments[0];
   if (!next) return null;
   const covered = Math.min(c.tuition_fund_cad, next.amount);
   const inner = (
     <>
-      <Eyebrow>Next tuition</Eyebrow>
+      <Eyebrow>{tr('tui.title')}</Eyebrow>
       <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 4 }}>
         <View style={{ flex: 1 }}>
-          <Body style={{ fontFamily: fonts.bodyBold }}>{next.term}</Body>
-          <Body style={{ fontSize: 13, color: t.muted }}>due {next.due}</Body>
+          <Body style={{ fontFamily: fonts.bodyBold }}>{tr.d(next.term)}</Body>
+          <Body style={{ fontSize: 13, color: t.muted }}>{tr('tui.due', { date: next.due })}</Body>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Mono style={{ fontFamily: fonts.monoBold, fontSize: 26, color: next.days_until_due < 21 ? t.danger : t.text }}>{next.days_until_due}</Mono>
-          <Body style={{ fontSize: 11, color: t.muted }}>days left</Body>
+          <Body style={{ fontSize: 11, color: t.muted }}>{tr('tui.daysLeft')}</Body>
         </View>
       </Row>
       <View style={{ marginTop: 12 }}>
         <Bar value={covered} max={next.amount} color={c.next_shortfall_cad > 0 ? t.gold : t.ok} height={10} />
       </View>
       <Row style={{ justifyContent: 'space-between', marginTop: 4 }}>
-        <Mono style={{ fontSize: 12, color: t.muted }}>fund {money(c.tuition_fund_cad, 'CAD', 0)}</Mono>
-        <Mono style={{ fontSize: 12, color: t.muted }}>needed {money(next.amount, 'CAD', 0)}</Mono>
+        <Mono style={{ fontSize: 12, color: t.muted }}>{tr('tui.fund', { v: money(c.tuition_fund_cad, 'CAD', 0) })}</Mono>
+        <Mono style={{ fontSize: 12, color: t.muted }}>{tr('tui.needed', { v: money(next.amount, 'CAD', 0) })}</Mono>
       </Row>
       {c.next_shortfall_cad > 0 ? (
         <Body style={{ fontSize: 13, marginTop: 8 }}>
-          Short by <Mono style={{ color: t.danger, fontFamily: fonts.monoBold, fontSize: 13 }}>{money(c.next_shortfall_cad, 'CAD')}</Mono>. Your MYR wallet is worth about{' '}
-          {money(c.myr_wallet_value_cad, 'CAD', 0)}.
+          {tr('tui.short1')}<Mono style={{ color: t.danger, fontFamily: fonts.monoBold, fontSize: 13 }}>{money(c.next_shortfall_cad, 'CAD')}</Mono>
+          {tr('tui.short2', { v: money(c.myr_wallet_value_cad, 'CAD', 0) })}
         </Body>
       ) : (
-        <Body style={{ fontSize: 13, marginTop: 8, color: t.ok }}>Fully covered.</Body>
+        <Body style={{ fontSize: 13, marginTop: 8, color: t.ok }}>{tr('tui.covered')}</Body>
       )}
       {!bare && <Provenance />}
     </>
@@ -163,11 +170,12 @@ export function TuitionCard({ c, bare }: { c: Extract<Card, { type: 'tuition' }>
 
 export function BudgetCard({ c, bare }: { c: Extract<Card, { type: 'budget' }>; bare?: boolean }) {
   const t = useTheme();
+  const tr = useT();
   const max = Math.max(...c.categories.map((x) => Math.max(x.spent_cad, x.budget_cad ?? 0)), 1);
   const inner = (
     <>
       <Row style={{ justifyContent: 'space-between' }}>
-        <Eyebrow>Spending · last {c.period_days} days</Eyebrow>
+        <Eyebrow>{tr('bud.title', { n: c.period_days })}</Eyebrow>
         <Mono style={{ fontSize: 13 }}>{money(c.total_spent_cad, 'CAD', 0)}</Mono>
       </Row>
       <View style={{ gap: 10, marginTop: 12 }}>
@@ -175,8 +183,8 @@ export function BudgetCard({ c, bare }: { c: Extract<Card, { type: 'budget' }>; 
           <View key={x.category}>
             <Row style={{ justifyContent: 'space-between', marginBottom: 3 }}>
               <Row style={{ gap: 6 }}>
-                <Body style={{ fontSize: 13, textTransform: 'capitalize' }}>{x.category}</Body>
-                {x.over_budget && <Pill label="OVER" tone="danger" />}
+                <Body style={{ fontSize: 13, textTransform: 'capitalize' }}>{tr.d(x.category)}</Body>
+                {x.over_budget && <Pill label={tr('bud.over')} tone="danger" />}
               </Row>
               <Mono style={{ fontSize: 12, color: t.muted }}>
                 {amount(x.spent_cad, 0)}
@@ -189,7 +197,7 @@ export function BudgetCard({ c, bare }: { c: Extract<Card, { type: 'budget' }>; 
       </View>
       {c.possible_duplicate_charges.length > 0 && (
         <Body style={{ fontSize: 13, color: t.warn, marginTop: 10 }}>
-          Possible duplicate charge: {c.possible_duplicate_charges.join(', ')}
+          {tr('bud.dupe', { list: c.possible_duplicate_charges.join(', ') })}
         </Body>
       )}
       {!bare && <Provenance />}
@@ -200,26 +208,27 @@ export function BudgetCard({ c, bare }: { c: Extract<Card, { type: 'budget' }>; 
 
 function Scam({ c }: { c: Extract<Card, { type: 'scam_check' }> }) {
   const t = useTheme();
+  const tr = useT();
   const verdict = {
-    likely_scam: { label: 'Likely scam', tone: 'danger' as const, color: t.danger, bg: t.dangerBg },
-    suspicious: { label: 'Suspicious', tone: 'warn' as const, color: t.warn, bg: t.warnBg },
-    no_known_pattern: { label: 'No known scam pattern', tone: 'ok' as const, color: t.ok, bg: t.okBg },
+    likely_scam: { label: tr('scam.likely'), tone: 'danger' as const, color: t.danger, bg: t.dangerBg },
+    suspicious: { label: tr('scam.suspicious'), tone: 'warn' as const, color: t.warn, bg: t.warnBg },
+    no_known_pattern: { label: tr('scam.none'), tone: 'ok' as const, color: t.ok, bg: t.okBg },
   }[c.verdict];
   // Named warning signs from the backend ("Asks for gift cards"), never raw rule matches.
   const signals = Array.isArray(c.signals) ? c.signals : [];
   return (
     <Surface tone={verdict.tone} style={{ padding: 0, overflow: 'hidden' }}>
       <View style={{ backgroundColor: verdict.bg, padding: 14 }}>
-        <Eyebrow style={{ color: verdict.color }}>Scam shield</Eyebrow>
+        <Eyebrow style={{ color: verdict.color }}>{tr('scam.title')}</Eyebrow>
         <Body style={{ fontFamily: fonts.display, fontSize: 22, color: verdict.color, marginTop: 2 }}>{verdict.label}</Body>
       </View>
       <View style={{ padding: 14, gap: 8 }}>
         {signals.length > 0 && (
           <View style={{ gap: 6 }}>
-            <Body style={{ fontSize: 12, color: t.muted }}>Warning signs</Body>
+            <Body style={{ fontSize: 12, color: t.muted }}>{tr('scam.signs')}</Body>
             <Row style={{ flexWrap: 'wrap', gap: 6 }}>
               {signals.map((s) => (
-                <Pill key={s.category + s.name} label={s.name} tone={s.category === 'scam' ? 'danger' : 'warn'} />
+                <Pill key={s.category + s.name} label={tr.d(s.name)} tone={s.category === 'scam' ? 'danger' : 'warn'} />
               ))}
             </Row>
             {c.quote ? (
@@ -231,8 +240,8 @@ function Scam({ c }: { c: Extract<Card, { type: 'scam_check' }> }) {
         )}
         {c.model_label && (
           <Body style={{ fontSize: 12, color: t.muted }}>
-            Our classifier: <Mono style={{ fontSize: 12 }}>{c.model_label}</Mono> ({Math.round((c.model_confidence ?? 0) * 100)}%)
-            {c.model_keywords.length > 0 ? ` · driven by "${c.model_keywords.slice(0, 4).join('", "')}"` : ''}
+            {tr('scam.classifier')}<Mono style={{ fontSize: 12 }}>{c.model_label}</Mono> ({Math.round((c.model_confidence ?? 0) * 100)}%)
+            {c.model_keywords.length > 0 ? tr('scam.driven', { words: c.model_keywords.slice(0, 4).join('", "') }) : ''}
           </Body>
         )}
         {c.advice.map((a) => (
@@ -247,9 +256,10 @@ function Scam({ c }: { c: Extract<Card, { type: 'scam_check' }> }) {
 
 function Transactions({ c }: { c: Extract<Card, { type: 'transactions' }> }) {
   const t = useTheme();
+  const tr = useT();
   return (
     <Surface>
-      <Eyebrow>Recent transactions</Eyebrow>
+      <Eyebrow>{tr('tx.title')}</Eyebrow>
       <View style={{ marginTop: 6 }}>
         {c.rows.map((r, i) => (
           <Row key={i} style={{ paddingVertical: 6, borderBottomWidth: i < c.rows.length - 1 ? 1 : 0, borderColor: t.border, gap: 10 }}>
@@ -258,7 +268,7 @@ function Transactions({ c }: { c: Extract<Card, { type: 'transactions' }> }) {
               <Body style={{ fontSize: 13 }} numberOfLines={1}>
                 {r.counterparty}
               </Body>
-              <Body style={{ fontSize: 11, color: t.muted }}>{r.category}</Body>
+              <Body style={{ fontSize: 11, color: t.muted }}>{tr.d(r.category)}</Body>
             </View>
             <Mono style={{ fontSize: 13, color: r.amount > 0 ? t.ok : t.text }}>
               {r.amount > 0 ? '+' : ''}
@@ -292,13 +302,12 @@ function Checklist({ c }: { c: Extract<Card, { type: 'checklist' }> }) {
   );
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const shortDate = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
 
 // Runway: the spending balance over time as bars around a zero line. Days below zero sit in a red
 // "shortfall zone"; gold lines mark tuition due dates; the first bar is today and the gold bar the low point.
 export function RunwayCard({ c, bare, compact }: { c: Extract<Card, { type: 'forecast' }>; bare?: boolean; compact?: boolean }) {
   const t = useTheme();
+  const tr = useT();
   const H = compact ? 64 : 96;
   const n = c.series.length;
   const hi = Math.max(0, ...c.series);
@@ -308,21 +317,21 @@ export function RunwayCard({ c, bare, compact }: { c: Extract<Card, { type: 'for
   const gaps = c.tuition.filter((x) => x.gap > 0);
   const short = c.first_shortfall_date !== null;
   const verdict = short
-    ? { label: 'RUNS SHORT', tone: 'danger' as const }
+    ? { label: tr('run.short'), tone: 'danger' as const }
     : gaps.length
-      ? { label: 'TUITION GAP', tone: 'warn' as const }
-      : { label: 'ON TRACK', tone: 'ok' as const };
+      ? { label: tr('run.gap'), tone: 'warn' as const }
+      : { label: tr('run.ok'), tone: 'ok' as const };
   const inner = (
     <>
       <Row style={{ justifyContent: 'space-between' }}>
-        <Eyebrow>Runway · to {shortDate(c.end_date)}</Eyebrow>
+        <Eyebrow>{tr('run.title', { date: tr.date(c.end_date) })}</Eyebrow>
         <Pill label={verdict.label} tone={verdict.tone} />
       </Row>
       <Body style={{ fontFamily: fonts.bodyBold, marginTop: 4, color: short ? t.danger : t.text }}>
-        {short ? `Runs short on ${shortDate(c.first_shortfall_date as string)}` : `Lasts to ${shortDate(c.end_date)}`}
+        {short ? tr('run.runsShort', { date: tr.date(c.first_shortfall_date as string) }) : tr('run.lasts', { date: tr.date(c.end_date) })}
       </Body>
       <Body style={{ fontSize: 12, color: t.muted }}>
-        {c.account} · lowest {money(c.lowest.balance, 'CAD')} on {shortDate(c.lowest.date)}
+        {tr('run.lowest', { account: tr.d(c.account), v: money(c.lowest.balance, 'CAD'), date: tr.date(c.lowest.date) })}
       </Body>
       <View style={{ height: H, marginTop: 10 }}>
         {lo < 0 && (
@@ -351,20 +360,20 @@ export function RunwayCard({ c, bare, compact }: { c: Extract<Card, { type: 'for
         ))}
       </View>
       <Row style={{ justifyContent: 'space-between', marginTop: 4 }}>
-        <Mono style={{ fontSize: 11, color: t.muted }}>today {amount(c.starting_balance, 0)}</Mono>
+        <Mono style={{ fontSize: 11, color: t.muted }}>{tr('run.today', { v: amount(c.starting_balance, 0) })}</Mono>
         <Mono style={{ fontSize: 11, color: c.ending_balance < 0 ? t.danger : t.muted }}>
-          {shortDate(c.end_date)} {amount(c.ending_balance, 0)}
+          {tr.date(c.end_date)} {amount(c.ending_balance, 0)}
         </Mono>
       </Row>
       {c.tuition.map((x) => (
         <Row key={x.due} style={{ gap: 8, marginTop: 6 }}>
           <View style={{ width: 10, height: 2, backgroundColor: x.gap > 0 ? t.danger : t.gold }} />
           <Body style={{ fontSize: 12, flex: 1 }}>
-            Tuition due {shortDate(x.due)} ({money(x.amount, 'CAD', 0)}):{' '}
+            {tr('run.tuitionDue', { date: tr.date(x.due), amount: money(x.amount, 'CAD', 0) })}
             {x.gap > 0 ? (
-              <Mono style={{ fontSize: 12, color: t.danger, fontFamily: fonts.monoBold }}>fund short {money(x.gap, 'CAD')}</Mono>
+              <Mono style={{ fontSize: 12, color: t.danger, fontFamily: fonts.monoBold }}>{tr('run.fundShort', { v: money(x.gap, 'CAD') })}</Mono>
             ) : (
-              <Body style={{ fontSize: 12, color: t.ok }}>covered</Body>
+              <Body style={{ fontSize: 12, color: t.ok }}>{tr('run.covered')}</Body>
             )}
           </Body>
         </Row>
@@ -372,7 +381,7 @@ export function RunwayCard({ c, bare, compact }: { c: Extract<Card, { type: 'for
       {!compact && c.suggestions.length > 0 && (
         <>
           <Divider />
-          <Eyebrow>What would help</Eyebrow>
+          <Eyebrow>{tr('run.help')}</Eyebrow>
           <View style={{ gap: 6, marginTop: 6 }}>
             {c.suggestions.map((s, i) => (
               <Row key={i} style={{ alignItems: 'flex-start', gap: 10 }}>
@@ -387,8 +396,8 @@ export function RunwayCard({ c, bare, compact }: { c: Extract<Card, { type: 'for
       )}
       {!compact && (
         <Body style={{ fontSize: 11, color: t.faint, marginTop: 10 }}>
-          Assumes spending of about {money(c.weekly_spending_cad, 'CAD', 0)} a week
-          {c.pending_included.length > 0 ? ` and counts ${c.pending_included.length} pending draft(s) as confirmed` : ''}. {c.disclosure}
+          {tr('run.assumes', { v: money(c.weekly_spending_cad, 'CAD', 0) })}
+          {c.pending_included.length > 0 ? tr('run.pending', { n: c.pending_included.length }) : ''}{tr.lang === 'zh' ? '。' : '. '}{c.disclosure}
         </Body>
       )}
       {!bare && <Provenance />}
@@ -461,25 +470,26 @@ function StreakDots({ history }: { history: CreditCardData['payment_history'] })
 
 export function CreditCard({ c, compact }: { c: CreditCardData; compact?: boolean }) {
   const t = useTheme();
+  const tr = useT();
   const st = c.statement;
   const steps = c.next_actions.slice(0, compact ? 1 : 4);
   return (
     <Surface>
       <Row style={{ justifyContent: 'space-between', gap: 8 }}>
-        <Eyebrow style={{ flex: 1 }}>Credit builder · {c.card.label}</Eyebrow>
-        <Pill label={`${c.health.label.toUpperCase()} · SIMULATED`} tone={HEALTH_TONE[c.health.key]} />
+        <Eyebrow style={{ flex: 1 }}>{tr('cr.title', { card: tr.d(c.card.label) })}</Eyebrow>
+        <Pill label={tr('cr.simulated', { label: tr.d(c.health.label).toUpperCase() })} tone={HEALTH_TONE[c.health.key]} />
       </Row>
       <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 6 }}>
         <View>
           <Mono style={{ fontFamily: fonts.monoBold, fontSize: 30, letterSpacing: -1, color: c.utilization_pct >= c.target_pct ? t.danger : t.text }}>
             {c.utilization_pct}%
           </Mono>
-          <Body style={{ fontSize: 12, color: t.muted }}>of your limit used now</Body>
+          <Body style={{ fontSize: 12, color: t.muted }}>{tr('cr.used')}</Body>
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Mono style={{ fontSize: 14 }}>{money(c.card.balance, c.card.currency)}</Mono>
           <Mono style={{ fontSize: 11, color: t.faint }}>
-            of {money(c.card.credit_limit, c.card.currency, 0)} · {c.card.number}
+            {tr('cr.of', { limit: money(c.card.credit_limit, c.card.currency, 0), number: c.card.number })}
           </Mono>
         </View>
       </Row>
@@ -487,15 +497,15 @@ export function CreditCard({ c, compact }: { c: CreditCardData; compact?: boolea
         <UtilizationGauge pct={c.utilization_pct} target={c.target_pct} />
       </View>
       <Body style={{ fontSize: 12, color: t.muted, marginTop: 4 }}>
-        Last statement reported {c.utilization_reported_pct}%. Next one closes {c.next_statement_date} ({c.days_until_statement} days)
-        {c.utilization_projected_at_close_pct > c.utilization_pct ? `; at this pace it would report ${c.utilization_projected_at_close_pct}%` : ''}.
+        {tr('cr.reported', { r: c.utilization_reported_pct, date: c.next_statement_date, n: c.days_until_statement })}
+        {c.utilization_projected_at_close_pct > c.utilization_pct ? tr('cr.pace', { p: c.utilization_projected_at_close_pct }) : ''}{tr.lang === 'zh' ? '。' : '.'}
       </Body>
       <Divider />
       <Row style={{ justifyContent: 'space-between', gap: 10 }}>
         <View style={{ flex: 1, gap: 6 }}>
           <StreakDots history={c.payment_history} />
           <Body style={{ fontSize: 12, color: t.muted }}>
-            {c.on_time_streak} on time in a row · {c.months_of_history} months of history
+            {tr('cr.streak', { n: c.on_time_streak, m: c.months_of_history })}
           </Body>
         </View>
         {st && st.status === 'due' && st.remaining > 0 ? (
@@ -504,16 +514,16 @@ export function CreditCard({ c, compact }: { c: CreditCardData; compact?: boolea
               {money(st.remaining, c.card.currency)}
             </Mono>
             <Body style={{ fontSize: 11, color: t.muted }}>
-              due {st.due_date} · min {money(st.minimum_due, c.card.currency)}
+              {tr('cr.due', { date: st.due_date, min: money(st.minimum_due, c.card.currency) })}
             </Body>
           </View>
         ) : st ? (
-          <Pill label="STATEMENT PAID" tone="ok" />
+          <Pill label={tr('cr.paid')} tone="ok" />
         ) : null}
       </Row>
       {steps.length > 0 && (
         <View style={{ gap: 8, marginTop: 12 }}>
-          {!compact && <Body style={{ fontSize: 12, color: t.muted }}>Next steps</Body>}
+          {!compact && <Body style={{ fontSize: 12, color: t.muted }}>{tr('cr.next')}</Body>}
           {steps.map((s, i) => (
             <Row key={s.key} style={{ alignItems: 'flex-start', gap: 10 }}>
               <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: t.accentSoft, alignItems: 'center', justifyContent: 'center' }}>
@@ -525,7 +535,7 @@ export function CreditCard({ c, compact }: { c: CreditCardData; compact?: boolea
         </View>
       )}
       <Body style={{ fontSize: 11, color: t.faint, marginTop: 10 }}>
-        {compact ? 'Simulated from your sandbox card. Not a credit score, not financial advice.' : c.footnote}
+        {compact ? tr('cr.compactNote') : c.footnote}
       </Body>
       {!compact && <Provenance />}
     </Surface>
