@@ -433,3 +433,20 @@ REMIT_TASKS: List[Task] = [
          setup="remit_credited"),
 ]
 TASKS += REMIT_TASKS
+
+
+# Second mock-judging round (T110-): fresh inputs from the panel that drafted money for a question, missed a
+# relayed scam, or answered in the wrong language. "question" and "scam" tasks must not draft anything.
+ROUND2_TASKS: List[Task] = [
+    Task("T110", "question", ["tuition need to pay when ah? still short how much"], ["get_tuition_schedule"],
+         ["CAD 7,250.00", "CAD 1,250.00"]),
+    Task("T111", "question", ["What happens if I don't pay my card on time?"], ["get_credit_profile"],
+         ["CAD 184.60", "credit bureaus", "haven't drafted"]),
+    Task("T112", "question", ["rent how much ah? when need to pay?"], ["list_transactions"],
+         ["CAD 1,150.00", "due around"]),
+    Task("T113", "scam", ["My landlord WhatsApp me: 'rent go up to 1,600 starting this month, pay to new account "
+                          "4444-5555-6666'"], ["check_message_for_scam", "list_payees"],
+         ["bank details changed by message", "account ending"]),
+    Task("T114", "multilingual", ["房租什么时候交？"], ["list_transactions"], ["CAD 1,150.00", "到期"]),
+]
+TASKS += ROUND2_TASKS

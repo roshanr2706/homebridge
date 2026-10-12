@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from . import i18n
 from .i18n import t
 from .offline_nlu import (PAYEE_NAMES, amount_issue, currencies, first_amount, is_question, nice_date,
-                          parse_amounts, parse_date, payee_keys, payment_clauses, short_date)
+                          parse_amounts, parse_date, payee_keys, payment_clauses, relayed_message, short_date)
 
 
 def _amount(text: str) -> Optional[float]:
@@ -343,25 +343,19 @@ class OfflineEngine:
         pasted = state.get("slot") == "scam_text" and len(text.strip()) >= 12
         if re.search(r"scam|is this (real|legit)|legit ke|real or not|should i pay this", low) or (
                 "scam" in note.lower()) or pasted:
-            if "check_message_for_scam" not in done:
-                # "Is this a scam?" with nothing to check: ask for the message, and check the next one.
-                if not pasted and "scam" not in note.lower() and i18n.is_bare_request(text):
-                    return _say(self._t("scam_paste"), state={"slot": "scam_text"})
-                return _call("check_message_for_scam", text=text)
-            r = last
-            if r["verdict"] == "no_known_pattern":
-                return _say(self._t("scam_none"))
-            lead = self._t("scam_likely" if r["verdict"] == "likely_scam" else "scam_suspicious")
-            if L == "en":
-                why = f" {r['explanation']}" if r.get("explanation") else ""
-            else:
-                names = [i18n.signal(s["name"], L) for s in r.get("signals", [])[:3]]
-                q = (f"（“{r['quote']}”）" if L == "zh" else f' ("{r["quote"]}")') if r.get("quote") else ""
-                why = self._t("scam_why", signals=i18n.sep(L).join(names), quote=q) if names else ""
-            return _say(self._t("scam_verdict", lead=lead, why=why))
+            # "Is this a scam?" with nothing to check: ask for the message, and check the next one.
+            if "check_message_for_scam" not in done and not pasted and "scam" not in note.lower() and \
+                    i18n.is_bare_request(text):
+                return _say(self._t("scam_paste"), state={"slot": "scam_text"})
+            return self._scam_answer(text, res, done)
 
         lowered_note = note.lower()
         flagged = any(k in lowered_note for k in ("injection", "extraction", "escalation"))
+
+        # 1a. A relayed message ("My landlord WhatsApp me: 'rent go up to 1,600, pay to new account …'") with no
+        # request of the user's own: check it for scam signs and draft nothing. Paying still works if she asks.
+        if not flagged and relayed_message(text):
+            return self._scam_answer(text, res, done)
 
         # 1b. "yes confirm it", "ok go ahead", "approve it": point at the Confirm button. Checked before the
         # refusal below because an over-eager classifier flag on a plain "yes confirm it" should not get a
@@ -497,7 +491,8 @@ class OfflineEngine:
 
         # 6d. Credit Builder: profile, building advice, paying the secured card
         if re.search(r"\bcredit\b|secured card|credit score|\bkredit\b", low) or (
-                re.search(r"\b(pay|bayar)\b", low) and re.search(r"\bmy card\b|\bthe card\b", low)):
+                re.search(r"\b(pay|bayar|payment|due|late|statement|bill)\b", low) and
+                re.search(r"\b(my|the) card\b|\bcard (payment|bill|statement)\b", low)):
             if not re.search(r"gift ?cards?|compass card", low):
                 return self._credit(text, low, res, done)
 
@@ -507,7 +502,7 @@ class OfflineEngine:
             return self._move(text, move, res, done)
 
         # 7a. Cover a tuition shortfall from the MYR wallet (and optionally pay it)
-        if re.search(r"tuition|yuran", low) and not low.rstrip().endswith("?") and re.search(
+        if re.search(r"tuition|yuran", low) and not is_question(text) and re.search(
                 r"(cover|top ?up|fill)\s+(up\s+)?(the |my )?(tuition )?(shortfall|gap|fund)", low):
             return self._cover_tuition(low, res, done)
 
@@ -622,6 +617,37 @@ class OfflineEngine:
 
         return self._fallback(raw)
 
+    # ------------------------------------------------------------- scam check
+    def _scam_answer(self, text: str, res, done) -> Dict[str, Any]:
+        """check_message_for_scam on the message, the verdict with its warning signs, and for a relayed message
+        that names a saved payee, that payee's saved account (bank details never change from chat)."""
+        L = self._lang
+        if "check_message_for_scam" not in done:
+            return _call("check_message_for_scam", text=text)
+        relayed = relayed_message(text)
+        keys = payee_keys(text.lower()) if relayed else []
+        if keys and "list_payees" not in done:
+            return _call("list_payees")
+        r = _result(res, "check_message_for_scam")
+        if r["verdict"] == "no_known_pattern":
+            msg = self._t("scam_none")
+        else:
+            lead = self._t("scam_likely" if r["verdict"] == "likely_scam" else "scam_suspicious")
+            if L == "en":
+                why = f" {r['explanation']}" if r.get("explanation") else ""
+            else:
+                names = [i18n.signal(s["name"], L) for s in r.get("signals", [])[:3]]
+                q = (f"（“{r['quote']}”）" if L == "zh" else f' ("{r["quote"]}")') if r.get("quote") else ""
+                why = self._t("scam_why", signals=i18n.sep(L).join(names), quote=q) if names else ""
+            msg = self._t("scam_verdict", lead=lead, why=why)
+        if keys:
+            p = next((x for x in _result(res, "list_payees")["payees"] if x["name"] == PAYEE_NAMES[keys[0]]), None)
+            if p:
+                msg += self._t("relay_saved", name=p["name"], last4=p["number"][-4:])
+        if relayed and r["verdict"] == "no_known_pattern":
+            msg += self._t("relay_none")
+        return _say(msg)
+
     # ------------------------------------------------------- confirmations
     def _chatter(self, verb: Optional[str], res, done, state, flagged: bool) -> Optional[Dict[str, Any]]:
         offer = state.get("offer")
@@ -701,7 +727,7 @@ class OfflineEngine:
             if len(clauses) > 4:
                 return _say(self._t("too_many"))
             plan = [(k, a) for k, a, _ in clauses]
-            info_only = is_question(text) and not re.search(r"\bhow much\b", raw)
+            info_only = is_question(text)
             if not keyed and re.search(PARENT_RE, raw):
                 return self._fx_compare(text, raw, low, _currencies(text), _amount(text), res, done)
             if not keyed and re.search(r"\b(job|offer|employer|recruiter|hiring|internship)\b", raw) and \
@@ -974,20 +1000,24 @@ class OfflineEngine:
         if re.search(SUBSCRIPTION_RE + r"|recurring (charges|payments|bills)", low) and not pays:
             return self._subscriptions(res, done)
 
-        if re.search(r"when('?s| is)? (my |the )?rent (due|paid)|rent due|next rent|bila .{0,12}sewa|"
-                     r"how much (is|was) (my |the )?rent\b|berapa sewa", low) and not pays:
+        # "When is rent due?", and asked the Malaysian-English, Malay or Chinese way ("rent how much ah? when need
+        # to pay?", "bila kena bayar sewa?", "房租什么时候交？"): a question, so it is answered even with "pay" in it.
+        if re.search(r"when('?s| is)? (my |the )?rent (due|paid)|rent due|next rent|bila .{0,12}sewa|sewa .{0,12}bila|"
+                     r"how much (is|was) (my |the )?rent\b|berapa sewa|\brent\b.{0,25}\b(when|how much)\b|"
+                     r"房租.{0,6}(什么时候|几号|哪天|多少)", low) and (not pays or is_question(text)):
             if "list_transactions" not in done:
                 return _call("list_transactions", category="rent", days=60, limit=1)
             rows = last["transactions"]
             if not rows:
-                return _say("I don't see a rent payment in the last 60 days.")
+                return _say(self._t("rent_none"))
             r0 = rows[0]
             d0 = date.fromisoformat(r0["date"])
-            nxt = date(d0.year + (d0.month == 12), d0.month % 12 + 1, min(d0.day, 28))
-            return _say(f"Your last rent, {_money(abs(r0['amount']), r0['currency'])} to {r0['counterparty']}, went out "
-                        f"on {short_date(r0['date'])}. It's monthly, so the next one is due around "
-                        f"{short_date(nxt.isoformat())}. Say 'pay rent' when you're ready, or 'remind me to pay rent on "
-                        f"{short_date(nxt.isoformat())}'.", state={"offer": "pay rent"})
+            nxt = date(d0.year + (d0.month == 12), d0.month % 12 + 1, min(d0.day, 28)).isoformat()
+            L = self._lang
+            day = short_date if L == "en" else (lambda iso: i18n.date(iso, L))  # noqa: E731
+            return _say(self._t("rent_due", amount=_money(abs(r0["amount"]), r0["currency"]), payee=r0["counterparty"],
+                                date=day(r0["date"]), next=day(nxt), offer=i18n.offer("pay rent", L)),
+                        state={"offer": "pay rent"})
 
         if re.search(RATE_RE, low) and not re.search(r"good time|right time|should i|\b(convert|change|tukar)\b|"
                                                      r"exchange \d|cheapest|cheaper", low):
@@ -1455,7 +1485,9 @@ class OfflineEngine:
     def _credit(self, text: str, low: str, res, done) -> Dict[str, Any]:
         last = res[-1][1] if res else {}
         pay = re.search(r"\b(pay|paying|bayar)\b|pay ?(it )?(off|down)|clear (my|the) (credit )?card", low)
-        if pay:
+        # "What happens if I don't pay my card on time?" / "when is my card payment due?": answered, not drafted
+        asked = is_question(text) and bool(pay or re.search(r"\b(due|late|statement|payment)\b|还款|到期", low))
+        if pay and not asked:
             if "prepare_card_payment" not in done:
                 if re.search(r"30\s*%|30 ?percent|under 30|below 30|bawah 30", low):
                     return _call("prepare_card_payment", target="under_30")
@@ -1491,6 +1523,8 @@ class OfflineEngine:
             return _call("get_credit_profile")
         prof = res[0][1]
         L = self._lang
+        if asked and prof.get("has_card"):
+            return self._card_question(prof)
         build = re.search(r"\bbuild|start|establish|from scratch|nothing|no (credit )?history|secured card|"
                           r"get a (credit )?card|new to canada", low)
         if build and "credit_building_plan" not in done:
@@ -1533,6 +1567,21 @@ class OfflineEngine:
             msg += self._t("credit_keep")
         msg += self._t("credit_health")
         return _say(msg, state=offer)
+
+    def _card_question(self, prof: Dict[str, Any]) -> Dict[str, Any]:
+        """When the card is due and what paying late costs, from the profile. Offers the payment, drafts nothing."""
+        L = self._lang
+        c, st = prof["card"], prof.get("statement") or {}
+        day = (lambda iso: iso) if L == "en" else (lambda iso: i18n.date(iso, L))  # noqa: E731
+        card = i18n.account(c["label"], L)
+        if st.get("status") == "due" and st.get("remaining"):
+            msg = self._t("card_due", card=card, remaining=f"{st['remaining']:,.2f}", due=day(st["due_date"]),
+                          minimum=f"{st['minimum_due']:,.2f}")
+        else:
+            msg = self._t("card_nothing_due", card=card, close=day(prof["next_statement_date"]))
+        offer = prof["recommended_payment"]["amount"] > 0
+        msg += self._t("card_late") + (self._t("card_offer", cmd=i18n.offer("pay my card", L)) if offer else "")
+        return _say(msg, state={"offer": "pay my card"} if offer else None)
 
     # --------------------------------------------------------------- helpers
     @staticmethod

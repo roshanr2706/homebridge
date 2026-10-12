@@ -135,6 +135,12 @@ RULES: Dict[str, List[Tuple[str, str]]] = {
         ("Asks you to keep it secret", r"(don'?t|do not) tell (anyone|your)"),
         ("Asks for a wire transfer service", r"western union"),
         ("Bank details changed by message", r"(new|changed) (bank|account)( number| details)?.{0,40}(rent|tuition|pay|send)"),
+        # "… pay to new account 4444-5555-6666", "bank details have changed", "转到新账户", "bayar ke akaun baru"
+        ("Bank details changed by message",
+         r"\b(pay|send|transfer|deposit|wire)\b.{0,25}\b(a |the |my |our |this )?(new|different|another|changed) "
+         r"(bank )?(account|acc)\b|\b(bank|account|payment) details (have |has )?(changed|been updated)\b|"
+         r"(转|付|汇|打)(到|入|给)?(新的?|另一个)(银行)?(账户|账号)|(账户|账号)(已经?)?(更换|变更|换了)|"
+         r"\bakaun (baru|lain)\b.{0,30}\b(bayar|pindah|hantar)|\b(bayar|pindah|hantar)\b.{0,25}\bakaun (baru|lain)\b"),
         ("Fee to release money or a prize", r"(release|processing|clearance|refundable) (fee|deposit)"),
         ("Promises guaranteed returns", r"guaranteed .{0,20}returns?"),
         ("Asks you to pass money on for someone", r"(keep \d+%|forward it to)"),

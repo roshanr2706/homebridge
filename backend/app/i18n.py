@@ -796,6 +796,55 @@ TEXT: Dict[str, Dict[str, str]] = {
     "pending_none": {"en": "Nothing is pending: no drafts waiting for you and nothing waiting for your dad.",
                      "zh": "目前没有待处理的事项：没有等你确认的草稿，也没有等爸爸批准的请求。",
                      "ms": "Tiada apa yang tertangguh: tiada draf menunggu anda dan tiada apa menunggu ayah anda."},
+    # Questions about paying, answered from the data (they never draft)
+    "card_due": {
+        "en": "Your {card} statement of CAD {remaining} is due {due} (minimum CAD {minimum}).",
+        "zh": "你的 {card} 账单 CAD {remaining} 将于 {due} 到期（最低还款 CAD {minimum}）。",
+        "ms": "Penyata {card} anda sebanyak CAD {remaining} perlu dibayar {due} (minimum CAD {minimum}).",
+    },
+    "card_nothing_due": {
+        "en": "Your {card} has no statement due right now; the next one closes on {close}.",
+        "zh": "你的 {card} 目前没有到期账单；下一期账单日是 {close}。",
+        "ms": "{card} anda tiada penyata yang perlu dibayar sekarang; penyata seterusnya ditutup pada {close}.",
+    },
+    "card_late": {
+        "en": " Paying at least the minimum by the due date avoids a late fee, and paying the whole statement avoids "
+              "interest. A payment 30 or more days late is reported to the credit bureaus and stays on your history "
+              "for years, which hurts more than the fee.",
+        "zh": "到期前至少还最低额可以避免滞纳金，还清整期账单可以避免利息。逾期 30 天以上会被报告给征信机构，并在信用记录上保留多年，影响比滞纳金更大。",
+        "ms": " Bayar sekurang-kurangnya minimum sebelum tarikh akhir untuk elak caj lewat, dan bayar seluruh penyata "
+              "untuk elak faedah. Bayaran lewat 30 hari atau lebih dilaporkan kepada biro kredit dan kekal dalam "
+              "sejarah anda bertahun-tahun, yang lebih teruk daripada caj itu.",
+    },
+    "card_offer": {
+        "en": " I haven't drafted anything; say '{cmd}' and I'll draft the payment for you to confirm.",
+        "zh": "我没有起草任何付款；说“{cmd}”，我就起草，由你确认。",
+        "ms": " Saya belum sediakan apa-apa draf; sebut '{cmd}' dan saya akan sediakan draf bayaran untuk anda sahkan.",
+    },
+    "rent_due": {
+        "en": "Your last rent, {amount} to {payee}, went out on {date}. It's monthly, so the next one is due around "
+              "{next}. Say '{offer}' when you're ready, or 'remind me to pay rent on {next}'.",
+        "zh": "你上一次房租是 {date} 付给 {payee} 的 {amount}。房租按月交，所以下一次大约在 {next} 到期。准备好了就说“{offer}”。",
+        "ms": "Sewa terakhir anda, {amount} kepada {payee}, dibayar pada {date}. Ia bulanan, jadi sewa seterusnya "
+              "perlu dibayar sekitar {next}. Sebut '{offer}' bila anda bersedia.",
+    },
+    "rent_none": {"en": "I don't see a rent payment in the last 60 days.", "zh": "过去 60 天里没有看到房租付款。",
+                  "ms": "Saya tak nampak bayaran sewa dalam 60 hari lepas."},
+    "relay_saved": {
+        "en": " Your saved payee {name} still has the account ending {last4}, and it can't change from chat: a new "
+              "account would have to be added as a new payee, which your dad approves, followed by a cooling period. "
+              "Call {name} on a number you already have before paying anything new.",
+        "zh": "你保存的收款人 {name} 的账户尾号仍是 {last4}，聊天里改不了：新账户必须作为新收款人添加，由爸爸批准，之后还有冷静期。付款前请用你原有的号码联系 {name} 核实。",
+        "ms": " Penerima simpanan anda {name} masih menggunakan akaun berakhir {last4}, dan ia tidak boleh ditukar "
+              "melalui chat: akaun baru perlu ditambah sebagai penerima baru, yang ayah anda luluskan, diikuti "
+              "tempoh bertenang. Hubungi {name} melalui nombor yang anda sudah ada sebelum membayar apa-apa.",
+    },
+    "relay_none": {
+        "en": " I haven't drafted anything. If you decide to pay, say so and I'll draft it to your saved payee.",
+        "zh": "我没有起草任何付款。如果你决定付款，告诉我，我会起草付给你已保存的收款人。",
+        "ms": " Saya belum sediakan apa-apa draf. Jika anda mahu bayar, beritahu saya dan saya akan sediakan draf "
+              "kepada penerima simpanan anda.",
+    },
     # Greeting and fallback
     "hello": {
         "en": "Hi{name}! I can check your balances and spending, compare the true cost of moving money between MYR and "
