@@ -5,7 +5,8 @@ FinTechathon 2026, International Track, Topic C (Cross-border & Student Finance 
 
 The agent plans and talks. It never holds the power to move money: every payment is a draft
 that the student confirms in the app with a single-use token the model never sees, and large,
-unusual or sponsor-funded payments also need the sponsor (parent) to approve on their own device.
+unusual or sponsor-funded payments also need the sponsor (parent) to approve on their own device
+with a PIN checked on the server.
 
 ![Aisha's phone and her dad's phone side by side: a tuition payment waiting for his approval](docs/img/two-phones.png)
 
@@ -15,20 +16,63 @@ unusual or sponsor-funded payments also need the sponsor (parent) to approve on 
 
 - **Technical documentation:** [`docs/technical.md`](docs/technical.md)
 - **Security self-assessment:** [`docs/security_self_assessment.md`](docs/security_self_assessment.md)
-- **Execution evidence:** [`evidence/offline/SUMMARY.md`](evidence/offline/SUMMARY.md)
-- **Demo script:** [`docs/demo_script.md`](docs/demo_script.md)
+- **Demo script and Q&A:** [`docs/demo_script.md`](docs/demo_script.md)
+- **Proposal summary:** [`docs/proposal_summary.md`](docs/proposal_summary.md)
+- **Execution evidence:** [`evidence/offline/SUMMARY.md`](evidence/offline/SUMMARY.md) (regenerate with `python scripts/run_evidence.py`)
+
+## Results
+
+<!-- counts: tests=619, tasks=95, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=23, f1=0.854 on 902 rows, audit=1059 -->
+Offline engine, measured 2026-10-12:
 
 | | |
 |---|---|
-| Scripted tasks | 36 / 36 pass (English, Malaysian English, Malay, Chinese) |
-| Attack suite | 57 / 57 blocked (induced transfer, extraction, escalation, prompt injection) |
-| Automated tests | 153 passing, no network needed |
-| Our classifier | macro F1 0.85 (grouped 5-fold CV) |
+| Scripted tasks | 95 / 95 pass (79 English including casual Malaysian English, 9 Simplified Chinese, 7 Malay) |
+| Attack suite | 79 / 79 blocked (induced transfer 27, extraction 11, escalation 21, prompt injection 20) |
+| Automated tests | 619 passing, no network needed |
+| Our classifier | macro F1 0.854 (grouped 5-fold CV, 902 rows) |
+| Agent tools | 23 registered; none of them can execute, approve, unlock or change limits |
+
+The scripted tasks run on the deterministic offline engine. A live LLM run (DeepSeek) has not been done
+yet: the client is tested against a mocked transport only (see "Choosing the model").
+
+## Features
+
+- **Chat agent with ledger-built cards.** Balances, spending, tuition, FX quotes, scam checks and more. The
+  numbers on each card come from the sandbox ledger, not from the model's prose.
+- **True-cost FX.** Providers ranked by what actually arrives, with fee and exchange-rate margin against
+  the mid-market rate.
+- **Cash-flow forecast.** "Will I run out of money before tuition?" A day-by-day runway to the next tuition
+  date, end of term, a month or a date, with the low point, tuition gaps and the cheapest fix. Also on the
+  Wallet tab (`GET /forecast`). Advice only; it never drafts.
+- **Credit Builder.** A sandbox secured card: utilization now, last reported and projected, on-time streak,
+  and the exact payment that keeps the reported balance under 30%. Labelled "not a credit score".
+- **Permission tiers T0 to T4.** Reads run freely; payments are drafts; large, risky or sponsor-funded ones
+  go to the sponsor; confirm, approve, unlock and limit changes are not agent tools at all.
+- **Sponsor PIN.** The sponsor's Approve, Unlock and limit changes need a 6-digit PIN checked on the server
+  (PBKDF2, lockout after 5 wrong tries). Demo PIN `246810`.
+- **Remittance flow.** "Ask my dad for 800 for textbooks" goes to the sponsor. He picks a transfer service
+  from a true-cost list (cheapest preselected), enters his PIN, the quote is locked, compliance runs, the
+  money is in transit from his own account, then credited. Both phones show the timeline.
+- **Emergency freeze, alerts and digest.** "I think I got scammed, lock my account" locks payments from chat;
+  only the app can unlock, and the student can never lift a lock on money the sponsor funds. Unusual activity
+  (fast payments, a large first payment, 01:00 to 05:00, failed confirms) alerts the sponsor, who also gets a
+  24-hour digest.
+- **Compliance layer (sandbox model).** Sanctions screening against a fictional sample list, KYC levels,
+  FINTRAC EFTR flag and cross-border records, BNM-style purpose codes, structuring flags, all audited and
+  reported at `GET /compliance/report`. Production would run these through licensed partners.
+- **Scam shield and injection defences.** Rules in English, Chinese and Malay, our own classifier, taint
+  tracking of pasted text, and tool output treated as untrusted data.
+- **Hash-chained audit log.** The Ledger tab verifies the chain and simulates a tampered entry.
+- **Languages.** The assistant replies in English, Bahasa Melayu or Simplified Chinese, and understands
+  casual Malaysian English. The **EN / 中文** switch in the header turns the whole app into Chinese.
+- **UI direction prototypes.** Four alternative front ends built against the same API, kept for comparison
+  and not part of the submitted app: see [`ui-variants/README.md`](ui-variants/README.md).
 
 ## Quick start
 
-Requires Python 3.10+ and Node 20+. No API key is needed: without one the backend runs the
-deterministic offline engine, which covers every scripted task.
+Requires Python 3.10+ and Node 20+. No API key is needed: the default provider is the deterministic
+offline engine (`LLM_PROVIDER=offline`), which covers every scripted task.
 
 ```bash
 # Backend
@@ -45,8 +89,28 @@ npm install
 npx expo start --web            # opens http://localhost:8081; press "a" for Android
 ```
 
-The app talks to `http://localhost:8000` by default. To point it elsewhere, copy
-`app/.env.example` to `app/.env` and set `EXPO_PUBLIC_API_URL`.
+Demo values (all overridable, see `backend/.env.example`):
+
+| Setting | Demo value | Purpose |
+|---|---|---|
+| `HB_DEMO_MODE` | `1` (default) | 60-second payee cooling, remittances settle in seconds, reset allowed |
+| `HB_DEMO_TODAY` | `2026-10-08` | Pins the sandbox date so screenshots, video and docs agree (empty = real date) |
+| `HB_SPONSOR_PIN` | `246810` | The sponsor's approval PIN, stored only as a salted hash |
+| `HB_OPERATOR_TOKEN` | `demo-operator` | Needed in an `X-Operator` header for `/demo/reset` (the web app sends it in demo mode) |
+| `HB_STUDENT_TOKEN`, `HB_SPONSOR_TOKEN` | `demo-student`, `demo-sponsor` | Bearer tokens |
+
+The backend reads these from the environment; it does not load `.env` files itself (Docker Compose does).
+The app talks to `http://localhost:8000` by default. To point it elsewhere, copy `app/.env.example` to
+`app/.env` and set `EXPO_PUBLIC_API_URL`.
+
+### One URL, no dev overlay (production web build)
+
+```bash
+cd app && npm run build:web     # writes app/dist
+cd ../backend && uvicorn app.main:app --host 0.0.0.0 --port 8000   # serves app/dist at http://localhost:8000/
+```
+
+Use this for recordings and the live demo: it has no Expo development overlay.
 
 ### On a phone
 
@@ -58,22 +122,21 @@ The app talks to `http://localhost:8000` by default. To point it elsewhere, copy
 - **Sideloaded APK (`eas build --profile preview`).** Android release builds block plain `http`
   (cleartext) traffic, so the APK needs the demo server behind **HTTPS**. Set the real address in
   `app/eas.json` (`build.preview.env.EXPO_PUBLIC_API_URL`) before building; it is baked in at build
-  time. We deliberately do not turn on `usesCleartextTraffic` (an app-wide switch in
-  `expo-build-properties`) for a finance app. iOS release builds have the same expectation (App
-  Transport Security).
+  time. We deliberately do not turn on `usesCleartextTraffic` for a finance app. iOS release builds have
+  the same expectation (App Transport Security).
 - **Device check.** On Android and iOS, Confirm (student) and Approve (sponsor) first ask for Face ID,
   a fingerprint or the device passcode. Face ID needs a development build (Expo Go doesn't support it
-  on iOS). On web, or on a phone with no screen lock, the action goes ahead and
-  the card says the device check was skipped.
+  on iOS). On web, or on a phone with no screen lock, the action goes ahead and the card says the device
+  check was skipped. This check is client-side; the sponsor PIN is the server-side factor.
 
-### One URL for everything (Docker)
+### Docker (not yet built or tested)
 
 ```bash
-docker compose up --build       # app and API on http://localhost:8000
+docker compose up --build       # intended: app and API on http://localhost:8000
 ```
 
-The image builds the Expo web app and serves it from FastAPI. Without Docker you can do the same:
-run `npm run build:web` in `app/`, then start the backend; it serves `app/dist` at `/`.
+The `Dockerfile` builds the Expo web app and serves it from FastAPI. We have not yet built the image for
+this submission; the manual steps above do the same thing.
 
 ## Using the app
 
@@ -84,31 +147,30 @@ production each person signs in on their own phone and the server decides the ro
 
 | Student (Aisha) | Sponsor (Dad) |
 |---|---|
-| **Assistant**: chat. Answers come with cards built from the bank data (FX comparison, balances, tuition, budget, scam check), labelled as not written by the AI. Drafted payments appear as confirmation cards. | **Approvals**: requests waiting for him, with the reasons they came to him, risk signals, and a note back to Aisha |
-| **Wallet**: balances, tuition countdown and shortfall, spending against budget, payees, items in progress | **Rules**: the limits Aisha can confirm alone; only the sponsor can change them |
-| **Ledger**: the hash-chained audit log, with live verification and a tamper simulation | **Ledger**: the same audit log |
-
-**Languages.** The assistant replies in the language you write in: English (including casual Malaysian
-English), Bahasa Melayu or Chinese, with the same tools, drafts and safety checks in each. The **EN / 中文**
-switch in the header turns the whole app into Chinese (tabs, cards, confirmation cards, sponsor and rules
-screens), and the quick-prompt chips then send Chinese prompts.
+| **Assistant**: chat. Answers come with cards built from the ledger (FX comparison, balances, forecast, tuition, budget, credit, scam check), labelled as not written by the AI. Drafted payments appear as confirmation cards with a "Compliance checks" block. | **Approvals**: requests waiting for him, why they came to him, risk signals, compliance checks, the transfer-service picker for money requests, the PIN pad, a note back to Aisha; alerts and the 24-hour digest at the top |
+| **Wallet**: balances, runway chart, tuition countdown and shortfall, credit gauge, spending against budget, payees, items in progress, lock/unlock | **Rules**: the limits Aisha can confirm alone (PIN to change), and the one-tap lock (PIN to unlock) |
+| **Ledger**: the hash-chained audit log, with live verification and a tamper simulation | **Ledger**: his role-scoped view of the same log |
 
 Try: "Cheapest way to change 5,000 MYR to CAD?", "Pay my spring tuition", "cover the tuition
-shortfall from my MYR wallet", "eh rent how much ah, can pay landlord or not", "我还有多少钱？",
-"帮我交房租", "我的钱够用到学期末吗？", "duit cukup tak sampai hujung sem?",
+shortfall from my MYR wallet", "eh rent how much ah, can pay landlord or not", "Will I run out of money
+before tuition is due?", "How's my credit?", "Ask my dad for 800 for textbooks", "did dad send the money?",
+"我还有多少钱？", "帮我交房租", "我的钱够用到学期末吗？", "duit cukup tak sampai hujung sem?",
 or paste a suspicious message after "Is this a scam?". The ↺ button resets the sandbox.
 
 ## Choosing the model
 
 ```bash
-export LLM_PROVIDER=deepseek          # deepseek | deepseek-pro | qwen | qwen-cn | offline | custom
+export LLM_PROVIDER=deepseek          # offline (default) | deepseek | deepseek-pro | qwen | qwen-cn | custom
 export LLM_API_KEY=sk-...
 # optional: LLM_MODEL, LLM_BASE_URL (required for custom), LLM_THINKING=1
 ```
 
-DeepSeek (`deepseek-flash`) is the default live model because it is reachable from mainland China
-and abroad; Qwen (DashScope) is the fallback. If the API fails mid-conversation, the agent finishes
-that turn with the offline engine and says so (`"fallback": true`, shown in the app).
+The default is `offline`. DeepSeek (`deepseek-flash`, checked as a valid model ID on api-docs.deepseek.com
+on 2026-10-10) is supported and is our intended live model because it is reachable from mainland China and
+abroad; Qwen (DashScope) is the alternative. **Status: supported and tested against a mocked HTTP
+transport; live run pending an API key.** If the API fails mid-conversation, the agent finishes that turn
+with the offline engine and says so (`"fallback": true`, shown in the app). Setting a cloud provider with no
+`LLM_API_KEY` stops the backend at startup.
 
 ## Tests and evidence
 
@@ -120,39 +182,58 @@ LLM_PROVIDER=deepseek LLM_API_KEY=sk-... python scripts/run_evidence.py   # writ
 python scripts/build_classifier_data.py     # rebuilds data/classifier_train.jsonl (already committed)
 ```
 
+Test cases, by file: scripted tasks (`test_scripted_tasks.py`), the attack suite and a compromised-model
+provider (`test_attacks.py`), input guard (`test_guard.py`), offline routing (`test_engine_routing.py`),
+languages (`test_i18n.py`), compliance (`test_compliance.py`), remittances (`test_remittance.py`), freeze
+and alerts (`test_safety.py`), sponsor PIN, reset and scoping (`test_security_controls.py`), forecast,
+credit, persistence, API features and the LLM wire format.
+
 ## API
 
-All endpoints take `Authorization: Bearer <token>`. Demo tokens: `demo-student`, `demo-sponsor`
-(override with `HB_STUDENT_TOKEN`, `HB_SPONSOR_TOKEN`).
+All endpoints except `/health` take `Authorization: Bearer <token>`. Demo tokens: `demo-student`,
+`demo-sponsor`. The role comes from the token, never from the request body.
 
-| Method | Path | Role | Purpose |
-|---|---|---|---|
-| POST | `/chat` | student | `{"message", "session_id"}` → reply, cards, drafted actions, safety flags, tool trace |
-| GET | `/overview` | student | Wallet screen: balances, tuition, budget, payees, pending items, limits |
-| GET | `/forecast` | student | Cash-flow runway card (`?until=next_tuition`, `end_of_term`, a month or a date) |
-| GET | `/accounts` | student | Balances (masked), payees, tuition schedule |
-| GET | `/actions` | student | Drafts and their status (includes the confirm token for drafts awaiting the student) |
-| POST | `/actions/{id}/confirm` | student | `{"token"}`: single-use token from the draft |
-| POST | `/actions/{id}/cancel` | student | Cancel a draft |
-| GET | `/sponsor/queue` | sponsor | Actions waiting for approval |
-| GET | `/sponsor/overview` | sponsor | Student balances, limits, recent activity |
-| POST | `/sponsor/actions/{id}/approve` · `/reject` | sponsor | `{"note"}`: decide, with an optional note to the student |
-| POST | `/sponsor/limits` | sponsor | `{"single_cad", "daily_cad"}`: change the limits |
-| GET | `/audit` | any | Recent audit entries |
-| GET | `/audit/verify` | any | Verify the hash chain; `?tamper_seq=N` verifies a copy with entry N edited |
-| POST | `/demo/reset` | any | Reset the sandbox (demo mode only) |
-| GET | `/health` | none | Provider and mode |
+| Method | Path | Role | Body / query | Purpose |
+|---|---|---|---|---|
+| GET | `/health` | none | | Provider, demo mode, pinned date |
+| GET | `/me` | any | | Who the token belongs to and its role |
+| POST | `/chat` | student | `{"message", "session_id"}` | Reply, cards, drafted actions, guard flags, tool trace (30 messages a minute per owner) |
+| GET | `/overview` | student | | Wallet: balances, tuition, budget, credit, payees, pending items, limits, lock state, KYC, sharing scope |
+| GET | `/forecast` | student | `?until=next_tuition` (or `end_of_term`, a month, a date) | Runway card |
+| GET | `/accounts` | student | | Balances (masked), payees, tuition schedule |
+| GET | `/actions` | student | | Drafts and their status (includes the confirm token for drafts awaiting her) |
+| POST | `/actions/{id}/confirm` | student | `{"token"}` | Confirm with the single-use token from the draft |
+| POST | `/actions/{id}/cancel` | student | | Cancel a draft |
+| POST | `/freeze` | student | | Lock all her payments; alerts the sponsor |
+| POST | `/unfreeze` | student | | Lift only a lock she set on her own money |
+| GET | `/sponsor/queue` | sponsor | | Requests waiting for him (money requests include the transfer-service options) |
+| GET | `/sponsor/overview` | sponsor | | Sponsor-funded accounts only, his own source account, requests to him, alerts, 24-hour digest, KYC, PIN status |
+| POST | `/sponsor/actions/{id}/approve` | sponsor | `{"pin", "note", "provider"}` | Approve; **PIN required**; `provider` picks the transfer service for a money request (empty = cheapest) |
+| POST | `/sponsor/actions/{id}/reject` | sponsor | `{"note"}` | Reject (no PIN: it only stops money) |
+| POST | `/sponsor/limits` | sponsor | `{"single_cad", "daily_cad", "pin"}` | Change the limits; **PIN required**; capped by the student's KYC level |
+| POST | `/sponsor/freeze` | sponsor | `{"scope": "sponsor_funded" \| "all"}` | Lock the money he funds, or everything |
+| POST | `/sponsor/unfreeze` | sponsor | `{"pin"}` | Lift every lock; **PIN required** |
+| GET | `/audit` | any | `?since=N` | Role-scoped audit entries (the sponsor never sees her chat or tool calls) |
+| GET | `/audit/verify` | any | `?tamper_seq=N` | Verify the whole chain; with `tamper_seq`, verify a copy with that entry edited |
+| GET | `/compliance/report` | any | | Role-scoped evidence of the compliance checks run |
+| POST | `/demo/reset` | any | header `X-Operator: <HB_OPERATOR_TOKEN>` | Reset the sandbox; only with `HB_DEMO_MODE=1` **and** the operator token |
+| GET | `/` | none | | The exported web app, when `app/dist` exists |
+
+Remittances have no endpoints of their own: a money request is an action that the sponsor approves through
+`/sponsor/actions/{id}/approve`, and its timeline is on the action.
 
 ## Layout
 
 ```
-backend/app/    agent loop, tools, policy engine, sandbox bank, FX, guard, classifier, cards, audit log
-backend/tests/  scripted tasks, attack suite, compromised-model, API role, LLM wire-format tests
-backend/scripts build_classifier_data.py, run_evidence.py
-app/            Expo React Native app (student and sponsor views)
-docs/           technical documentation, security self-assessment, demo script
-evidence/       generated logs for the submission
-Dockerfile      single image: web build + API
+backend/app/      agent loop, tools, policy engine, compliance, remittances, safety monitor, sponsor PIN,
+                  sandbox bank, FX, guard, classifier, offline engine, languages, cards, audit log
+backend/tests/    scripted tasks, attack suite, compromised model, API roles, compliance, remittance, LLM wire
+backend/scripts/  build_classifier_data.py, run_evidence.py
+app/              Expo React Native app (student and sponsor views, EN / 中文)
+ui-variants/      four UI direction prototypes against the same API (not the submitted app)
+docs/             technical documentation, security self-assessment, demo script, proposal summary
+evidence/         generated logs for the submission
+Dockerfile        single image: web build + API (not yet built)
 ```
 
 All data is fictional and the bank is a sandbox.
