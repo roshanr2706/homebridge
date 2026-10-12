@@ -31,11 +31,19 @@ export function Assistant() {
   useEffect(() => {
     const el = scroller.current;
     if (!el) return;
-    // Scroll so the newest turn's start is in view, not the very bottom of a tall card stack.
-    const last = el.querySelector<HTMLElement>('[data-turn]:last-of-type');
-    const prevUser = [...el.querySelectorAll<HTMLElement>('[data-from="user"]')].pop();
-    const target = last?.dataset.from === 'agent' && prevUser ? prevUser.offsetTop - 80 : el.scrollHeight;
-    el.scrollTo({ top: target, behavior: 'smooth' });
+    // Scroll so the newest turn's start is in view, not the very bottom of a tall card stack. Wait for the
+    // reply's enter animation, or the scroll is clamped to the shorter content height.
+    const id = window.setTimeout(() => {
+      const turns = el.querySelectorAll<HTMLElement>('[data-turn]');
+      const last = turns[turns.length - 1];
+      const prevUser = [...el.querySelectorAll<HTMLElement>('[data-from="user"]')].pop();
+      // Measured against the scroller itself: offsetTop is relative to the nearest positioned ancestor.
+      const target = last?.dataset.from === 'agent' && prevUser
+        ? el.scrollTop + prevUser.getBoundingClientRect().top - el.getBoundingClientRect().top - 16
+        : el.scrollHeight;
+      el.scrollTo({ top: target, behavior: 'smooth' });
+    }, 350);
+    return () => window.clearTimeout(id);
   }, [messages]);
 
   const submit = (v = text) => {
