@@ -6,19 +6,20 @@ FinTechathon 2026 · International Track · Topic C (Cross-border & Student Fina
 
 ## Problem
 
-Millions of international students live between two financial systems. A Malaysian student in Vancouver pays tuition in CAD from money her parents earn in MYR. She loses 3 to 7% of every transfer to hidden exchange-rate margins, has no Canadian credit history, and is the main target of tax-agency, "embassy safe account" and rental-deposit scams. Her parents fund large payments from abroad but have no say in how the money is spent and no protection if she is defrauded.
+A Malaysian student in Vancouver pays tuition in CAD from money her parents earn in MYR. She loses 3 to 7% of a transfer to hidden exchange-rate margins, has no Canadian credit history, and is a prime target of "embassy safe account" and parcel-to-"police" scams. Her parents fund large payments but have no say and no protection if she is defrauded.
 
 ## Solution
 
-HomeBridge is a chat-first agent in a mobile app (Android, iOS and web) with two roles on separate devices:
+A chat-first agent in a mobile app (Android, iOS and web) with two roles on separate devices:
 
-- **Student:** asks in English, Malaysian English, Malay or Mandarin. The agent checks balances, ranks remittance providers by what actually arrives (fee plus spread against mid-market), forecasts cash flow to the next tuition date, plans tuition and rent, builds credit, and checks pasted messages for scams.
-- **Sponsor (parent abroad):** approves large, unusual or sponsor-funded payments and new payees on their own phone, sets limits, and can freeze payments in an emergency.
+- **Student:** asks in English, Malay or Simplified Chinese (casual Malaysian English is understood). The agent checks balances, forecasts cash flow to the next tuition date, ranks providers by what actually arrives, plans tuition and rent, builds credit on a secured card, checks messages for scams, and can freeze payments.
+- **Sponsor (parent abroad):** approves large, unusual or sponsor-funded payments with a server-checked PIN, picks the service when sending money, sets limits, and sees alerts and a daily digest. He sees only the accounts he funds, not her wages or chat.
 
 ## How the AI participates safely
 
-The language model plans and talks; a policy engine written in plain code decides. Every payment is a draft bound to its exact parameters. It executes only after the student confirms in the app with a single-use token the model never sees, and, above set limits, after the sponsor approves. Permission tiers run from T0 (read) to T4 (not exposed to the model at all). An input guard plus our own trained scam and injection classifier add friction, tool outputs are treated as untrusted data, account numbers are masked before they reach the model, and every step is written to a hash-chained audit log that detects tampering.
+The model plans and talks; a policy engine in plain code decides. Every payment is a draft bound to its exact parameters, executed only after the student confirms with a single-use token the model never sees and, above set limits, after the sponsor approves. Tiers run from T0 (read) to T4 (not exposed to the model). A compliance layer screens every draft (sample-list sanctions, KYC, FINTRAC EFTR flag, BNM-style purpose codes, structuring). Our own classifier adds friction, tool output is untrusted, account numbers are masked, and every step is in a hash-chained audit log.
 
 ## Evidence and feasibility
 
-Scripted tasks in four languages and an adversarial attack suite (induced transfers, data extraction, privilege escalation, prompt injection) run as automated tests and export sandbox logs. The model layer is provider-agnostic and defaults to DeepSeek, reachable from mainland China; a deterministic offline engine keeps the demo working without network access. A production path would add KYC, AML screening and licensed partner rails (FINTRAC in Canada, Bank Negara Malaysia rules).
+<!-- counts: tests=619, tasks=95, attacks=79 -->
+On the default offline engine (deterministic, no network): 95 / 95 scripted tasks, 79 / 79 attacks blocked (induced transfer, extraction, privilege escalation, prompt injection), 619 automated tests. DeepSeek, reachable from mainland China, is supported and tested against a mocked API; the live run is pending an API key. Compliance is implemented in the sandbox; production would run on licensed partners (a FINTRAC-registered money-services business in Canada, a BNM-licensed bank onshore in Malaysia).
