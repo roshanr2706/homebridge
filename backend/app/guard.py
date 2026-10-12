@@ -120,7 +120,10 @@ RULES: Dict[str, List[Tuple[str, str]]] = {
     "scam": [
         # Paying, buying or sending gift cards, or their codes; "I paid with gift cards last time" is not a scam.
         ("Asks for gift cards", r"\b(buy|send|pay|purchase|get|use)\b.{0,25}\bgift ?cards?|gift ?cards?\b.{0,60}\b(codes?|scratch|fine|fees?|tax|owe)\b"),
-        ("Asks for crypto", r"\b(bitcoin|crypto|usdt|btc|crypto atm)\b"),
+        # Paying or depositing in crypto, not a question about it ("should I invest in bitcoin?" is advice-seeking).
+        ("Asks for crypto",
+         r"\b(pay|send|transfer|deposit|wire|move|buy)\b.{0,40}\b(bitcoin|crypto|usdt|btc)\b"
+         r"|\b(bitcoin|crypto|usdt|btc)\b.{0,25}\b(address|wallet|atm|deposit|only)\b|\bcrypto atm\b"),
         ("Threat of arrest or deportation", r"(deport|arrest|warrant|bail)"),
         ("Impersonates a government agency",
          r"(cra|canada revenue|ircc|immigration|service canada|embassy|cbsa).{0,80}(pay|owe|fee|fine|suspend)"),

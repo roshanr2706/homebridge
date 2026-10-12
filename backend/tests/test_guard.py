@@ -272,3 +272,25 @@ def test_chat_rate_limit_is_per_owner_across_sessions(monkeypatch):
     codes = [client.post("/chat", json={"message": "hi", "session_id": f"c{i}"}, headers=S).status_code
              for i in range(4)]
     assert codes == [200, 200, 200, 429]
+
+
+# ------------------------------------------------------------------ second review: flags that over-reached
+@pytest.mark.parametrize("text", ["Should I invest my tuition money in bitcoin?", "is crypto a good idea for students"])
+def test_crypto_questions_are_not_scams(text):
+    assert "scam" not in check(text, use_model=False).flags
+
+
+@pytest.mark.parametrize("text", ["Landlord wants the deposit in bitcoin before viewing",
+                                  "pay the fee via USDT to this wallet", "send 500 in crypto now"])
+def test_paying_in_crypto_is_flagged(text):
+    assert "scam" in check(text, use_model=False).flags
+
+
+def test_reading_a_memo_with_instructions_does_not_flag_later_payments():
+    from app.harness import fresh
+    from app.seed import STUDENT
+    st = fresh()
+    st.agent.run(STUDENT, "student", "memo", "show my recent transactions")
+    r = st.agent.run(STUDENT, "student", "memo", "pay hydro 40")
+    assert [a["tier"] for a in r.actions] == ["T2"]
+    assert r.guard["carried"] == []
