@@ -112,7 +112,7 @@ export function ReviewSheet() {
                   Single-use confirmation · expires in {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')}
                 </Typography>
               </Stack>
-              <LinearProgress variant="determinate" value={(left / total) * 100} color={left < 60 ? 'error' : 'primary'} sx={{ height: 4 }} />
+              <LinearProgress variant="determinate" value={Math.max(0, Math.min(100, (left / total) * 100))} color={left < 60 ? 'error' : 'primary'} sx={{ height: 4 }} />
             </Box>
           )}
           {a.status === 'awaiting_sponsor' && (
