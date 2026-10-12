@@ -19,6 +19,7 @@ from .bank import Bank, to_minor
 from .fx import FxMarket, FxUnavailable
 from .guard import SCAM_SUSPICIOUS_CONFIDENCE, check as guard_check
 from .classifier import shared as shared_classifier
+from .compliance import STUDENT_BLOCK_MESSAGE
 from .policy import PendingAction, PolicyEngine, PolicyError
 from .privacy import SHARING, data_flow
 
@@ -575,8 +576,9 @@ def _drafted(ctx: ToolContext, act: Any) -> Dict[str, Any]:
     layer blocked comes back to the model as a refusal, so it never tells the user to confirm it."""
     ctx.created_actions.append(act)
     if act.status == "blocked":
-        return {"error": f"{(act.result or {}).get('error', 'Blocked by compliance screening.')} Nothing was saved "
-                         "or sent.", "refused_by_policy": True, "action": act.for_model()}
+        # Neutral wording for the student (no tipping off); the card is shown, and the sponsor sees the reason
+        return {"error": f"{STUDENT_BLOCK_MESSAGE} Nothing was saved or sent.", "refused_by_policy": True,
+                "blocked": True}
     return {"action": act.for_model()}
 
 

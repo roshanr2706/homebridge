@@ -472,5 +472,9 @@ ROUND2_TASKS: List[Task] = [
     Task("T127", "question", ["how much fee if i send 10k ringgit"], ["get_fx_quotes"], ["MYR 10,000.00"]),
     Task("T128", "tuition", ["will I run out of money before tuition?", "cover the tuition shortfall from my MYR wallet"],
          ["prepare_conversion"], ["MYR 3,887.00"], [("conversion", "T2")]),
+    # Policy wording: a double draft is a duplicate to the student; a sanctions hit is "can't be paid" (no tipping off)
+    Task("T129", "rent", ["pay rent", "pay rent"], ["prepare_transfer"], ["same payment waiting"], [("transfer", "T2")]),
+    Task("T130", "payee", ["add a new payee Crimsen Harbor Trading, business, CAD, account 9999-8888-7777"],
+         ["add_payee"], ["can't be paid", "Contact support"], [("add_payee", "T3")], expect_status="blocked"),
 ]
 TASKS += ROUND2_TASKS

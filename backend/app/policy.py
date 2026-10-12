@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Optional
 
 from .audit import AuditLog
 from .bank import Bank, BankError, to_minor
-from .compliance import Compliance
+from .compliance import STUDENT_BLOCK_MESSAGE, Compliance, for_student, student_reason
 from .config import Limits
 from .fx import FxMarket
 from .guard import normalize
@@ -147,8 +147,9 @@ class PendingAction:
                 "blocked": "Blocked by compliance screening. It cannot be confirmed or approved.",
                 "in_transit": "The sponsor approved and sent it; the money is on its way (see remittance).",
             }.get(self.status, ""),
+            # The chat model works for the student, so it gets her wording (no sanctions detail: no tipping off)
             "compliance": {"outcome": self.compliance.get("outcome", "clear"),
-                           "notes": [c["detail"] for c in self.compliance.get("checks", [])
+                           "notes": [c["detail"] for c in for_student(self.compliance).get("checks", [])
                                      if c["status"] in ("flag", "block", "report")]},
         }
 
@@ -320,9 +321,11 @@ class PolicyEngine:
         with self._lock:
             self.actions[action.id] = action
             self._save(action)
+        # The student can read her own action_drafted entries, so a sanctions hit is named here in neutral words;
+        # the match, list and score are in the sanctions_hit entry, which only the sponsor's view includes.
         self.audit.record("action_drafted", owner, action_id=action.id, kind=kind, params=params,
-                          tier=action.tier, risk=action.risk_score, reasons=action.risk_reasons,
-                          provenance=provenance)
+                          tier=action.tier, risk=action.risk_score,
+                          reasons=[student_reason(r) for r in action.risk_reasons], provenance=provenance)
         self.compliance.record(action, comp)
         if not comp["blocked"]:
             self.safety.note_draft(owner, kind, params, action.id)
@@ -376,10 +379,17 @@ class PolicyEngine:
 
         if amount_cad > self.limits.single_cad:
             t3.append(f"Amount above the single-payment limit of CAD {self.limits.single_cad:,.0f}")
-        daily = self._daily_outflow_cad(owner)
-        if daily + amount_cad > self.limits.daily_cad:
-            t3.append(f"Would exceed the 24h limit of CAD {self.limits.daily_cad:,.0f} "
-                      f"(already CAD {daily:,.2f} sent or pending)")
+        else:   # the single limit already explains the tier; "already CAD 0.00 sent" would only add noise
+            daily = self._daily_outflow_cad(owner)
+            if daily + amount_cad > self.limits.daily_cad:
+                t3.append(f"Would exceed the 24h limit of CAD {self.limits.daily_cad:,.0f} "
+                          f"(already CAD {daily:,.2f} sent or pending)")
+        same = next((x for x in self.actions.values() if x.owner == owner and x.kind == "transfer"
+                     and x.status in ("awaiting_user", "awaiting_sponsor")
+                     and x.params.get("payee_id") == payee_id and abs(x.params["amount"] - amount) < 0.005), None)
+        if same:   # a double "pay rent" is usually a mistake: say so on the card and in the reply
+            warnings.append(f"You already have the same payment waiting ({same.summary}). Cancel one if you meant "
+                            "to pay once.")
         if acc["sponsor_funded"]:
             t3.append(f"Paid from a sponsor-funded account ({acc['label']})")
         if acc["balance"] < to_minor(amount):
@@ -742,6 +752,15 @@ class PolicyEngine:
         d["warnings"] = [w for w in d["warnings"] if not w.startswith(FROZEN_PREFIX)]
         if lock:
             d["warnings"].append(f"{FROZEN_PREFIX} {lock}. It can't be confirmed or approved until they are unlocked.")
+        if viewer != "sponsor":
+            # No tipping off: the student's card says a sanctioned payee can't be paid, not which list matched.
+            # A double draft of the same payment is called a duplicate. The sponsor's card keeps the detail.
+            d["compliance"] = for_student(d["compliance"])
+            d["risk_reasons"] = [student_reason(r) for r in d["risk_reasons"]]
+            d["sponsor_reasons"] = [student_reason(r) for r in d["sponsor_reasons"]]
+            d["risk_signals"] = [r for r in d["risk_reasons"] if r not in d["sponsor_reasons"]]
+            if a.status == "blocked":
+                d["result"] = {"error": STUDENT_BLOCK_MESSAGE}
         return d
 
 

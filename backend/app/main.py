@@ -75,9 +75,9 @@ class LimitsIn(BaseModel):
 
 
 # Audit events the sponsor never sees (the student's chat and tool use), and ones the student never sees
-# (the sponsor's own PIN attempts).
+# (the sponsor's own PIN attempts, and which watchlist entry a payee matched: no tipping off).
 CHAT_EVENTS = {"user_message", "assistant_reply", "tool_call", "tool_denied", "rate_limited", "llm_error"}
-SPONSOR_PRIVATE_EVENTS = {"sponsor_pin_failed", "sponsor_pin_locked"}
+SPONSOR_PRIVATE_EVENTS = {"sponsor_pin_failed", "sponsor_pin_locked", "sanctions_hit", "sanctions_review"}
 SAFETY_EVENTS = {"payments_frozen", "payments_unfrozen", "unfreeze_denied", "alert_raised"}
 
 # What the student agreed to share at onboarding (shown on both phones). privacy.py is the one source; the agent

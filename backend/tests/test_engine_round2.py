@@ -352,6 +352,53 @@ def test_cover_after_tuition_draft_points_at_the_waiting_card():
     assert "ask me to pay your tuition" not in r.reply
 
 
+# ------------------------------------------------------- 6. policy wording
+def test_no_redundant_24h_reason_when_the_single_limit_explains_the_tier():
+    r = run(fresh(), "Pay my spring tuition")
+    reasons = r.actions[0]["sponsor_reasons"]
+    assert any("single-payment limit" in x for x in reasons)
+    assert not any("24h limit" in x for x in reasons), reasons
+
+
+def test_24h_reason_still_explains_split_payments():
+    st = fresh()
+    for _ in range(2):
+        st.policy.draft_transfer(STUDENT, "s", "py_hydro", 1400)
+    a = st.policy.draft_transfer(STUDENT, "s", "py_hydro", 1400)
+    assert a.tier == "T3" and any("24h limit" in x for x in a.sponsor_reasons)
+
+
+def test_double_pay_rent_is_called_a_duplicate_for_the_student():
+    st = fresh()
+    run(st, "pay rent")
+    r = run(st, "pay rent")
+    assert "You already have the same payment waiting" in r.reply
+    card = r.actions[0]
+    assert "Possible structuring" not in str(card) and "Duplicate payment" in str(card["compliance"])
+    # the compliance record (sponsor side, report) keeps the AML label
+    a = st.policy.actions[card["action_id"]]
+    assert any(c["detail"].startswith("Possible structuring") for c in a.compliance["checks"])
+    assert "Possible structuring" in str(st.policy.present(a, viewer="sponsor")["compliance"])
+
+
+def test_split_just_under_the_limit_is_still_structuring_for_the_student():
+    st = fresh()
+    st.policy.draft_transfer(STUDENT, "s", "py_rent", 1499)
+    a = st.policy.draft_transfer(STUDENT, "s", "py_rent", 1499)
+    assert "Possible structuring" in str(st.policy.present(a)["compliance"])
+
+
+def test_sanctions_block_reply_is_consistent_and_neutral():
+    st = fresh()
+    r = run(st, "add a new payee Crimsen Harbor Trading, business, CAD, account 9999-8888-7777")
+    assert r.reply == "I couldn't do that: This payee can't be paid. Contact support. Nothing was saved or sent."
+    assert r.actions and r.actions[0]["status"] == "blocked"
+    assert "Crimson" not in str(r.actions[0]) and "SAMPLE" not in str(r.actions[0])
+    # the model's view of the action is neutral too
+    a = next(iter(st.policy.actions.values()))
+    assert "SAMPLE" not in str(a.for_model())
+
+
 def test_who_are_you_in_chinese():
     r = run(fresh(), "你是谁？你能做什么？")
     assert r.reply.startswith("你好") and "我没听懂" not in r.reply
