@@ -94,9 +94,12 @@ def test_sponsor_funded_freeze_leaves_her_own_money_usable(st):
     conv = st.policy.draft_conversion(STUDENT, "s", "MYR", "CAD", 300)
     with pytest.raises(PolicyError, match="MYR Wallet"):
         st.policy.confirm(conv.id, STUDENT, conv._token)
-    # Money coming in is never locked.
+    # A remittance is sponsor money going out, so the sponsor-funded lock covers it until he unlocks.
     top = st.policy.draft_topup_request(STUDENT, "s", 500, "MYR", "books")
-    assert st.policy.sponsor_decide(top.id, SPONSOR, True).status == "executed"
+    with pytest.raises(PolicyError, match="money the sponsor sends"):
+        st.policy.sponsor_decide(top.id, SPONSOR, True)
+    st.policy.safety.unfreeze(STUDENT, "sponsor", SPONSOR)
+    assert st.policy.sponsor_decide(top.id, SPONSOR, True).status in ("in_transit", "executed")
 
 
 def test_new_payees_cannot_be_approved_while_frozen(st):

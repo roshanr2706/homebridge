@@ -8,7 +8,8 @@ Both are enforced here and in PolicyEngine, never by the model:
   student can lock everything (from chat through the T1 `freeze_payments` tool, or from the app)
   but can unlock only her own money, only from the app, and only if she locked it herself. There
   is no unlock tool, so nothing typed into the chat can lift a lock. While a lock applies, drafts
-  are still allowed but Confirm, Approve and execution are refused.
+  are still allowed but Confirm, Approve and execution are refused. The sponsor-funded lock also
+  stops the sponsor approving a remittance (remit.py); one already in transit still arrives.
 * Alerts. Deterministic signals (several confirmed payments in an hour, a first payment to a payee
   well above the student's usual size, activity in the small hours in Vancouver, repeated failed
   or refused confirmations) are stored as alerts the sponsor sees in their overview. An alert
@@ -131,10 +132,21 @@ class SafetyMonitor:
         self.bank.save_freeze(owner, json.dumps(data, sort_keys=True))
 
     def frozen_reason(self, owner: str, kind: str, params: Dict[str, Any]) -> Optional[str]:
-        """Why an action of this kind cannot run right now, or None. Inbound top-ups are never locked."""
+        """Why an action of this kind cannot run right now, or None.
+
+        A remittance from the sponsor (kind 'topup') is sponsor money going out, so the lock on sponsor-funded
+        money covers it: while that lock is on, the sponsor can't approve one (he unlocks in Rules first). A lock
+        often means a scam in progress, and "ask your parents to send money" is part of many scripts. Money
+        already in transit is still credited when it arrives; a lock only stops money leaving."""
         s = self.state(owner)
-        if not s["frozen"] or kind == "topup":
+        if not s["frozen"]:
             return None
+        if kind == "topup":
+            by = s["sponsor_funded"]
+            if not by:
+                return None
+            who = "the sponsor" if by == "sponsor" else self._name(owner)
+            return f"{who} locked payments, including money the sponsor sends; only the sponsor can unlock it"
         if kind == "add_payee":
             return "new payees can't be approved while payments are locked"
         acc = self.bank.account(params.get("from_account_id", ""))

@@ -516,9 +516,26 @@ class Bank:
     def set_pin_state(self, user_id: str, failures: int, locked_until: float) -> None:
         self._x("UPDATE user_pins SET failures=?, locked_until=? WHERE user_id=?", (failures, locked_until, user_id))
 
-    def credit_sponsor_topup(self, student: str, amount_minor: int, currency: str, memo: str) -> None:
-        acc = self.find_account(student, currency)
-        if not acc:
-            raise BankError(f"No {currency} account to receive the top-up")
-        self._adjust(acc["id"], amount_minor)
-        self.add_transaction(acc["id"], amount_minor, currency, "allowance", "Sponsor top-up", memo)
+    # Remittances (remit.py). Each leg is posted under a reference derived from the action id, at most once:
+    # the balance change and its transaction row are written in one commit, and a second post with the same
+    # reference is refused, so a remittance can't be debited or credited twice, even after a restart.
+    def has_transaction(self, tx_id: str) -> bool:
+        return bool(self._q("SELECT 1 FROM transactions WHERE id=?", (tx_id,)))
+
+    def post_once(self, tx_id: str, account_id: str, delta_minor: int, category: str, counterparty: str,
+                  memo: str = "") -> Dict[str, Any]:
+        with self._lock:
+            if self.has_transaction(tx_id):
+                raise BankError(f"Already posted ({tx_id})")
+            acc = self.account(account_id)
+            if not acc:
+                raise BankError("Unknown account")
+            if acc["balance"] + delta_minor < 0:
+                raise BankError(f"Insufficient funds in {acc['label']}")
+            self.db.execute("UPDATE accounts SET balance=balance+? WHERE id=?", (delta_minor, account_id))
+            self.db.execute("INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?)",
+                            (tx_id, account_id, datetime.now().isoformat(timespec="seconds"), delta_minor,
+                             acc["currency"], category, counterparty, memo))
+            self.db.commit()
+            return {"transaction_id": tx_id, "account": acc["label"], "currency": acc["currency"],
+                    "amount": to_major(delta_minor)}

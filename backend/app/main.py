@@ -33,7 +33,7 @@ from .config import Limits, Settings, load_settings
 from .fx import FxMarket
 from .policy import PendingAction, PolicyEngine, PolicyError
 from .safety import SafetyError
-from .seed import SPONSOR, STUDENT, seed_security
+from .seed import SPONSOR, STUDENT, seed_security, seed_sponsor_account
 from .tools import ToolContext, budget_summary, get_credit_profile, get_tuition_schedule
 from .tools import forecast_cashflow
 from .cards import forecast_card
@@ -55,6 +55,8 @@ class ConfirmIn(BaseModel):
 class DecisionIn(BaseModel):
     note: str = Field("", max_length=200)
     pin: str = Field("", max_length=12)   # required to approve, not to reject
+    # For a money request: the transfer service the sponsor picked (remit.py); empty means the cheapest.
+    provider: str = Field("", max_length=20, pattern=r"^[a-z_]*$")
 
 
 class PinIn(BaseModel):
@@ -131,8 +133,10 @@ def build_state(settings: Optional[Settings] = None, today: Optional[date] = Non
     if not bank.is_seeded():
         bank.reset(agent.today)
         policy.reset()
-    elif not bank.has_security_seed():  # a file database from before KYC and the sponsor PIN existed
-        seed_security(bank, agent.today)
+    else:
+        if not bank.has_security_seed():  # a file database from before KYC and the sponsor PIN existed
+            seed_security(bank, agent.today)
+        seed_sponsor_account(bank)        # ... or from before remittances (a no-op once it exists)
     return AppState(settings, bank, fx, audit, policy, agent)
 
 
@@ -247,7 +251,8 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
                           policy=st.policy, audit=st.audit, today=st.agent.today)
         accs = st.bank.accounts(user_id)
         total = sum(a["balance"] * st.fx.mid(a["currency"], "CAD") for a in accs)
-        pending = [st.policy.present(a) for a in st.policy.list_for(user_id, ["awaiting_user", "awaiting_sponsor"])]
+        pending = [st.policy.present(a) for a in st.policy.list_for(user_id, ["awaiting_user", "awaiting_sponsor",
+                                                                                 "in_transit"])]
         return {"accounts": accs, "total_cad": round(total, 2), "tuition": get_tuition_schedule(ctx, {}),
                 "budget": budget_summary(ctx, {}), "reminders": st.bank.reminders(user_id),
                 "payees": st.bank.payees(user_id), "pending": pending,
@@ -317,7 +322,7 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
 
     @app.get("/sponsor/queue")
     def queue(sponsor_id: str = Depends(sponsor)):
-        return {"actions": [st.policy.present(a) for a in st.policy.sponsor_queue(sponsor_id)]}
+        return {"actions": [st.policy.present(a, viewer="sponsor") for a in st.policy.sponsor_queue(sponsor_id)]}
 
     @app.get("/sponsor/overview")
     def overview(sponsor_id: str = Depends(sponsor)):
@@ -331,7 +336,9 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         return {"student": {"id": student_id, "name": u.get("name")}, "accounts": accs,
                 "total_cad": round(sum(a["balance"] * st.fx.mid(a["currency"], "CAD") for a in accs), 2),
                 "limits": st.settings.limits.__dict__,
-                "recent": [st.policy.present(a) for a in visible][-10:],
+                # His own account in Kuala Lumpur, which remittances are sent from. Never in the student's views.
+                "source_accounts": st.bank.accounts(sponsor_id),
+                "recent": [st.policy.present(a, viewer="sponsor") for a in visible][-10:],
                 "freeze": st.policy.safety.state(student_id),
                 "alerts": list(reversed(st.policy.safety.alerts(student_id)))[:10],
                 # Counts cover all drafts (no details); money out covers only the accounts the sponsor funds.
@@ -366,14 +373,16 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
     def approve(action_id: str, body: DecisionIn, sponsor_id: str = Depends(sponsor)):
         _pin(sponsor_id, body.pin, "approve " + action_id[:20])
         try:
-            return st.policy.present(st.policy.sponsor_decide(action_id, sponsor_id, True, body.note))
+            return st.policy.present(st.policy.sponsor_decide(action_id, sponsor_id, True, body.note, body.provider),
+                                     viewer="sponsor")
         except PolicyError as e:
             _err(e)
 
     @app.post("/sponsor/actions/{action_id}/reject")
     def reject(action_id: str, body: DecisionIn, sponsor_id: str = Depends(sponsor)):
         try:
-            return st.policy.present(st.policy.sponsor_decide(action_id, sponsor_id, False, body.note))
+            return st.policy.present(st.policy.sponsor_decide(action_id, sponsor_id, False, body.note),
+                                     viewer="sponsor")
         except PolicyError as e:
             _err(e)
 

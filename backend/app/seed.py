@@ -127,6 +127,19 @@ def seed(bank: "Bank", today: date) -> None:
     )
     seed_credit_card(bank, today)
     seed_security(bank, today)
+    seed_sponsor_account(bank)
+
+
+SPONSOR_ACCOUNT = ("acc_spn", SPONSOR, "Maybank Savings", "MYR", 4850000, "5142-7730-0619", 0)
+
+
+def seed_sponsor_account(bank: "Bank") -> None:
+    """The sponsor's own ringgit account in Kuala Lumpur, which remittances are sent from (remit.py). Only the
+    sponsor sees its balance; the student's endpoints and tools read her own accounts only. Also run on a file
+    database from before remittances existed."""
+    with bank._lock:
+        bank.db.execute("INSERT OR IGNORE INTO accounts VALUES (?,?,?,?,?,?,?)", SPONSOR_ACCOUNT)
+        bank.db.commit()
 
 
 def seed_security(bank: "Bank", today: date) -> None:

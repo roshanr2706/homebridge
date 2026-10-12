@@ -72,7 +72,39 @@ export type Action = {
   // Why it can't be confirmed or approved right now (payments are locked), or null.
   frozen?: string | null;
   compliance?: Compliance;
+  // A money request (kind 'topup') runs as a remittance from the sponsor's own account (backend/app/remit.py).
+  remittance?: Remittance;
+  eta_in_seconds?: number | null;
+  // Sponsor's view only: the true-cost comparison while it waits for him, and the account it is sent from.
+  remit_options?: RemitOption[];
+  sponsor_source?: { label: string; number: string; currency: string; balance?: number } | null;
 };
+
+export type RemitStep = 'initiated' | 'compliance_checked' | 'in_transit' | 'credited';
+export type Remittance = {
+  status?: string;
+  reference?: string;
+  timeline?: Partial<Record<RemitStep, number>>;
+  settle_after?: number;
+  compliance_outcome?: string;
+};
+export type RemitQuote = {
+  provider_key: string;
+  provider: string;
+  send_amount: number;
+  send_currency: string;
+  fee: number;
+  fee_currency: string;
+  rate: number;
+  mid_rate: number;
+  spread_pct: number;
+  receive_amount: number;
+  receive_currency: string;
+  true_cost: number;
+  true_cost_pct: number;
+  speed: string;
+};
+export type RemitOption = RemitQuote & { eta: string; cheapest: boolean; extra_vs_cheapest: number };
 
 // Who locked each kind of money: the sponsor's own funds, and the student's own money.
 export type FreezeState = {
@@ -104,6 +136,8 @@ export type SponsorOverview = {
   accounts: Account[];
   total_cad: number;
   limits: Record<string, number>;
+  // The sponsor's own account(s) in Kuala Lumpur, which remittances are sent from.
+  source_accounts?: Account[];
   recent: Action[];
   freeze: FreezeState;
   alerts: Alert[];
@@ -211,7 +245,9 @@ export type Card =
   | { type: 'transactions'; count: number; rows: { date: string; counterparty: string; amount: number; currency: string; category: string }[] }
   | { type: 'checklist'; title: string; items: string[]; footnote: string }
   | ForecastCard
-  | CreditCardData;
+  | CreditCardData
+  // get_remittance_status: the money requests to show as action cards (with their live timeline).
+  | { type: 'remittance'; action_ids: string[] };
 
 // Cash-flow forecast ("runway"). `series` is one bar per `step_days` days from start_date; the indexes
 // below point into it.
@@ -309,7 +345,9 @@ export const api = {
   sponsorFreeze: (scope: 'sponsor_funded' | 'all') => call<{ freeze: FreezeState }>('sponsor', '/sponsor/freeze', 'POST', { scope }),
   // Unlocking, approving and changing limits need the sponsor's PIN, checked on the server.
   sponsorUnfreeze: (pin: string) => call<{ freeze: FreezeState }>('sponsor', '/sponsor/unfreeze', 'POST', { pin }),
-  approve: (id: string, note: string, pin: string) => call<Action>('sponsor', `/sponsor/actions/${id}/approve`, 'POST', { note, pin }),
+  // For a money request, `provider` is the transfer service the sponsor picked (empty: the cheapest).
+  approve: (id: string, note: string, pin: string, provider = '') =>
+    call<Action>('sponsor', `/sponsor/actions/${id}/approve`, 'POST', { note, pin, provider }),
   reject: (id: string, note = '') => call<Action>('sponsor', `/sponsor/actions/${id}/reject`, 'POST', { note }),
   setLimits: (single_cad: number, daily_cad: number, pin: string) =>
     call<{ limits: Record<string, number> }>('sponsor', '/sponsor/limits', 'POST', { single_cad, daily_cad, pin }),

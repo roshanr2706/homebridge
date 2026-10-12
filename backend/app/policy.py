@@ -38,6 +38,7 @@ from .compliance import Compliance
 from .config import Limits
 from .fx import FxMarket
 from .guard import normalize
+from .remit import Remittances
 from .safety import FROZEN_PREFIX, SafetyMonitor
 
 RISKY_PAYEE_KINDS = {"crypto", "gift_card", "individual", "unknown"}
@@ -90,7 +91,7 @@ def _hash_token(token: str) -> str:
 @dataclass
 class PendingAction:
     id: str
-    kind: str                      # transfer | conversion | add_payee
+    kind: str                      # transfer | conversion | add_payee | topup (a remittance request)
     owner: str
     session_id: str
     params: Dict[str, Any]
@@ -105,17 +106,32 @@ class PendingAction:
     token_hash: str
     created_at: float
     expires_at: float
-    status: str = "awaiting_user"  # awaiting_user|awaiting_sponsor|executed|rejected|cancelled|expired|failed
+    # awaiting_user|awaiting_sponsor|in_transit (a remittance on its way)|executed|rejected|cancelled|expired|failed
+    status: str = "awaiting_user"
     user_confirmed: bool = False
     sponsor_decision: Optional[str] = None
     sponsor_note: str = ""
     result: Optional[Dict[str, Any]] = None
     provenance: Dict[str, str] = field(default_factory=dict)
     compliance: Dict[str, Any] = field(default_factory=dict)  # compliance.py result, shown on the card
+    # Remittance progress for a money request (remit.py): status, reference, timeline, settle_after.
+    remittance: Dict[str, Any] = field(default_factory=dict)
     _token: Optional[str] = None   # plaintext, handed to the app once, never to the model
+
+    def remit_brief(self) -> Dict[str, Any]:
+        q = self.params.get("quote") or {}
+        return {"to_account": self.params.get("to_account", ""), "status": self.remittance.get("status") or self.status,
+                "provider": q.get("provider"), "receive_amount": q.get("receive_amount"),
+                "receive_currency": q.get("receive_currency"), "settle_after": self.remittance.get("settle_after")}
 
     def for_model(self) -> Dict[str, Any]:
         """What the language model is allowed to see."""
+        out = self._for_model()
+        if self.kind == "topup":
+            out["remittance"] = self.remit_brief()
+        return out
+
+    def _for_model(self) -> Dict[str, Any]:
         return {
             "action_id": self.id,
             "kind": self.kind,
@@ -129,6 +145,7 @@ class PendingAction:
                 "awaiting_user": "The user must review and tap Confirm in the app. You cannot confirm it.",
                 "awaiting_sponsor": "Waiting for the sponsor to approve in their own app.",
                 "blocked": "Blocked by compliance screening. It cannot be confirmed or approved.",
+                "in_transit": "The sponsor approved and sent it; the money is on its way (see remittance).",
             }.get(self.status, ""),
             "compliance": {"outcome": self.compliance.get("outcome", "clear"),
                            "notes": [c["detail"] for c in self.compliance.get("checks", [])
@@ -150,6 +167,7 @@ class PendingAction:
             "result": self.result,
             "provenance": self.provenance,
             "compliance": self.compliance,
+            "remittance": self.remittance,
         })
         if include_token and self._token and self.status == "awaiting_user":
             d["confirm_token"] = self._token
@@ -166,6 +184,7 @@ class PolicyEngine:
         self.bank.ensure_policy_tables()
         self.safety = SafetyMonitor(bank, fx, audit)
         self.compliance = Compliance(bank, fx, audit)
+        self.remit = Remittances(bank, fx, audit, limits)
         self._load()
 
     @property
@@ -180,6 +199,8 @@ class PolicyEngine:
             self.safety.audit = log
         if hasattr(self, "compliance"):
             self.compliance.audit = log
+        if hasattr(self, "remit"):
+            self.remit.audit = log
 
     def limits_changed(self) -> None:
         """Called after the sponsor edits the limits. Student-only drafts made earlier then go to the sponsor."""
@@ -209,7 +230,10 @@ class PolicyEngine:
                 data = json.loads(row["data"])
                 a = PendingAction(**{k: v for k, v in data.items() if k in known})
                 self.actions[a.id] = a
-                if a.status == "executing":
+                if a.status == "executing" and self.remit.recover(a):
+                    self.audit.record("remittance_recovered", "system", action_id=a.id, status=a.status)
+                    self._save(a)
+                elif a.status == "executing":
                     a.status = "failed"
                     a.result = {"error": "Interrupted by a server restart during execution; check the ledger."}
                     self.audit.record("action_failed", "system", action_id=a.id, error="interrupted by restart")
@@ -513,16 +537,35 @@ class PolicyEngine:
 
     @_locked
     def draft_topup_request(self, owner: str, session_id: str, amount: float, currency: str,
-                            reason: str) -> PendingAction:
-        """Student asks the sponsor for money. Goes straight to the sponsor; no student token needed."""
+                            reason: str, destination: str = "") -> PendingAction:
+        """Student asks the sponsor for money. Goes straight to the sponsor; no student token needed. When he
+        approves, it becomes a remittance from his own account (remit.py) into the account chosen here:
+        CAD Everyday or the CAD Tuition Fund for CAD, the MYR Wallet for ringgit."""
         amount = _amount(amount)
         if amount > 100000:
             raise PolicyError("Amount must be a positive number.")
         currency = currency.upper()
-        if not self.bank.find_account(owner, currency):
+        if currency not in ("CAD", "MYR"):
+            raise PolicyError(f"No {currency} account to receive money. Use MYR or CAD.")
+        destination = (destination or "").lower()
+        if destination not in ("", "everyday", "tuition", "wallet"):
+            raise PolicyError("Destination must be 'everyday', 'tuition' or 'wallet'.")
+        if currency == "MYR":
+            if destination not in ("", "wallet"):
+                raise PolicyError("Ringgit can only go to the MYR Wallet. Ask in CAD for Everyday or the Tuition Fund.")
+            label = "Wallet"
+        else:
+            if destination == "wallet":
+                raise PolicyError("The MYR Wallet takes ringgit. Ask in MYR, or choose Everyday or the Tuition Fund.")
+            tuition = destination == "tuition" or (not destination and re.search(
+                r"tuition|fee|yuran|学费|sem(ester)? fee", reason or "", re.I))
+            label = "Tuition" if tuition else "Everyday"
+        dst = self.bank.find_account(owner, currency, label)
+        if not dst:
             raise PolicyError(f"No {currency} account to receive money. Use MYR or CAD.")
         self._rate_limit(owner)
-        params = {"amount": float(amount), "currency": currency, "reason": reason[:200]}
+        params = {"amount": float(amount), "currency": currency, "reason": reason[:200],
+                  "to_account_id": dst["id"], "to_account": dst["label"]}
         a = self._new("topup", owner, session_id, params, f"Ask sponsor for {currency} {amount:,.2f}: {reason[:80]}",
                       ["A request for money: the sponsor decides whether to send it"], 0, [], [], {})
         a.user_confirmed = True
@@ -543,6 +586,8 @@ class PolicyEngine:
             a.status = "expired"
             self._save(a)
             self.audit.record("action_expired", "system", action_id=a.id)
+        if a.status == "in_transit":   # a remittance is credited when it's due, checked on read
+            self.remit.tick(self, a)
         return a
 
     def confirm(self, action_id: str, user_id: str, token: str) -> PendingAction:
@@ -587,7 +632,10 @@ class PolicyEngine:
                 return a
             return self._execute(a)
 
-    def sponsor_decide(self, action_id: str, sponsor_id: str, approve: bool, note: str = "") -> PendingAction:
+    def sponsor_decide(self, action_id: str, sponsor_id: str, approve: bool, note: str = "",
+                       provider: str = "") -> PendingAction:
+        """The sponsor's decision. Approving a money request starts a remittance from the sponsor's own account
+        through `provider` (the cheapest service when none is named); see remit.py."""
         with self._lock:
             a = self.get(action_id)
             owner = self.bank.user(a.owner)
@@ -603,6 +651,7 @@ class PolicyEngine:
             if lock:  # rejecting is always allowed
                 self.audit.record("sponsor_denied", sponsor_id, action_id=action_id, reason="payments frozen")
                 raise PolicyError(f"{FROZEN_PREFIX} {lock}. Unlock payments in Rules before approving, or reject it.")
+            choice = self.remit.pick(a, provider) if approve and a.kind == "topup" else None
             a.sponsor_decision = "approved" if approve else "rejected"
             a.sponsor_note = (note or "")[:200]
             self.audit.record("sponsor_" + a.sponsor_decision, sponsor_id, action_id=a.id, note=note[:200])
@@ -612,6 +661,8 @@ class PolicyEngine:
                     self.bank.reject_payee(a.params["payee_id"])
                 self._save(a)
                 return a
+            if choice is not None:
+                return self.remit.initiate(self, a, choice, sponsor_id)
             return self._execute(a)
 
     def cancel(self, action_id: str, user_id: str) -> PendingAction:
@@ -651,10 +702,8 @@ class PolicyEngine:
                 fee = 0
                 a.result = self.bank.convert(a.params["from_account_id"], a.params["to_account_id"],
                                              to_minor(a.params["amount"]), a.params["rate"], fee)
-            elif a.kind == "topup":
-                self.bank.credit_sponsor_topup(a.owner, to_minor(a.params["amount"]), a.params["currency"],
-                                               a.params["reason"])
-                a.result = {"credited": a.params["amount"], "currency": a.params["currency"]}
+            elif a.kind == "topup":   # money requests run as remittances (remit.py), never created from nothing
+                raise BankError("A money request is sent as a remittance by the sponsor.")
             elif a.kind == "add_payee":
                 self.bank.activate_payee(a.params["payee_id"], self.limits.payee_cooling_seconds)
                 a.result = {"payee_id": a.params["payee_id"],
@@ -669,9 +718,18 @@ class PolicyEngine:
         return a
 
     # ------------------------------------------------------------ queries
-    def present(self, a: PendingAction, include_token: bool = False) -> Dict[str, Any]:
-        """for_app() with the balance warning recomputed, so a card never shows a stale shortfall."""
+    def present(self, a: PendingAction, include_token: bool = False, viewer: str = "student") -> Dict[str, Any]:
+        """for_app() with the balance warning recomputed, so a card never shows a stale shortfall. The sponsor's
+        view of a money request also carries his source account (with its balance) and, while it waits for him,
+        the true-cost comparison of the services that can send it; the student's view never has either."""
         d = a.for_app(include_token)
+        if a.kind == "topup":
+            d["eta_in_seconds"] = (max(0, int(a.remittance["settle_after"] - self.remit.clock()))
+                                   if a.status == "in_transit" and a.remittance.get("settle_after") else None)
+            if viewer == "sponsor":
+                d["sponsor_source"] = self.remit.source_public(a.owner, with_balance=True)
+                if a.status == "awaiting_sponsor":
+                    d["remit_options"] = self.remit.options(a.params)
         if a.kind in ("transfer", "conversion") and a.status in ("awaiting_user", "awaiting_sponsor"):
             acc = self.bank.account(a.params["from_account_id"])
             d["warnings"] = [w for w in a.warnings if "lower than this amount" not in w]

@@ -10,7 +10,7 @@ import { amount, fonts, money, useTheme } from '../theme';
 import { useToast } from '../toast';
 import { Body, Button, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
-const STATUS: Record<string, Key> = { awaiting_user: 'wal.needsYou', awaiting_sponsor: 'wal.withSponsor' };
+const STATUS: Record<string, Key> = { awaiting_user: 'wal.needsYou', awaiting_sponsor: 'wal.withSponsor', in_transit: 'wal.onTheWay' };
 
 export function WalletScreen({ active }: { active: boolean }) {
   const t = useTheme();

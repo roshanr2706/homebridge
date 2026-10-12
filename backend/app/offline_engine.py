@@ -170,6 +170,19 @@ REMIT_RE = (r"\b(send|sending|transfer|remit|wire)\b.{0,40}\b(dad|father|mum|mom
             r"malaysia)\b|\b(dad|father|mum|mom|mother|parents?|family)\b.{0,40}\b(send|sending|transfer|remit)\b|"
             r"汇款|寄钱|kirim duit|hantar duit")
 PARENT_RE = r"\b(dad|father|mum|mom|mother|parents?|family|ayah|bapa|ibu|papa)\b"
+# "Did dad send the money?": where a remittance from the sponsor is (get_remittance_status). Checked on the raw
+# text, before the remittance-quote and balance rules, which share words with it.
+_DAD = r"(my )?(dad|father|papa|sponsor|parents?|mum|mom)"
+REMIT_STATUS_RE = (
+    rf"\b(did|has|have) {_DAD} (send|sent|transfer(red)?|wire[d]?|remit(ted)?)\b|"
+    rf"\b(where('?s| is| are)|any sign of|status of) .{{0,20}}\bmoney from {_DAD}\b|"
+    rf"\bmoney from {_DAD} .{{0,25}}\b(arrive[d]?|come in|land(ed)?|here|in yet|credited)\b|"
+    r"\b(has|did|is) (the |my )?(money|transfer|remittance|top-?up)( from (my )?(dad|father|sponsor))? "
+    r"(arrive[d]?|come in|land(ed)?|been credited|on (its|the) way|here|in)\b|"
+    r"\b(remittance|top-?up) status\b|\bstatus of (my )?(remittance|top-?up)\b|"
+    r"\b(duit|wang) (ayah|bapa|abah)\b.{0,12}\b(masuk|sampai|tiba)\b|\b(ayah|bapa|abah) (dah|sudah) "
+    r"(hantar|kirim|transfer)\b|"
+    r"(爸爸|父亲|爸)(的|汇的|转的|打的|寄的)?钱.{0,4}(到了|到账|到没|收到|来了)|(爸爸|父亲)(汇|转|打)钱了|汇款(到了|到账|状态|进度)")
 ACCOUNT_WORDS = {"everyday": r"everyday|chequing|checking|spending account|cad account|cad wallet",
                  "tuition": r"tuition fund|tuition account|tuition savings|dana yuran|学费账户",
                  "wallet": r"myr wallet|ringgit wallet|myr account|ringgit account|malaysian account|马币账户"}
@@ -204,45 +217,27 @@ def _forecast_horizon(low: str) -> Dict[str, Any]:
     return {"until": month}
 
 
-def _forecast_reply(r: Dict[str, Any]) -> str:
-    d = short_date
-    lo = r["lowest"]
-    gaps = [t for t in r["tuition"] if t["gap"] > 0]
-    if r["first_shortfall_date"]:
-        msg = (f"Not quite. On your usual spending, {r['account']} dips below zero on {d(r['first_shortfall_date'])} "
-               f"(lowest CAD {lo['balance']:,.2f} on {d(lo['date'])})")
-    else:
-        msg = (f"{'Mostly' if gaps else 'Yes'}. Your spending money lasts to {d(r['end_date'])}: the lowest point is "
-               f"CAD {lo['balance']:,.2f} on {d(lo['date'])}")
-    if gaps:
-        msg += (f", {'and' if r['first_shortfall_date'] else 'but'} your tuition fund will be CAD {gaps[0]['gap']:,.2f} "
-                f"short when {gaps[0]['term']} is due on {d(gaps[0]['due'])}")
-        msg += f" (and {gaps[1]['term']} on {d(gaps[1]['due'])} is not funded yet)." if len(gaps) > 1 else "."
-    elif r["tuition"]:
-        msg += f", and your tuition fund covers the installment due {d(r['tuition'][0]['due'])}."
-    else:
-        msg += "."
+def _forecast_pick(r: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The single most useful next step. With a spending dip: the cheapest fix for it (a spending cut when one is
+    enough, else converting into Everyday), since a tuition gap is covered by the offer that ends the reply. With
+    only a tuition gap: the conversion that covers it. Otherwise the buffer tip, if any."""
     tips = r["suggestions"]
-    # One tip for the tuition gap, and the cheapest fix for the dip (a spending cut if one is enough).
-    picks = tips[:1] if gaps else []   # the tool lists the tuition-gap tip first
     if r["first_shortfall_date"]:
-        picks += [s for s in tips[len(picks):] if s["kind"] in ("cut_spending", "convert")][:1]
-    for s in picks or [t for t in tips[:1] if t["kind"] != "on_track"]:  # on_track only repeats the verdict
-        msg += " " + s["text"]
-    if any(s["kind"] == "convert" for s in picks):
-        msg += (" I haven't moved any money. Say 'cover the tuition shortfall from my MYR wallet' and I'll draft "
-                "that conversion for you to confirm." if gaps else
-                " I haven't moved any money; ask me if you want that conversion drafted for you to confirm.")
-    else:
-        msg += " This is an estimate from your schedule and recent spending; I haven't moved any money."
-    return msg
+        return (next((s for s in tips if s["kind"] == "cut_spending"), None)
+                or next((s for s in tips if s["kind"] == "convert" and s["destination"] == "everyday"), None)
+                or next((s for s in tips if s["kind"] == "ask_sponsor"), None))
+    if any(g["gap"] > 0 for g in r["tuition"]):
+        return next((s for s in tips if s["kind"] == "convert"), None)
+    return next((s for s in tips if s["kind"] == "buffer"), None)
 
 
-def _forecast_reply_local(r: Dict[str, Any], lang: str) -> str:
-    """The same verdict and picks as _forecast_reply, in Chinese or Malay. The tool's suggestion text is English,
-    so each suggestion is rebuilt from its fields."""
-    d = lambda iso: i18n.date(iso, lang)  # noqa: E731
+def _forecast_reply(r: Dict[str, Any], lang: str = "en") -> str:
+    """Verdict, the single most useful next step, and the offer, in at most three sentences and in the user's
+    language. The runway card under the reply shows the chart and every suggestion, so the reply doesn't repeat
+    them. Each piece is rebuilt from the tool's fields (its suggestion text is English and longer)."""
+    d = (lambda iso: short_date(iso)) if lang == "en" else (lambda iso: i18n.date(iso, lang))  # noqa: E731
     m = lambda v: _money(v, "CAD")  # noqa: E731
+    stop = "。" if lang == "zh" else "."
     lo = r["lowest"]
     gaps = [g for g in r["tuition"] if g["gap"] > 0]
     short = r["first_shortfall_date"]
@@ -254,37 +249,29 @@ def _forecast_reply_local(r: Dict[str, Any], lang: str) -> str:
                 lowest=m(lo["balance"]), low_date=d(lo["date"]))
     if gaps:
         msg += t("fc_gap", lang, join=t("fc_and" if short else "fc_but", lang), gap=m(gaps[0]["gap"]),
-                 term=i18n.term(gaps[0]["term"], lang), due=d(gaps[0]["due"]))
-        msg += (t("fc_gap2", lang, term=i18n.term(gaps[1]["term"], lang), due=d(gaps[1]["due"])) if len(gaps) > 1
-                else ("。" if lang == "zh" else "."))
+                 term=i18n.term(gaps[0]["term"], lang), due=d(gaps[0]["due"])) + stop
     elif r["tuition"]:
         msg += t("fc_covered", lang, due=d(r["tuition"][0]["due"]))
     else:
-        msg += "。" if lang == "zh" else "."
-    tips = r["suggestions"]
-    picks = tips[:1] if gaps else []
-    if short:
-        picks += [s for s in tips[len(picks):] if s["kind"] in ("cut_spending", "convert")][:1]
-    for s in picks or [x for x in tips[:1] if x["kind"] != "on_track"]:
-        if s["kind"] == "convert":
-            dest = t("fc_why_gap", lang, gap=f"{s['receive_cad']:,.2f}") if s["destination"] == "tuition" else \
-                t("fc_why_zero", lang)
-            tip = t("fc_tip_convert", lang, myr=f"{s['amount']:,.0f}", by=d(s["by_date"]), why=dest,
-                    dest=i18n.account("Tuition Fund" if s["destination"] == "tuition" else "CAD Everyday", lang),
-                    provider=i18n.provider(s["provider"], lang), pct=s["true_cost_pct"])
-        elif s["kind"] == "cut_spending":
-            tip = t("fc_tip_cut_dining" if s["category"] == "dining" else "fc_tip_cut_all", lang,
-                    n=math.ceil(s["weekly_cut_cad"]))
-        elif s["kind"] == "ask_sponsor" and short:
-            tip = t("fc_tip_ask", lang, date=d(short))
-        elif s["kind"] == "buffer":
-            tip = t("fc_tip_buffer", lang, lowest=m(lo["balance"]), low_date=d(lo["date"]))
-        else:
-            continue
-        msg += tip if lang == "zh" else " " + tip
-    if any(s["kind"] == "convert" for s in picks):
-        msg += (t("fc_end_offer", lang, offer=i18n.offer("cover the tuition shortfall from my MYR wallet", lang))
-                if gaps else t("fc_end_ask", lang))
+        msg += stop
+    s = _forecast_pick(r)
+    if s and s["kind"] == "convert":
+        why = (t("fc_why_gap", lang, gap=f"{s['receive_cad']:,.2f}") if s["destination"] == "tuition"
+               else t("fc_why_zero", lang))
+        msg += t("fc_tip_convert", lang, myr=f"{s['amount']:,.0f}", by=d(s["by_date"]), why=why,
+                 dest=i18n.account("Tuition Fund" if s["destination"] == "tuition" else "CAD Everyday", lang),
+                 provider=i18n.provider(s["provider"], lang), pct=s["true_cost_pct"])
+    elif s and s["kind"] == "cut_spending":
+        msg += t("fc_tip_cut_dining" if s["category"] == "dining" else "fc_tip_cut_all", lang,
+                 n=math.ceil(s["weekly_cut_cad"]))
+    elif s and s["kind"] == "ask_sponsor":
+        msg += t("fc_tip_ask", lang, date=d(short))
+    elif s and s["kind"] == "buffer":
+        msg += t("fc_tip_buffer", lang)
+    if gaps:
+        msg += t("fc_end_offer", lang, offer=i18n.offer("cover the tuition shortfall from my MYR wallet", lang))
+    elif s and s["kind"] == "convert":
+        msg += t("fc_end_ask", lang)
     else:
         msg += t("fc_end", lang)
     return msg
@@ -302,7 +289,7 @@ class OfflineEngine:
         return _action_text(a, self._lang)
 
     def _forecast(self, r: Dict[str, Any]) -> str:
-        return _forecast_reply(r) if self._lang == "en" else _forecast_reply_local(r, self._lang)
+        return _forecast_reply(r, self._lang)
 
     # ------------------------------------------------------------------ main
     def chat(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -395,6 +382,12 @@ class OfflineEngine:
                      raw):
             return _say(self._t("refuse_approve"))
 
+        # 2b'. "Did dad send the money?" / "duit ayah dah masuk?" / "爸爸的钱到了吗？": where the remittance is
+        if re.search(REMIT_STATUS_RE, raw):
+            if "get_remittance_status" not in done:
+                return _call("get_remittance_status")
+            return _say(self._remit_reply(_result(res, "get_remittance_status")))
+
         # 2c. Answer to the question the previous reply asked ("Who would you like to pay?" -> "the landlord")
         slot = self._slot_answer(text, raw, state, today)
         if slot is not None:
@@ -446,7 +439,7 @@ class OfflineEngine:
             if "forecast_cashflow" not in done:
                 nxt = date(today.year + (today.month == 12), today.month % 12 + 1, 1)
                 return _call("forecast_cashflow", until=nxt.strftime("%B").lower())
-            return _say("Your rent, bills and usual spending are already in this forecast. " + _forecast_reply(last),
+            return _say(self._forecast(last),
                         state=self._forecast_state(last))
 
         # 4. Multi-step: convert enough then pay rent
@@ -469,7 +462,8 @@ class OfflineEngine:
                     reason = re.sub(r"^untuk\s+", "", why.group(0)).strip(" 。.!！")
                 cur = "MYR" if "MYR" in _currencies(text) else "CAD"
                 return _call("request_sponsor_topup", amount=amt, currency=cur, reason=reason[:80] or "student expenses")
-            return _say(self._act(last["action"]) + self._t("topup_sent"))
+            acct = (last["action"].get("remittance") or {}).get("to_account") or "CAD Everyday"
+            return _say(self._act(last["action"]) + self._t("topup_sent", account=i18n.account(acct, L)))
 
         # 6. Summary for the sponsor
         if re.search(r"summary|report", low) and re.search(r"dad|father|parent|sponsor|send", low):
@@ -602,17 +596,23 @@ class OfflineEngine:
         if re.search(r"transactions?|history|statement", low):
             if "list_transactions" not in done:
                 return _call("list_transactions", limit=10)
-            return _say(self._t("tx_list", list=i18n.sep(L).join(
-                f"{x['date']} {x['counterparty']} {x['currency']} {x['amount']:,.2f}" for x in last["transactions"][:8])))
+            rows = last["transactions"][:8]   # the transactions card lists them
+            if not rows:
+                return _say(self._t("tx_list", n=0, latest="-"))
+            x = rows[0]
+            on = {"en": "on", "zh": "，", "ms": "pada"}[L]
+            return _say(self._t("tx_list", n=len(rows), latest=f"{x['counterparty']} {x['currency']} {x['amount']:,.2f} "
+                                f"{on} {i18n.date(x['date'], L)}"))
 
         if re.search(r"balance|how much (money )?(do i have|left|i have)|baki|berapa|duit|broke|net worth|"
                      r"how much .{0,15}\bin (my|the) .{0,20}(account|wallet|fund)", low):
             cur = "MYR" if re.search(r"ringgit|myr|\brm\b|baki|berapa", low) else "CAD"
             if "get_balances" not in done:
                 return _call("get_balances", total_currency=cur)
-            b = last
-            parts = [f"{i18n.account(a['label'], L)} {_money(a['balance'], a['currency'])}" for a in b["accounts"]]
-            return _say(self._t("balances", parts=i18n.sep(L).join(parts),
+            b = last   # the balances card lists every account; the reply gives the spending money and the total
+            main = _account(b, "Everyday") or b["accounts"][0]
+            return _say(self._t("balances", account=i18n.account(main["label"], L),
+                                main=_money(main["balance"], main["currency"]),
                                 total=_money(b["total"], b["total_currency"])))
 
         if re.search(r"^(thanks|thank you|thx|ty|terima kasih|谢谢)\b", low):
@@ -1038,12 +1038,45 @@ class OfflineEngine:
                         "ask 'will I run out of money before tuition?'")
         return None
 
+    def _remit_reply(self, r: Dict[str, Any]) -> str:
+        """The latest money request's stage in one or two sentences; the action card under it has the timeline."""
+        L = self._lang
+        x = r.get("latest")
+        if not x:
+            return self._t("remit_none")
+        req = x["requested"]
+        amount = _money(req["amount"], req["currency"])
+        rec = x.get("receive") or {}
+        receive = _money(rec["amount"], rec["currency"]) if rec else amount
+        account = i18n.account(x.get("to_account") or "", L)
+        provider = i18n.provider(x.get("provider") or "", L)
+        if x["stage"] == "awaiting_sponsor":
+            return self._t("remit_waiting", amount=amount, reason=req.get("reason") or "-")
+        if x["stage"] == "in_transit":
+            secs = x.get("eta_in_seconds") or 0
+            eta = (self._t("remit_eta_soon") if secs < 3600 else self._t("remit_eta_today") if secs < 12 * 3600
+                   else self._t("remit_eta_date", date=i18n.date(x["eta"][:10], L)))
+            return self._t("remit_transit", receive=receive, account=account, provider=provider, eta=eta)
+        if x["stage"] == "credited":
+            ago = x.get("credited_seconds_ago") or 0
+            when = (self._t("remit_when_now") if ago < 3600
+                    else self._t("remit_when_date", date=i18n.date(x["credited_at"][:10], L)))
+            return self._t("remit_credited", receive=receive, account=account, provider=provider, when=when)
+        if x["stage"] == "rejected":
+            note = x.get("sponsor_note") or ""
+            note = (f"（“{note}”）" if L == "zh" else f' ("{note}")') if note else ""
+            return self._t("remit_rejected", amount=amount, note=note)
+        why = {"expired": "remit_why_expired", "cancelled": "remit_why_cancelled",
+               "returned": "remit_why_returned"}.get(x["stage"], "remit_why_other")
+        return self._t("remit_stopped", amount=amount, why=self._t(why))
+
     def _pending_reply(self, raw: str, acts: List[Dict[str, Any]]) -> str:
         keys = payee_keys(raw)
         if keys:
             acts = [a for a in acts if PAYEE_NAMES[keys[0]].lower() in a["summary"].lower()]
         mine = [a for a in acts if a["status"] == "awaiting_user"]
         dad = [a for a in acts if a["status"] == "awaiting_sponsor"]
+        transit = [a for a in acts if a["status"] == "in_transit"]
         approved = [a for a in acts if a["status"] == "executed" and a["needs_sponsor_approval"]]
         rejected = [a for a in acts if a["status"] == "rejected"]
         done_ = [a for a in acts if a["status"] == "executed" and not a["needs_sponsor_approval"]]
@@ -1059,6 +1092,8 @@ class OfflineEngine:
             parts.append(self._t("pending_mine", list=lst(mine)))
         if dad:
             parts.append(self._t("pending_dad", list=lst(dad)))
+        if transit:
+            parts.append(self._t("pending_transit", list=lst(transit)))
         if approved:
             parts.append(self._t("pending_approved", list=lst(approved)))
         if rejected:
@@ -1381,7 +1416,7 @@ class OfflineEngine:
                 msg += (" Tell your dad early, and ask me 'will I run out of money before tuition?' to see how long "
                         "your money lasts.")
             return msg
-        top = i18n.comma(L).join(f"{cat(c)} CAD {c['spent_cad']:,.2f}" for c in b["categories"][:5])
+        top = i18n.comma(L).join(f"{cat(c)} CAD {c['spent_cad']:,.2f}" for c in b["categories"][:3])  # card: all
         msg = self._t("spent_total", total=f"CAD {b['total_spent_cad']:,.2f}", top=top)
         if over:
             msg += self._t("spent_over", list=i18n.comma(L).join(cat(c) for c in over))
@@ -1460,39 +1495,44 @@ class OfflineEngine:
                           r"get a (credit )?card|new to canada", low)
         if build and "credit_building_plan" not in done:
             return _call("credit_building_plan", has_credit_card=bool(prof.get("has_card")), has_sin=True)
-        disclosure = last.get("disclosure", "") if L == "en" else self._t("credit_disclosure")
-        steps = lambda n: (" " if L != "zh" else "").join(  # noqa: E731
-            f"({i + 1}) {i18n.credit_step(s, L)}" for i, s in enumerate(last["steps"][:n]))
+        # The cards under the reply (credit profile, checklist) carry the detail: the reply is the verdict, the one
+        # next step with its offer, and the disclosure, in at most three sentences.
+        disclosure = self._t("credit_disclosure")
+        sp = "" if L == "zh" else " "
         if not prof.get("has_card"):
-            return _say(self._t("credit_scratch", steps=steps(5), disclosure=disclosure))
+            first = i18n.credit_step(last["steps"][0], L) if last.get("steps") else ""
+            return _say(self._t("credit_scratch", step=first, disclosure=disclosure))
         c, st = prof["card"], prof.get("statement") or {}
         rec = prof["recommended_payment"]
         card = i18n.account(c["label"], L)
+        cmd = i18n.offer("pay my card", L)
+        offer = {"offer": "pay my card"} if rec["amount"] > 0 else None
         if build:
             msg = self._t("credit_have_card", card=card, limit=f"{c['credit_limit']:,.0f}",
-                          streak=prof["on_time_streak"], months=prof["months_of_history"], steps=steps(3))
-            if prof["utilization_pct"] >= 30:
+                          streak=prof["on_time_streak"], months=prof["months_of_history"])
+            if prof["utilization_pct"] >= 30 and rec["amount"] > 0:
                 msg += self._t("credit_util_now", util=prof["utilization_pct"], amount=f"{rec['amount']:,.2f}",
-                               after=rec["utilization_after_pct"])
-            return _say(msg + ("" if L == "zh" else " ") + disclosure)
+                               after=rec["utilization_after_pct"], cmd=cmd)
+            else:
+                msg += self._t("credit_next_keep")
+            return _say(msg + sp + disclosure, state=offer)
         lead = ""
         if re.search(r"\bscore\b|评分|分数", low) and not re.search(r"improve|raise|increase|boost|build|naik|提高", low):
             lead = self._t("credit_score_lead")
         day = (lambda iso: iso) if L == "en" else (lambda iso: i18n.date(iso, L))  # noqa: E731
-        msg = self._t("credit_now", lead=lead, card=card, util=prof["utilization_pct"], balance=f"{c['balance']:,.2f}",
-                      limit=f"{c['credit_limit']:,.0f}", reported=prof["utilization_reported_pct"],
-                      streak=prof["on_time_streak"])
-        if st.get("status") == "due" and st.get("remaining"):
-            msg += self._t("credit_due", remaining=f"{st['remaining']:,.2f}", due=day(st["due_date"]),
-                           minimum=f"{st['minimum_due']:,.2f}")
+        msg = self._t("credit_now", lead=lead, your="your" if lead else "Your", card=card,
+                      util=prof["utilization_pct"], balance=f"{c['balance']:,.2f}", limit=f"{c['credit_limit']:,.0f}",
+                      streak=prof["on_time_streak"],
+                      label=i18n.health(prof["credit_health"]["key"], prof["credit_health"]["label"], L))
         if rec["amount"] > 0:
-            msg += self._t("credit_pay_rec", amount=f"{rec['amount']:,.2f}", after=rec["utilization_after_pct"],
-                           close=day(prof["next_statement_date"]), cmd=i18n.offer("pay my card", L))
+            covers = (self._t("credit_covers", remaining=f"{st['remaining']:,.2f}", due=day(st["due_date"]))
+                      if st.get("status") == "due" and st.get("remaining") else "")
+            msg += self._t("credit_pay_rec", amount=f"{rec['amount']:,.2f}", covers=covers,
+                           after=rec["utilization_after_pct"], close=day(prof["next_statement_date"]), cmd=cmd)
         else:
             msg += self._t("credit_keep")
-        msg += self._t("credit_health", label=i18n.health(prof["credit_health"]["key"],
-                                                          prof["credit_health"]["label"], L))
-        return _say(msg, state={"offer": "pay my card"} if rec["amount"] > 0 else None)
+        msg += self._t("credit_health")
+        return _say(msg, state=offer)
 
     # --------------------------------------------------------------- helpers
     @staticmethod

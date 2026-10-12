@@ -32,7 +32,7 @@ import difflib
 import re
 import time
 import unicodedata
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from .audit import AuditLog
 from .bank import Bank, mask
@@ -91,7 +91,7 @@ BNM_NOTE = ("Purpose codes modelled on Bank Negara Malaysia purpose-of-payment c
             "codes). Ringgit is non-internationalised: in production the MYR wallet is a linked account at a "
             "Malaysian licensed bank and conversions run onshore through a licensed partner.")
 COUNTRY = {"CAD": "CA", "MYR": "MY", "USD": "US"}
-LIVE = ("awaiting_user", "awaiting_sponsor", "executed")
+LIVE = ("awaiting_user", "awaiting_sponsor", "in_transit", "executed")
 
 
 def normalise_name(name: str) -> str:
@@ -191,6 +191,34 @@ class Compliance:
             out["checks"].append(_check("sanctions", "Sanctions screening", "pass",
                                         f"No match on the sample watchlist ({len(SAMPLE_WATCHLIST)} entries)"))
 
+    def _sanctions_parties(self, parties: List[Tuple[str, str]], out: Dict[str, Any]) -> None:
+        """Screens both sides of a remittance, as (role, name): the beneficiary and the originator. A hit on
+        either blocks it; a near match on either asks for manual review."""
+        results = [(role, name, screen_name(name)) for role, name in parties]
+        rank = {"hit": 2, "review": 1, "clear": 0}
+        role, name, worst = max(results, key=lambda r: rank[r[2]["status"]])
+        out["screening"] = {"name": name, "role": role, **worst}
+        if worst["status"] == "hit":
+            out["blocked"] = True
+            out["block_reason"] = (f"Sanctions screening: the {role} '{name}' matches '{worst['match']}' on the "
+                                   f"{worst['list']} watchlist (score {worst['score']:.2f}). The remittance is "
+                                   "blocked.")
+            out["checks"].append(_check("sanctions", "Sanctions screening", "block",
+                                        f"{role.capitalize()} match: {worst['match']} ({worst['list']}, "
+                                        f"{worst['score']:.0%})"))
+        elif worst["status"] == "review":
+            out["risk"] += SANCTIONS_REVIEW_RISK
+            out["risk_reasons"].append(f"The {role}'s name is close to a watchlist entry ({worst['match']}, "
+                                       f"{worst['score']:.0%}): manual review")
+            out["checks"].append(_check("sanctions", "Sanctions screening", "flag",
+                                        f"{role.capitalize()} near match: {worst['match']} ({worst['list']}, "
+                                        f"{worst['score']:.0%}). Manual review."))
+        else:
+            who = " and ".join(f"{r} {n}" for r, n, _ in results)
+            out["checks"].append(_check("sanctions", "Sanctions screening", "pass",
+                                        f"{who[0].upper() + who[1:]}: no match on the sample watchlist "
+                                        f"({len(SAMPLE_WATCHLIST)} entries)"))
+
     def _kyc_check(self, owner: str, out: Dict[str, Any], sponsor_too: bool) -> None:
         people = [self.kyc(owner)]
         sponsor = (self.bank.user(owner) or {}).get("sponsor_id")
@@ -204,7 +232,7 @@ class Compliance:
                                     detail if ok else detail + ". Money can't move until verified."))
 
     def _structuring(self, policy: "PolicyEngine", owner: str, kind: str, params: Dict[str, Any],
-                     amount_cad: float, out: Dict[str, Any]) -> None:
+                     amount_cad: float, out: Dict[str, Any], exclude_id: Optional[str] = None) -> None:
         now = time.time()
         if kind == "transfer":
             same = lambda a: a.kind == "transfer" and a.params.get("payee_id") == params["payee_id"]  # noqa: E731
@@ -215,8 +243,8 @@ class Compliance:
                               and a.params.get("from_account_id") == params["from_account_id"])
             to = (self.bank.account(params["from_account_id"]) or {}).get("label", "this account")
             noun = "conversions from"
-        prior = [a for a in policy.actions.values()
-                 if a.owner == owner and same(a) and a.status in LIVE and now - a.created_at < STRUCTURING_WINDOW]
+        prior = [a for a in policy.actions.values() if a.id != exclude_id and a.owner == owner and same(a)
+                 and a.status in LIVE and now - a.created_at < STRUCTURING_WINDOW]
         cur_key = "currency" if kind == "transfer" else "from_currency"
         total = amount_cad + sum(self._cad(a.params["amount"], a.params[cur_key]) for a in prior)
         limit = policy.limits.single_cad
@@ -232,14 +260,14 @@ class Compliance:
                                         f"{len(prior) + 1} in 24h, CAD {total:,.0f} in total: under the limit"))
 
     def _cross_border(self, policy: "PolicyEngine", owner: str, amount_cad: float, record: Dict[str, Any],
-                      out: Dict[str, Any]) -> None:
+                      out: Dict[str, Any], exclude_id: Optional[str] = None,
+                      detail: str = "Originator, beneficiary, purpose and source of funds recorded") -> None:
         out["cross_border"] = True
         out["record"] = record
-        out["checks"].append(_check("record_keeping", "Cross-border record", "pass",
-                                    "Originator, beneficiary, purpose and source of funds recorded"))
+        out["checks"].append(_check("record_keeping", "Cross-border record", "pass", detail))
         since = time.time() - 24 * 3600
-        prior = [a for a in policy.actions.values() if a.owner == owner and a.status in LIVE and
-                 a.created_at >= since and (a.compliance or {}).get("cross_border")]
+        prior = [a for a in policy.actions.values() if a.id != exclude_id and a.owner == owner and
+                 a.status in LIVE and a.created_at >= since and (a.compliance or {}).get("cross_border")]
         prior_cad = sum(float((a.compliance or {}).get("amount_cad") or 0) for a in prior)
         if amount_cad >= EFTR_THRESHOLD_CAD:
             out["reports"].append("EFTR")
@@ -271,8 +299,10 @@ class Compliance:
             return f"Sponsor allowance from parent in Malaysia ({name})"
         return "Account holder's own funds"
 
-    def assess(self, policy: "PolicyEngine", kind: str, owner: str, params: Dict[str, Any]) -> Dict[str, Any]:
-        """Runs every check that applies to this draft. Nothing here moves money or raises."""
+    def assess(self, policy: "PolicyEngine", kind: str, owner: str, params: Dict[str, Any],
+               exclude_id: Optional[str] = None) -> Dict[str, Any]:
+        """Runs every check that applies to this draft. Nothing here moves money or raises. `exclude_id` is the
+        action being re-assessed (a remittance at initiation), so it is not counted against itself."""
         out: Dict[str, Any] = {"outcome": "clear", "blocked": False, "block_reason": None, "checks": [],
                                "reports": [], "record": None, "purpose_code": None, "cross_border": False,
                                "amount_cad": 0.0, "risk": 0, "risk_reasons": [], "screened_at": round(time.time(), 3)}
@@ -325,23 +355,43 @@ class Compliance:
                 tuition = bool(dst and "tuition" in dst["label"].lower())
                 self._purpose("ED01" if tuition else "ED02", out)
         elif kind == "topup":
-            dst = self.bank.find_account(owner, params["currency"])
-            amount_cad = self._cad(params["amount"], params["currency"])
+            # A remittance from the sponsor's own ringgit account. At the request only the amount is known; once
+            # the sponsor approves, `quote` holds the locked provider, rate and amounts (remit.py), and the same
+            # checks run again with them, so the record carries the FINTRAC EFT fields.
+            dst = self.bank.account(params.get("to_account_id", "")) or self.bank.find_account(owner, params["currency"])
+            src = self.bank.find_account(sponsor_id, "MYR")
+            q = params.get("quote") or {}
+            receive = float(q.get("receive_amount") or params["amount"])
+            amount_cad = self._cad(receive, params["currency"])
             out["amount_cad"] = round(amount_cad, 2)
-            out["checks"].append(_check("sanctions", "Sanctions screening", "pass",
-                                        "Sender is the verified sponsor (screened at onboarding)"))
+            self._sanctions_parties([("beneficiary", user["name"]), ("originator", sponsor["name"])], out)
             self._kyc_check(owner, out, sponsor_too=True)
             reason = params.get("reason", "")
-            tuition = bool(re.search(r"tuition|fee|yuran|学费|sem(ester)? fee", reason, re.I))
+            tuition = bool(dst and "tuition" in dst["label"].lower()) or bool(
+                re.search(r"tuition|fee|yuran|学费|sem(ester)? fee", reason, re.I))
+            originator = {"name": sponsor["name"],
+                          "account": mask(src["number"]) if src else "sponsor's Malaysian bank account",
+                          "institution": f"{src['label'].split()[0]} (Malaysia)" if src else "",
+                          "country": "MY", "address": "Kuala Lumpur, MY"}
+            beneficiary = {**self._party(user["name"], dst, params["currency"]),
+                           "address": "Vancouver, BC, CA" if params["currency"] != "MYR" else "linked account, MY"}
+            record: Dict[str, Any] = {
+                "originator": originator, "beneficiary": beneficiary, "purpose": reason,
+                "source_of_funds": f"Sponsor's own funds ({sponsor['name']}, parent)",
+                "amount": params["amount"], "currency": params["currency"]}
+            if q:
+                record.update({"amount_sent": q["send_amount"], "sent_currency": "MYR",
+                               "amount_received": q["receive_amount"], "received_currency": q["receive_currency"],
+                               "exchange_rate": q["rate"], "intermediary": q["provider"],
+                               "reference": exclude_id or "",
+                               "value_date": time.strftime("%Y-%m-%d", time.gmtime(q.get("quoted_at") or time.time()))})
             if params["currency"] != "MYR":   # the sponsor's ringgit leaves Malaysia
-                self._cross_border(policy, owner, amount_cad, {
-                    "originator": {"name": sponsor["name"], "account": "sponsor's Malaysian bank account",
-                                   "country": "MY"},
-                    "beneficiary": self._party(user["name"], dst, params["currency"]),
-                    "purpose": reason, "source_of_funds": f"Sponsor's own funds ({sponsor['name']}, parent)",
-                    "amount": params["amount"], "currency": params["currency"]}, out)
+                detail = ("FINTRAC EFT record: originator, beneficiary, amounts, rate, intermediary and reference "
+                          "kept for 5 years" if q else "Originator, beneficiary, purpose and source of funds recorded")
+                self._cross_border(policy, owner, amount_cad, record, out, exclude_id, detail)
                 self._purpose("ED01" if tuition else "ED02", out)
             else:
+                out["record"] = record if q else None
                 out["checks"].append(_check("record_keeping", "Domestic transfer", "pass",
                                             "Within Malaysia (sponsor's bank to the linked MYR account)"))
         if out["blocked"]:
@@ -350,9 +400,9 @@ class Compliance:
             out["outcome"] = "review"
         return out
 
-    def record(self, action: "PendingAction", result: Dict[str, Any]) -> None:
+    def record(self, action: "PendingAction", result: Dict[str, Any], stage: str = "draft") -> None:
         """Audits the decision. The payee name is already in the action_drafted entry; only the match is new."""
-        self.audit.record("compliance_check", "system", action_id=action.id, kind=action.kind,
+        self.audit.record("compliance_check", "system", action_id=action.id, kind=action.kind, stage=stage,
                           outcome=result["outcome"],
                           checks={c["id"]: c["status"] for c in result["checks"]},
                           reports=result["reports"],

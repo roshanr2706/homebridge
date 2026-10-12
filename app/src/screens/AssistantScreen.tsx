@@ -77,6 +77,7 @@ const TOOL_LABEL_ZH: Record<string, string> = {
   set_budget: '设预算',
   create_reminder: '提醒',
   request_sponsor_topup: '向担保人申请',
+  get_remittance_status: '汇款进度',
   prepare_transfer: '起草付款',
   prepare_conversion: '起草兑换',
   add_payee: '新收款人',
@@ -102,6 +103,7 @@ const TOOL_LABEL: Record<string, string> = {
   set_budget: 'set budget',
   create_reminder: 'reminder',
   request_sponsor_topup: 'sponsor request',
+  get_remittance_status: 'remittance status',
   prepare_transfer: 'draft payment',
   prepare_conversion: 'draft conversion',
   add_payee: 'new payee',
@@ -222,7 +224,12 @@ export function AssistantScreen({ active }: { active: boolean }) {
       });
       for (const a of list) {
         const before = known.current[a.action_id];
-        if (announce && before === 'awaiting_sponsor' && a.status !== before) {
+        // A money request: Dad sent it (in transit), then it arrived.
+        if (announce && a.kind === 'topup' && before && a.status !== before) {
+          if (a.status === 'in_transit') toast(tr('toast.remitSent'), tr.summary(a.summary) + (a.sponsor_note ? ` · “${a.sponsor_note}”` : ''), 'ok');
+          if (a.status === 'executed') toast(tr('toast.remitArrived'), tr.summary(a.summary), 'ok');
+        }
+        if (announce && before === 'awaiting_sponsor' && a.status !== before && a.status !== 'in_transit' && !(a.kind === 'topup' && a.status === 'executed')) {
           if (a.status === 'executed') toast(tr('toast.sponsorApproved'), tr.summary(a.summary) + (a.sponsor_note ? ` · “${a.sponsor_note}”` : ''), 'ok');
           if (a.status === 'rejected') toast(tr('toast.sponsorDeclined'), tr.summary(a.summary) + (a.sponsor_note ? ` · “${a.sponsor_note}”` : ''), 'danger');
           if (a.status === 'failed') toast(tr('toast.approvedFailed'), String(a.result?.error ?? tr.summary(a.summary)), 'danger');
@@ -255,13 +262,16 @@ export function AssistantScreen({ active }: { active: boolean }) {
       const r = await api.chat(msg, sessionId);
       merge(r.actions, false);
       setChatFlags(r.guard.session_flags ?? []);
+      // "Did dad send the money?": the money requests show as their own action cards, with the live timeline.
+      const remitIds = (r.cards ?? []).flatMap((c) => (c.type === 'remittance' ? c.action_ids : []));
+      if (remitIds.length) refresh();
       setMessages((m) => [
         ...m,
         {
           id: `b${Date.now()}`,
           from: 'bot',
           text: r.reply,
-          actionIds: r.actions.map((a) => a.action_id),
+          actionIds: [...new Set([...r.actions.map((a) => a.action_id), ...remitIds])],
           cards: r.cards ?? [],
           flags: r.guard.flags,
           tools: r.trace.map((x) => x.tool),

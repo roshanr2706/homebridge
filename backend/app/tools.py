@@ -436,14 +436,35 @@ def create_reminder(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     return {"ok": True, "reminder_id": rid, "due_date": d.isoformat()}
 
 
-@tool("request_sponsor_topup", "Ask the sponsor (parent) to send money, with a reason. The sponsor decides in their app.",
-      {"amount": {"type": "number"}, "currency": {"type": "string", "enum": ["MYR", "CAD"]},
-       "reason": {"type": "string"}}, ["amount", "reason"], tier="T1")
+@tool("request_sponsor_topup",
+      "Ask the sponsor (parent) to send money, with a reason. The sponsor decides in their app; if he approves, he "
+      "sends it from his own Malaysian bank account through the transfer service he picks, and it arrives in the "
+      "destination account. The result shows the request's status; use get_remittance_status later to track it.",
+      {"amount": {"type": "number", "description": "Amount the student should receive, in `currency`"},
+       "currency": {"type": "string", "enum": ["MYR", "CAD"]},
+       "reason": {"type": "string"},
+       "destination": {"type": "string", "enum": ["everyday", "tuition", "wallet"],
+                       "description": "Where the money lands: 'everyday' (CAD Everyday, default for CAD), 'tuition' "
+                                      "(CAD Tuition Fund; default when the reason is tuition or fees) or 'wallet' "
+                                      "(MYR Wallet, the only choice for MYR)"}},
+      ["amount", "reason"], tier="T1")
 def request_sponsor_topup(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     act = ctx.policy.draft_topup_request(ctx.user_id, ctx.session_id, _num(a["amount"]),
-                                         a.get("currency") or "CAD", str(a["reason"]))
+                                         a.get("currency") or "CAD", str(a["reason"]),
+                                         str(a.get("destination") or ""))
     ctx.created_actions.append(act)
-    return {"action": act.for_model()}
+    return {"action": act.for_model(), "remittance": ctx.policy.remit.view(act)}
+
+
+@tool("get_remittance_status",
+      "Where the money the student asked the sponsor for is: waiting for the sponsor, on its way (the transfer "
+      "service he chose, the locked amount, the account it lands in and when it is expected), credited, or "
+      "declined. Newest request first. Read-only.", {})
+def get_remittance_status(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
+    acts = [x for x in ctx.policy.list_for(ctx.user_id) if x.kind == "topup"]   # reading also settles arrivals
+    items = [ctx.policy.remit.view(x) for x in reversed(acts)][:5]
+    return {"remittances": items, "latest": items[0] if items else None, "count": len(acts),
+            "note": "Amounts are what arrives in the student's account; the sponsor's own balance is never shown."}
 
 
 # ------------------------------------------------------------- T2/T3 drafts

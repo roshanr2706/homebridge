@@ -130,11 +130,71 @@ TEXT: Dict[str, Dict[str, str]] = {
         "ms": "{lead}Boleh: {account} ada {balance}, cukup untuk {amount} kepada {payee}. Sebut '{cmd}' dan saya akan "
               "sediakan draf untuk anda sahkan.",
     },
-    "topup_sent": {"en": " You'll see the money once they approve.", "zh": "爸爸批准后你就会收到这笔钱。",
-                   "ms": " Anda akan terima wang itu selepas dia luluskan."},
+    "topup_sent": {
+        "en": " When he approves, he picks the transfer service and it lands in your {account}; ask me 'did dad send "
+              "the money?' any time to track it.",
+        "zh": "他批准时会选择汇款方式，钱会到你的{account}；随时问我“爸爸的钱到了吗？”就能查进度。",
+        "ms": " Bila dia luluskan, dia pilih perkhidmatan pindahan dan wang masuk ke {account} anda; tanya saya "
+              "'duit ayah dah masuk?' bila-bila masa untuk semak.",
+    },
+    # Remittance status (get_remittance_status). The card under the reply shows the timeline.
+    "remit_none": {
+        "en": "You haven't asked your dad for money recently, so nothing is on its way. Say 'ask my dad for 500 for "
+              "textbooks' to send him a request.",
+        "zh": "你最近没有向爸爸要钱，所以没有在路上的汇款。说“问爸爸要500加币买课本”就能发请求。",
+        "ms": "Anda belum minta duit daripada ayah baru-baru ini, jadi tiada wang dalam perjalanan. Sebut 'minta ayah "
+              "500 untuk buku' untuk hantar permintaan.",
+    },
+    "remit_waiting": {
+        "en": "Not yet: your request for {amount} ({reason}) is waiting for your dad to approve in his app, and nothing "
+              "has been sent.",
+        "zh": "还没有：你申请的 {amount}（{reason}）正在等爸爸在他的 App 里批准，钱还没有汇出。",
+        "ms": "Belum: permintaan {amount} ({reason}) anda sedang menunggu ayah luluskan dalam app dia, dan belum ada "
+              "wang dihantar.",
+    },
+    "remit_transit": {
+        "en": "Yes, your dad sent it: {receive} is on its way to your {account} via {provider}, arriving {eta}. The "
+              "amount and rate are locked.",
+        "zh": "爸爸已经汇出：{receive} 正通过{provider}汇往你的{account}，预计{eta}到账。金额和汇率已锁定。",
+        "ms": "Ya, ayah dah hantar: {receive} dalam perjalanan ke {account} anda melalui {provider}, dijangka sampai "
+              "{eta}. Jumlah dan kadar sudah dikunci.",
+    },
+    "remit_credited": {
+        "en": "Yes, it's arrived: {receive} from your dad landed in your {account} {when}, sent via {provider}.",
+        "zh": "已到账：爸爸汇来的 {receive} {when}存入了你的{account}（经{provider}）。",
+        "ms": "Ya, dah masuk: {receive} daripada ayah sudah masuk ke {account} anda {when}, melalui {provider}.",
+    },
+    "remit_rejected": {
+        "en": "Your dad declined your request for {amount}{note}, so nothing was sent.",
+        "zh": "爸爸拒绝了你 {amount} 的申请{note}，所以没有汇款。",
+        "ms": "Ayah anda menolak permintaan {amount}{note}, jadi tiada wang dihantar.",
+    },
+    "remit_stopped": {
+        "en": "Your request for {amount} didn't go through ({why}), so nothing arrived. Ask me again if you still "
+              "need it.",
+        "zh": "你 {amount} 的申请没有完成（{why}），所以没有到账。如果还需要，可以再让我发一次请求。",
+        "ms": "Permintaan {amount} anda tidak berjaya ({why}), jadi tiada wang masuk. Minta saya lagi jika masih perlu.",
+    },
+    "remit_eta_soon": {"en": "any moment now", "zh": "马上", "ms": "sebentar lagi"},
+    "remit_eta_today": {"en": "later today", "zh": "今天稍后", "ms": "hari ini"},
+    "remit_eta_date": {"en": "by {date}", "zh": "在 {date} 前", "ms": "menjelang {date}"},
+    "remit_when_now": {"en": "just now", "zh": "刚刚", "ms": "sebentar tadi"},
+    "remit_when_date": {"en": "on {date}", "zh": "于 {date}", "ms": "pada {date}"},
+    "remit_why_expired": {"en": "it expired before your dad answered", "zh": "爸爸回复前已过期",
+                          "ms": "ia tamat tempoh sebelum ayah jawab"},
+    "remit_why_cancelled": {"en": "you withdrew it", "zh": "你撤回了", "ms": "anda menariknya balik"},
+    "remit_why_returned": {"en": "the money went back to your dad", "zh": "钱已退回爸爸",
+                           "ms": "wang dipulangkan kepada ayah"},
+    "remit_why_other": {"en": "the transfer was stopped", "zh": "汇款被中止", "ms": "pindahan dihentikan"},
+    "pending_transit": {"en": "On its way from your dad: {list}", "zh": "爸爸已汇出、正在路上：{list}",
+                        "ms": "Dalam perjalanan daripada ayah: {list}"},
     # Balances
-    "balances": {"en": "Your balances: {parts}. Total is about {total}.", "zh": "你的余额：{parts}。合计约 {total}。",
-                 "ms": "Baki anda: {parts}. Jumlah kira-kira {total}."},
+    # The balances card lists every account; the reply gives the spending money and the total.
+    "balances": {"en": "Your balances: {account} has {main} for day-to-day spending. Total is about {total} across "
+                       "all your accounts.",
+                 "zh": "你的余额：{account}有 {main} 可用于日常开销。所有账户合计约 {total}。",
+                 "ms": "Baki anda: {account} ada {main} untuk belanja harian. Jumlah kira-kira {total} untuk semua "
+                       "akaun."},
     # Scam shield
     "scam_none": {
         "en": "I don't see common scam signs in that message. It still makes sense to check it against the "
@@ -570,32 +630,35 @@ TEXT: Dict[str, Dict[str, str]] = {
                    "ms": "Siap. Bajet {category} anda kini CAD {amount} sebulan."},
     "payees_list": {"en": "Your saved payees: {list}.", "zh": "你保存的收款人：{list}。",
                     "ms": "Penerima yang disimpan: {list}."},
-    "tx_list": {"en": "Recent transactions: {list}.", "zh": "最近的交易：{list}。", "ms": "Transaksi terkini: {list}."},
+    "tx_list": {"en": "Here are your latest {n} transactions; the most recent is {latest}.",
+                "zh": "以下是你最近的 {n} 笔交易；最新一笔是 {latest}。",
+                "ms": "Ini {n} transaksi terkini anda; yang terbaru ialah {latest}."},
     # Credit Builder
+    # The credit card under the reply shows utilization, the statement, the streak and the next steps; the reply
+    # gives the verdict, the one next step and the offer, then the disclosure.
     "credit_score_lead": {
-        "en": "I can't see your credit score: HomeBridge doesn't pull a bureau score, and you can get yours free from "
-              "Equifax or TransUnion Canada. Here's what I can see from your secured card. ",
-        "zh": "我看不到你的信用评分：HomeBridge 不会查询征信机构的评分，你可以在 Equifax 或 TransUnion Canada 免费查询。以下是我从你的有担保信用卡看到的情况。",
-        "ms": "Saya tak nampak skor kredit anda: HomeBridge tidak menarik skor biro, dan anda boleh dapatkannya "
-              "percuma daripada Equifax atau TransUnion Canada. Ini yang saya nampak dari kad bercagar anda. ",
+        "en": "I can't see your credit score (HomeBridge doesn't pull one; Equifax and TransUnion Canada show it "
+              "free), but ",
+        "zh": "我看不到你的信用评分（HomeBridge 不查询征信评分，可在 Equifax 或 TransUnion Canada 免费查询），不过",
+        "ms": "Saya tak nampak skor kredit anda (HomeBridge tidak menarik skor; Equifax dan TransUnion Canada "
+              "tunjukkannya percuma), tetapi ",
     },
     "credit_now": {
-        "en": "{lead}Your {card} is at {util}% utilization (CAD {balance} of CAD {limit}); your last statement "
-              "reported {reported}%. You've paid {streak} statements on time in a row.",
-        "zh": "{lead}你的 {card} 目前使用率为 {util}%（CAD {balance} / CAD {limit}）；上一期账单上报的是 {reported}%。你已经连续 "
-              "{streak} 期按时还款。",
-        "ms": "{lead}{card} anda pada penggunaan {util}% (CAD {balance} daripada CAD {limit}); penyata lepas "
-              "melaporkan {reported}%. Anda telah bayar {streak} penyata tepat pada masa berturut-turut.",
+        "en": "{lead}{your} {card} is at {util}% utilization (CAD {balance} of CAD {limit}); you've paid {streak} "
+              "statements on time in a row, and its simulated health is {label}.",
+        "zh": "{lead}你的 {card} 目前使用率为 {util}%（CAD {balance} / CAD {limit}），已连续 {streak} 期按时还款，模拟信用健康度为{label}。",
+        "ms": "{lead}{card} anda pada penggunaan {util}% (CAD {balance} daripada CAD {limit}); anda telah bayar "
+              "{streak} penyata tepat pada masa berturut-turut, dan kesihatan kredit simulasinya {label}.",
     },
-    "credit_due": {"en": " Your CAD {remaining} statement is due {due} (minimum CAD {minimum}).",
-                   "zh": "你 CAD {remaining} 的账单 {due} 到期（最低还款 CAD {minimum}）。",
-                   "ms": " Penyata CAD {remaining} anda perlu dibayar {due} (minimum CAD {minimum})."},
+    "credit_covers": {"en": "covers your CAD {remaining} statement due {due} and ",
+                      "zh": "可还清 {due} 到期的 CAD {remaining} 账单，并",
+                      "ms": "menampung penyata CAD {remaining} yang perlu dibayar {due} dan "},
     "credit_pay_rec": {
-        "en": " Paying CAD {amount} now covers it and keeps what's reported under 30% ({after}%) when the statement "
-              "closes on {close}. Say '{cmd}' and I'll draft it.",
-        "zh": "现在还 CAD {amount} 就能还清，并让 {close} 账单日上报的使用率低于 30%（{after}%）。说“{cmd}”，我就帮你起草。",
-        "ms": " Bayar CAD {amount} sekarang untuk menampungnya dan kekalkan laporan di bawah 30% ({after}%) apabila "
-              "penyata ditutup pada {close}. Sebut '{cmd}' dan saya akan sediakan draf.",
+        "en": " Paying CAD {amount} now {covers}keeps what's reported under 30% ({after}%) when the statement closes "
+              "on {close}; say '{cmd}' and I'll draft it.",
+        "zh": "现在还 CAD {amount}，{covers}让 {close} 账单日上报的使用率低于 30%（{after}%）；说“{cmd}”，我就帮你起草。",
+        "ms": " Bayar CAD {amount} sekarang {covers}kekalkan laporan di bawah 30% ({after}%) apabila penyata ditutup "
+              "pada {close}; sebut '{cmd}' dan saya akan sediakan draf.",
     },
     "credit_keep": {
         "en": " Keep the balance under 30% of the limit when the statement closes, and keep paying on time.",
@@ -603,34 +666,36 @@ TEXT: Dict[str, Dict[str, str]] = {
         "ms": " Kekalkan baki di bawah 30% had semasa penyata ditutup, dan terus bayar tepat pada masa.",
     },
     "credit_health": {
-        "en": " Simulated credit health: {label}. This is not a credit score; it's general information from your "
-              "sandbox card, not personalised advice, and HomeBridge is not a licensed adviser.",
-        "zh": "模拟信用健康度：{label}。这不是信用评分；这是基于你沙盒卡片的一般信息，不构成个性化建议，HomeBridge 也不是持牌顾问。",
-        "ms": " Kesihatan kredit simulasi: {label}. Ini bukan skor kredit; ini maklumat umum daripada kad sandbox "
-              "anda, bukan nasihat peribadi, dan HomeBridge bukan penasihat berlesen.",
+        "en": " This is not a credit score or personalised advice, and HomeBridge is not a licensed adviser.",
+        "zh": "这不是信用评分，也不构成个性化建议；HomeBridge 不是持牌顾问。",
+        "ms": " Ini bukan skor kredit atau nasihat peribadi, dan HomeBridge bukan penasihat berlesen.",
     },
     "credit_have_card": {
-        "en": "You already have the usual first step: your {card}, a secured card with a CAD {limit} limit backed by "
-              "your deposit, reporting to the bureaus. You've paid {streak} statements on time over {months} months. "
-              "From here: {steps}",
-        "zh": "你已经迈出了第一步：你的 {card} 是一张额度 CAD {limit} 的有担保信用卡，由你的押金担保，并会向征信机构报告。你在 {months} 个月里已按时还款 "
-              "{streak} 期。接下来：{steps}",
+        "en": "You already have the usual first step: your {card}, a secured card with a CAD {limit} limit that "
+              "reports to the bureaus, and you've paid {streak} statements on time over {months} months.",
+        "zh": "你已经迈出了第一步：你的 {card} 是一张额度 CAD {limit} 的有担保信用卡，会向征信机构报告，你在 {months} 个月里已按时还款 {streak} 期。",
         "ms": "Anda sudah ada langkah pertama yang biasa: {card} anda, kad kredit bercagar dengan had CAD {limit} "
-              "yang dijamin deposit anda dan melapor kepada biro. Anda telah bayar {streak} penyata tepat pada masa "
-              "dalam {months} bulan. Seterusnya: {steps}",
+              "yang melapor kepada biro, dan anda telah bayar {streak} penyata tepat pada masa dalam {months} bulan.",
     },
     "credit_util_now": {
-        "en": " Right now you're at {util}% of your limit, so paying CAD {amount} would bring you to {after}%.",
-        "zh": "你现在用了额度的 {util}%，还 CAD {amount} 就能降到 {after}%。",
-        "ms": " Sekarang anda pada {util}% had anda, jadi bayar CAD {amount} akan turunkannya ke {after}%.",
+        "en": " Next, bring utilization down: you're at {util}%, and paying CAD {amount} takes you to {after}% (say "
+              "'{cmd}' and I'll draft it).",
+        "zh": "下一步是降低使用率：你现在是 {util}%，还 CAD {amount} 就能降到 {after}%（说“{cmd}”，我就帮你起草）。",
+        "ms": " Seterusnya, turunkan penggunaan: anda pada {util}%, dan bayar CAD {amount} membawa anda ke {after}% "
+              "(sebut '{cmd}' dan saya akan sediakan draf).",
     },
-    "credit_scratch": {"en": "Here's how to build credit from scratch: {steps} {disclosure}",
-                       "zh": "从零开始建立信用的方法：{steps}{disclosure}",
-                       "ms": "Cara membina kredit dari awal: {steps} {disclosure}"},
+    "credit_next_keep": {
+        "en": " Next, keep it under 30% and paid on time; the checklist below has the rest.",
+        "zh": "下一步：保持使用率低于 30% 并按时还款；其余步骤见下方清单。",
+        "ms": " Seterusnya, kekalkan di bawah 30% dan bayar tepat pada masa; senarai semak di bawah ada selebihnya.",
+    },
+    "credit_scratch": {"en": "Start with this: {step} The checklist below has the rest. {disclosure}",
+                       "zh": "先从这一步开始：{step}其余步骤见下方清单。{disclosure}",
+                       "ms": "Mulakan dengan ini: {step} Senarai semak di bawah ada selebihnya. {disclosure}"},
     "credit_disclosure": {
-        "en": "General information, not personalised financial advice. HomeBridge is not a licensed adviser.",
-        "zh": "以上为一般信息，不构成个性化理财建议。HomeBridge 不是持牌顾问。",
-        "ms": "Maklumat umum, bukan nasihat kewangan peribadi. HomeBridge bukan penasihat berlesen.",
+        "en": "General information, not personalised financial advice; HomeBridge is not a licensed adviser.",
+        "zh": "以上为一般信息，不构成个性化理财建议；HomeBridge 不是持牌顾问。",
+        "ms": "Maklumat umum, bukan nasihat kewangan peribadi; HomeBridge bukan penasihat berlesen.",
     },
     "card_after": {
         "en": " Once it goes through, your card balance drops to CAD {balance}, {util}% of your limit",
@@ -650,17 +715,18 @@ TEXT: Dict[str, Dict[str, str]] = {
         "zh": "只还最低额能保住按时还款记录，但账单余下部分会产生利息。",
         "ms": " Bayaran minimum mengekalkan rekod tepat masa, tetapi faedah dikenakan pada baki penyata.",
     },
-    # Forecast (zh and ms; English uses the tool's own suggestion text)
+    # Forecast. The runway card shows the chart, every suggestion and the tuition markers; the reply is the
+    # verdict, the single most useful next step and the offer, in at most three sentences.
     "fc_short": {
-        "en": "Not quite. On your usual spending, {account} dips below zero on {date} (lowest {lowest} on {low_date})",
-        "zh": "不太够。按你平时的花销，{account}会在 {date} 跌破零（最低 {lowest}，在 {low_date}）",
-        "ms": "Tak cukup. Ikut perbelanjaan biasa anda, {account} jatuh bawah sifar pada {date} (paling rendah "
+        "en": "Not quite: on your usual spending, {account} dips below zero on {date} (lowest {lowest} on {low_date})",
+        "zh": "不太够：按你平时的花销，{account}会在 {date} 跌破零（最低 {lowest}，在 {low_date}）",
+        "ms": "Tak cukup: ikut perbelanjaan biasa anda, {account} jatuh bawah sifar pada {date} (paling rendah "
               "{lowest} pada {low_date})",
     },
     "fc_ok": {
-        "en": "{verdict}. Your spending money lasts to {end}: the lowest point is {lowest} on {low_date}",
-        "zh": "{verdict}。你的日常开销能撑到 {end}：最低点是 {lowest}（{low_date}）",
-        "ms": "{verdict}. Wang belanja anda cukup sehingga {end}: paling rendah {lowest} pada {low_date}",
+        "en": "{verdict}: your spending money lasts to {end}, with the lowest point {lowest} on {low_date}",
+        "zh": "{verdict}：你的日常开销能撑到 {end}，最低点是 {lowest}（{low_date}）",
+        "ms": "{verdict}: wang belanja anda cukup sehingga {end}, paling rendah {lowest} pada {low_date}",
     },
     "fc_yes": {"en": "Yes", "zh": "够用", "ms": "Cukup"},
     "fc_mostly": {"en": "Mostly", "zh": "基本够用", "ms": "Hampir cukup"},
@@ -671,41 +737,39 @@ TEXT: Dict[str, Dict[str, str]] = {
     },
     "fc_and": {"en": "and", "zh": "而且", "ms": "dan"},
     "fc_but": {"en": "but", "zh": "不过", "ms": "tetapi"},
-    "fc_gap2": {"en": " (and {term} on {due} is not funded yet).", "zh": "（{due} 到期的{term}也还没有资金）。",
-                "ms": " (dan {term} pada {due} belum ada dana)."},
     "fc_covered": {"en": ", and your tuition fund covers the installment due {due}.",
                    "zh": "，学费基金够付 {due} 到期的那一期。",
                    "ms": ", dan dana yuran anda cukup untuk ansuran yang perlu dibayar {due}."},
     "fc_tip_convert": {
-        "en": "Convert about MYR {myr} into your {dest} by {by} to {why}. Cheapest: {provider} (true cost {pct}%).",
-        "zh": "在 {by} 前把约 MYR {myr} 换入你的{dest}，{why}。最便宜：{provider}（真实成本 {pct}%）。",
-        "ms": "Tukar kira-kira MYR {myr} ke dalam {dest} anda sebelum {by} untuk {why}. Paling murah: {provider} "
-              "(kos sebenar {pct}%).",
+        "en": " Next step: convert about MYR {myr} into your {dest} by {by} to {why}; {provider} is cheapest ({pct}% "
+              "true cost).",
+        "zh": "下一步：在 {by} 前把约 MYR {myr} 换入你的{dest}，{why}；{provider}最便宜（真实成本 {pct}%）。",
+        "ms": " Langkah seterusnya: tukar kira-kira MYR {myr} ke dalam {dest} anda sebelum {by} untuk {why}; "
+              "{provider} paling murah (kos sebenar {pct}%).",
     },
     "fc_why_gap": {"en": "cover the CAD {gap} tuition gap", "zh": "以补上 CAD {gap} 的学费缺口",
                    "ms": "menampung kekurangan yuran CAD {gap}"},
     "fc_why_zero": {"en": "stay above zero", "zh": "让余额保持在零以上", "ms": "kekal di atas sifar"},
-    "fc_tip_cut_dining": {"en": "Cut dining by about CAD {n} a week; that alone keeps you above zero.",
-                          "zh": "每周在外出就餐上少花约 CAD {n}，单这一项就能让余额保持为正。",
-                          "ms": "Kurangkan makan di luar kira-kira CAD {n} seminggu; itu sahaja cukup untuk kekal "
-                                "di atas sifar."},
-    "fc_tip_cut_all": {"en": "Cut day-to-day spending by about CAD {n} a week; that alone keeps you above zero.",
-                       "zh": "每周日常开销减少约 CAD {n}，单这一项就能让余额保持为正。",
-                       "ms": "Kurangkan perbelanjaan harian kira-kira CAD {n} seminggu; itu sahaja cukup untuk kekal "
-                             "di atas sifar."},
-    "fc_tip_ask": {"en": "Ask your sponsor for a top-up before {date}.", "zh": "在 {date} 之前请爸爸补一笔钱。",
-                   "ms": "Minta penaja tambah duit sebelum {date}."},
+    "fc_tip_cut_dining": {"en": " Next step: cut dining by about CAD {n} a week, which alone keeps you above zero.",
+                          "zh": "下一步：每周在外出就餐上少花约 CAD {n}，单这一项就能让余额保持为正。",
+                          "ms": " Langkah seterusnya: kurangkan makan di luar kira-kira CAD {n} seminggu; itu sahaja "
+                                "cukup untuk kekal di atas sifar."},
+    "fc_tip_cut_all": {"en": " Next step: cut day-to-day spending by about CAD {n} a week, which alone keeps you "
+                             "above zero.",
+                       "zh": "下一步：每周日常开销减少约 CAD {n}，单这一项就能让余额保持为正。",
+                       "ms": " Langkah seterusnya: kurangkan perbelanjaan harian kira-kira CAD {n} seminggu; itu "
+                             "sahaja cukup untuk kekal di atas sifar."},
+    "fc_tip_ask": {"en": " Next step: ask your dad for a top-up before {date}.", "zh": "下一步：在 {date} 之前请爸爸补一笔钱。",
+                   "ms": " Langkah seterusnya: minta ayah tambah duit sebelum {date}."},
     "fc_tip_buffer": {
-        "en": "Your spending money stays above zero, but only just: {lowest} on {low_date}. Keeping dining near its "
-              "budget leaves more room.",
-        "zh": "你的余额能保持为正，但很紧：{low_date} 只剩 {lowest}。把外出就餐控制在预算内会更宽松。",
-        "ms": "Wang belanja anda kekal di atas sifar, tetapi tipis: {lowest} pada {low_date}. Kekalkan makan di luar "
-              "dalam bajet untuk lebih ruang.",
+        "en": " It's tight, so keeping dining near its budget leaves more room.",
+        "zh": "余额比较紧，把外出就餐控制在预算内会更宽松。",
+        "ms": " Ia agak tipis, jadi kekalkan makan di luar dalam bajet untuk lebih ruang.",
     },
     "fc_end_offer": {
-        "en": " I haven't moved any money. Say '{offer}' and I'll draft that conversion for you to confirm.",
-        "zh": "我没有动任何钱。说“{offer}”，我就起草这笔兑换，由你确认。",
-        "ms": " Saya belum pindahkan apa-apa wang. Sebut '{offer}' dan saya akan sediakan draf pertukaran itu untuk "
+        "en": " I haven't moved any money; say '{offer}' and I'll draft that conversion for you to confirm.",
+        "zh": "我没有动任何钱；说“{offer}”，我就起草这笔兑换，由你确认。",
+        "ms": " Saya belum pindahkan apa-apa wang; sebut '{offer}' dan saya akan sediakan draf pertukaran itu untuk "
               "anda sahkan.",
     },
     "fc_end_ask": {"en": " I haven't moved any money; ask me if you want that conversion drafted for you to confirm.",
@@ -840,16 +904,20 @@ CATEGORIES = {
 }
 PROVIDERS = {
     "zh": {"HomeBridge wallet conversion": "HomeBridge 钱包内兑换", "Low-cost transfer service": "低成本汇款服务",
-           "Bank telegraphic transfer": "银行电汇", "Airport money changer": "机场换汇柜台"},
+           "Bank telegraphic transfer": "银行电汇", "Airport money changer": "机场换汇柜台",
+           "Express remittance service": "快速汇款服务", "Instant domestic transfer": "境内即时转账",
+           "Interbank GIRO transfer": "银行间 GIRO 转账"},
     "ms": {"HomeBridge wallet conversion": "pertukaran dompet HomeBridge",
            "Low-cost transfer service": "perkhidmatan pindahan kos rendah",
-           "Bank telegraphic transfer": "pindahan telegrafik bank", "Airport money changer": "pengurup wang lapangan terbang"},
+           "Bank telegraphic transfer": "pindahan telegrafik bank", "Airport money changer": "pengurup wang lapangan terbang",
+           "Express remittance service": "perkhidmatan kiriman wang ekspres",
+           "Instant domestic transfer": "pindahan segera dalam negara", "Interbank GIRO transfer": "pindahan GIRO antara bank"},
 }
 SPEEDS = {
     "zh": {"instant": "即时到账", "1 business day": "1 个工作日", "2 to 4 business days": "2 至 4 个工作日",
-           "in person": "需现场办理"},
+           "in person": "需现场办理", "same day": "当天到账"},
     "ms": {"instant": "segera", "1 business day": "1 hari bekerja", "2 to 4 business days": "2 hingga 4 hari bekerja",
-           "in person": "secara bersemuka"},
+           "in person": "secara bersemuka", "same day": "hari yang sama"},
 }
 HEALTH = {
     "zh": {"needs_attention": "需要注意", "fair": "一般", "on_track": "良好", "strong": "优秀"},
