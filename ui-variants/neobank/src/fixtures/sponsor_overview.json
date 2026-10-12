@@ -1,0 +1,266 @@
+{
+ "student": {
+  "id": "aisha",
+  "name": "Aisha Rahman"
+ },
+ "accounts": [
+  {
+   "id": "acc_myr",
+   "label": "MYR Wallet",
+   "currency": "MYR",
+   "balance": 18200.0,
+   "number": "••••3341",
+   "sponsor_funded": true
+  },
+  {
+   "id": "acc_tui",
+   "label": "CAD Tuition Fund",
+   "currency": "CAD",
+   "balance": 6000.0,
+   "number": "••••8812",
+   "sponsor_funded": true
+  }
+ ],
+ "total_cad": 11889.52,
+ "limits": {
+  "single_cad": 1500.0,
+  "daily_cad": 3000.0,
+  "payee_cooling_seconds": 60,
+  "pending_ttl_seconds": 600,
+  "drafts_per_hour": 20,
+  "sponsor_risk_threshold": 50
+ },
+ "recent": [
+  {
+   "action_id": "act_d7c5f40bc2",
+   "kind": "transfer",
+   "summary": "Pay CAD 7,250.00 to UBC Student Financial Services from CAD Tuition Fund",
+   "tier": "T3",
+   "status": "awaiting_sponsor",
+   "needs_sponsor_approval": true,
+   "risk_score": 0,
+   "warnings": [
+    "Balance in CAD Tuition Fund is lower than this amount right now; it will fail unless topped up first."
+   ],
+   "next_step": "Waiting for the sponsor to approve in their own app.",
+   "compliance": {
+    "outcome": "clear",
+    "blocked": false,
+    "block_reason": null,
+    "checks": [
+     {
+      "id": "sanctions",
+      "label": "Sanctions screening",
+      "status": "pass",
+      "detail": "No match on the sample watchlist (12 entries)"
+     },
+     {
+      "id": "kyc",
+      "label": "Identity (KYC)",
+      "status": "pass",
+      "detail": "Aisha: verified (basic) · Rahman: verified (full)"
+     },
+     {
+      "id": "structuring",
+      "label": "Structuring detection",
+      "status": "pass",
+      "detail": "No split payments in the last 24h"
+     }
+    ],
+    "reports": [],
+    "record": null,
+    "purpose_code": null,
+    "cross_border": false,
+    "amount_cad": 7250.0,
+    "screened_at": 1791787682.63
+   },
+   "params": {
+    "payee_id": "py_ubc",
+    "payee_name": "UBC Student Financial Services",
+    "amount": 7250.0,
+    "currency": "CAD",
+    "from_account_id": "acc_tui",
+    "from_account": "CAD Tuition Fund",
+    "memo": "Winter Term 2, installment 1"
+   },
+   "risk_reasons": [
+    "Amount above the single-payment limit of CAD 1,500",
+    "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+    "Paid from a sponsor-funded account (CAD Tuition Fund)"
+   ],
+   "sponsor_reasons": [
+    "Amount above the single-payment limit of CAD 1,500",
+    "Would exceed the 24h limit of CAD 3,000 (already CAD 1,150.00 sent or pending)",
+    "Paid from a sponsor-funded account (CAD Tuition Fund)"
+   ],
+   "risk_signals": [],
+   "created_at": 1791787682.6311045,
+   "expires_at": 1791874082.6825237,
+   "user_confirmed": true,
+   "sponsor_decision": null,
+   "sponsor_note": "",
+   "result": null,
+   "provenance": {
+    "amount": "user"
+   },
+   "frozen": null
+  },
+  {
+   "action_id": "act_662767b907",
+   "kind": "conversion",
+   "summary": "Convert MYR 3,888.00 to about CAD 1,250.61 (MYR Wallet to CAD Tuition Fund)",
+   "tier": "T2",
+   "status": "awaiting_user",
+   "needs_sponsor_approval": false,
+   "risk_score": 0,
+   "warnings": [
+    "Rate 0.32166 includes a 0.6% margin over mid-market (0.3236)."
+   ],
+   "next_step": "The user must review and tap Confirm in the app. You cannot confirm it.",
+   "compliance": {
+    "outcome": "clear",
+    "blocked": false,
+    "block_reason": null,
+    "checks": [
+     {
+      "id": "sanctions",
+      "label": "Sanctions screening",
+      "status": "pass",
+      "detail": "Both sides are the account holder's own accounts (screened at onboarding)"
+     },
+     {
+      "id": "kyc",
+      "label": "Identity (KYC)",
+      "status": "pass",
+      "detail": "Aisha: verified (basic) · Rahman: verified (full)"
+     },
+     {
+      "id": "structuring",
+      "label": "Structuring detection",
+      "status": "pass",
+      "detail": "No split payments in the last 24h"
+     },
+     {
+      "id": "record_keeping",
+      "label": "Cross-border record",
+      "status": "pass",
+      "detail": "Originator, beneficiary, purpose and source of funds recorded"
+     },
+     {
+      "id": "eftr",
+      "label": "FINTRAC EFTR",
+      "status": "pass",
+      "detail": "Below the CAD 10,000 reporting threshold (24h total CAD 1,258)"
+     },
+     {
+      "id": "bnm_purpose",
+      "label": "BNM purpose code",
+      "status": "pass",
+      "detail": "ED01: Education: tuition and course fees abroad"
+     }
+    ],
+    "reports": [],
+    "record": {
+     "originator": {
+      "name": "Aisha Rahman",
+      "account": "••••3341",
+      "institution": "linked Malaysian bank account",
+      "country": "MY"
+     },
+     "beneficiary": {
+      "name": "Aisha Rahman",
+      "account": "••••8812",
+      "institution": "HomeBridge (Canada)",
+      "country": "CA"
+     },
+     "purpose": "Education: tuition and course fees abroad",
+     "source_of_funds": "Sponsor allowance from parent in Malaysia (Rahman bin Ismail)",
+     "amount": 3888.0,
+     "currency": "MYR",
+     "purpose_code": "ED01"
+    },
+    "purpose_code": {
+     "code": "ED01",
+     "label": "Education: tuition and course fees abroad"
+    },
+    "cross_border": true,
+    "amount_cad": 1258.16,
+    "screened_at": 1791787682.674
+   },
+   "params": {
+    "from_account_id": "acc_myr",
+    "to_account_id": "acc_tui",
+    "amount": 3888.0,
+    "from_currency": "MYR",
+    "to_currency": "CAD",
+    "rate": 0.32166,
+    "expected_receive": 1250.61,
+    "uses_sponsor_money": true
+   },
+   "risk_reasons": [],
+   "sponsor_reasons": [],
+   "risk_signals": [],
+   "created_at": 1791787682.6744719,
+   "expires_at": 1791788282.6744719,
+   "user_confirmed": false,
+   "sponsor_decision": null,
+   "sponsor_note": "",
+   "result": null,
+   "provenance": {},
+   "frozen": null
+  }
+ ],
+ "freeze": {
+  "frozen": false,
+  "own": null,
+  "sponsor_funded": null,
+  "since": null
+ },
+ "alerts": [],
+ "digest": {
+  "window_hours": 24,
+  "drafted": 3,
+  "executed": 1,
+  "awaiting_sponsor": 1,
+  "stopped": 0,
+  "money_out_cad": 0,
+  "money_out_scope": "sponsor_funded",
+  "flagged": [],
+  "alerts": 0,
+  "frozen": false
+ },
+ "kyc": {
+  "student": {
+   "user_id": "aisha",
+   "level": "verified_basic",
+   "label": "Verified (basic)",
+   "moves_money": true,
+   "verified_on": "2025-08-14",
+   "max_single_cad": 5000,
+   "max_daily_cad": 10000
+  },
+  "sponsor": {
+   "user_id": "rahman",
+   "level": "verified_full",
+   "label": "Verified (full)",
+   "moves_money": true,
+   "verified_on": "2025-08-04",
+   "max_single_cad": 20000,
+   "max_daily_cad": 50000
+  },
+  "limit_ceiling": {
+   "single_cad": 5000.0,
+   "daily_cad": 10000.0
+  }
+ },
+ "pin": {
+  "set": true,
+  "locked": false,
+  "failures": 0
+ },
+ "sharing": {
+  "scope": "sponsor_funded",
+  "summary": "Your sponsor sees the accounts they fund (MYR, linked Malaysian account; CAD Tuition Fund), the requests sent to them, safety alerts and a daily count of activity. Not your CAD Everyday account, wages, spending or chat.",
+  "consented_at_onboarding": true
+ }
+}
