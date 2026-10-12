@@ -11,6 +11,7 @@ import { Body, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
 const STATUS_TONE: Record<string, 'ok' | 'danger' | 'plain' | 'gold'> = {
   executed: 'ok',
+  in_transit: 'gold',
   rejected: 'danger',
   failed: 'danger',
   blocked: 'danger',
@@ -56,6 +57,8 @@ export function SponsorScreen({ active }: { active: boolean }) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [freeze, setFreeze] = useState<FreezeState | null>(null);
   const [sharing, setSharing] = useState('');
+  const [sources, setSources] = useState<Account[]>([]);
+  const [transit, setTransit] = useState<Action[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -69,6 +72,9 @@ export function SponsorScreen({ active }: { active: boolean }) {
       seen.current = new Set(q.actions.map((a) => a.action_id));
       setQueue(q.actions);
       setRecent(o.recent.filter((a) => a.status !== 'awaiting_sponsor').reverse());
+      // Remittances he sent that haven't arrived yet: shown as cards with their timeline.
+      setTransit(o.recent.filter((a) => a.status === 'in_transit').reverse());
+      setSources(o.source_accounts ?? []);
       setAccounts(o.accounts);
       setTotal(o.total_cad);
       setDigest(o.digest);
@@ -85,10 +91,11 @@ export function SponsorScreen({ active }: { active: boolean }) {
 
   usePoll(refresh, active ? 3000 : 15000);
 
-  const decide = (approve: boolean) => async (a: Action, note: string, pin = '') => {
+  const decide = (approve: boolean) => async (a: Action, note: string, pin = '', provider = '') => {
     try {
-      const r = await (approve ? api.approve(a.action_id, note, pin) : api.reject(a.action_id, note));
-      if (r.status === 'failed') toast(tr('sp.bankRefused'), String(r.result?.error ?? ''), 'danger');
+      const r = await (approve ? api.approve(a.action_id, note, pin, provider) : api.reject(a.action_id, note));
+      if (r.status === 'failed' || r.status === 'blocked') toast(tr('sp.bankRefused'), String(r.result?.error ?? ''), 'danger');
+      else if (r.status === 'in_transit') toast(tr('sp.sent'), tr.summary(a.summary), 'ok');
       else toast(tr(approve ? 'sp.approved' : 'sp.rejected'), tr.summary(a.summary), approve ? 'ok' : 'danger');
     } catch (e) {
       toast(tr('sp.cantRecord'), (e as Error).message, 'danger');
@@ -134,6 +141,18 @@ export function SponsorScreen({ active }: { active: boolean }) {
         </Surface>
       ) : (
         queue.map((a) => <ActionCard key={a.action_id} action={a} mode="sponsor" onApprove={decide(true)} onReject={decide(false)} />)
+      )}
+
+      {transit.length > 0 && (
+        <>
+          <Row style={{ justifyContent: 'space-between', marginTop: 6 }}>
+            <Display style={{ fontSize: 18 }}>{tr('sp.onTheWay')}</Display>
+            <Pill label={String(transit.length)} tone="gold" />
+          </Row>
+          {transit.map((a) => (
+            <ActionCard key={a.action_id} action={a} mode="sponsor" />
+          ))}
+        </>
       )}
 
       {digest && (
@@ -183,6 +202,21 @@ export function SponsorScreen({ active }: { active: boolean }) {
           ))}
         </Surface>
       )}
+
+      {sources.map((s) => (
+        <Surface key={s.id} style={{ marginTop: 10 }}>
+          <Eyebrow>{tr('sp.yourAccount')}</Eyebrow>
+          <Row style={{ justifyContent: 'space-between', paddingTop: 6 }}>
+            <View style={{ flex: 1 }}>
+              <Body style={{ fontSize: 14 }}>{tr.d(s.label)}</Body>
+              <Mono style={{ fontSize: 11, color: t.faint }}>
+                {tr('city.kl')} · {s.number}
+              </Mono>
+            </View>
+            <Mono style={{ fontSize: 14 }}>{money(s.balance, s.currency)}</Mono>
+          </Row>
+        </Surface>
+      ))}
 
       <Display style={{ fontSize: 18, marginTop: 10 }}>{tr('sp.accounts')}</Display>
       <Surface>

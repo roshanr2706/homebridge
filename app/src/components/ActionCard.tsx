@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import type { Action, Compliance, ComplianceCheck } from '../api';
+import type { Action, Compliance, ComplianceCheck, RemitOption, RemitQuote } from '../api';
 import { stepUp, useStepUpNote } from '../stepUp';
 import { PinEntry } from './PinEntry';
 import { useT, type Key, type T } from '../i18n';
@@ -14,8 +14,9 @@ type Props = {
   mode: 'student' | 'sponsor';
   onConfirm?: (a: Action) => Promise<void>;
   onCancel?: (a: Action) => Promise<void>;
-  // Called after the device check and the sponsor's PIN; the server checks the PIN.
-  onApprove?: (a: Action, note: string, pin: string) => Promise<void>;
+  // Called after the device check and the sponsor's PIN; the server checks the PIN. For a money request,
+  // `provider` is the transfer service the sponsor picked.
+  onApprove?: (a: Action, note: string, pin: string, provider?: string) => Promise<void>;
   onReject?: (a: Action, note: string) => Promise<void>;
 };
 
@@ -62,8 +63,35 @@ function headline(a: Action, tr: T): { big: string; sub?: string } {
   return { big: tr.summary(a.summary) };
 }
 
-function details(a: Action, tr: T): [string, string][] {
+// Seconds until an in-transit remittance arrives, from the server's settle time.
+function etaText(a: Action, now: number, tr: T): string {
+  const at = a.remittance?.settle_after;
+  if (!at) return '';
+  const s = Math.max(0, Math.round(at - now / 1000));
+  if (s < 3600) return tr('det.etaSoon', { s });
+  const d = new Date(at * 1000);
+  return `${tr.date(d.toISOString().slice(0, 10))} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+function remitDetails(a: Action, mode: Props['mode'], tr: T, now: number): [string, string][] {
   const p = a.params;
+  const q = p.quote as RemitQuote | undefined;
+  const rows: [string, string][] = [];
+  if (q) {
+    rows.push([tr('det.via'), `${tr.d(q.provider)} · ${tr.d(q.speed)}`]);
+    rows.push([tr(mode === 'sponsor' ? 'det.youSend' : 'det.dadSends'), `${money(q.send_amount, q.send_currency)} (${tr('rm.fee', { v: money(q.fee, q.fee_currency) })})`]);
+    if (q.receive_currency !== q.send_currency) rows.push([tr('det.rate'), tr('det.rateValue', { rate: q.rate, to: q.receive_currency, from: q.send_currency })]);
+    rows.push([tr(mode === 'sponsor' ? 'det.aishaGets' : 'det.receive'), money(q.receive_amount, q.receive_currency)]);
+  }
+  if (p.to_account) rows.push([tr('det.into'), tr.d(p.to_account)]);
+  if (a.status === 'in_transit') rows.push([tr('det.eta'), etaText(a, now, tr)]);
+  if (a.remittance?.reference) rows.push([tr('det.ref'), a.remittance.reference]);
+  return rows;
+}
+
+function details(a: Action, tr: T, mode: Props['mode'] = 'student', now = Date.now()): [string, string][] {
+  const p = a.params;
+  if (a.kind === 'topup') return remitDetails(a, mode, tr, now);
   if (a.kind === 'transfer') {
     const rows: [string, string][] = [
       [tr('det.to'), p.payee_name],
@@ -83,15 +111,36 @@ function details(a: Action, tr: T): [string, string][] {
 
 type Step = { label: string; state: 'done' | 'current' | 'todo' | 'bad' };
 
+// A money request: asked → the sponsor approves → sent (quote locked, his account debited) → compliance checks →
+// in transit → credited. Each step's time comes from the server (remittance.timeline).
+function remitSteps(a: Action, mode: Props['mode'], tr: T): Step[] {
+  const tl = a.remittance?.timeline ?? {};
+  const bad = ['rejected', 'cancelled', 'expired', 'failed', 'blocked'].includes(a.status);
+  const state = (done: boolean, current: boolean, failed: boolean): Step['state'] =>
+    done ? 'done' : failed ? 'bad' : current ? 'current' : 'todo';
+  // Declined, withdrawn or expired before the sponsor sent anything.
+  const stopped = bad && a.sponsor_decision !== 'approved';
+  return [
+    { label: tr('step.asked'), state: 'done' },
+    {
+      label: tr(mode === 'sponsor' ? 'step.youApprove' : 'step.dadApproves'),
+      state: state(a.sponsor_decision === 'approved', a.status === 'awaiting_sponsor', stopped),
+    },
+    { label: tr('step.sent'), state: state(!!tl.initiated, false, false) },
+    { label: tr('step.checked'), state: state(!!tl.compliance_checked && a.status !== 'blocked', false, a.status === 'blocked') },
+    { label: tr('step.inTransit'), state: state(!!tl.credited, a.status === 'in_transit', a.status === 'failed' && !!tl.initiated) },
+    { label: tr('step.credited'), state: state(!!tl.credited, false, a.status === 'failed' && !!tl.in_transit) },
+  ];
+}
+
 function steps(a: Action, mode: Props['mode'], tr: T): Step[] {
+  if (a.kind === 'topup') return remitSteps(a, mode, tr);
   const bad = ['rejected', 'cancelled', 'expired', 'failed', 'blocked'].includes(a.status);
   const out: Step[] = [{ label: tr('step.drafted'), state: 'done' }];
-  if (a.kind !== 'topup') {
-    out.push({
-      label: tr(mode === 'sponsor' ? 'step.confirmed' : 'step.youConfirm'),
-      state: a.user_confirmed ? 'done' : a.status === 'awaiting_user' ? 'current' : bad ? 'bad' : 'todo',
-    });
-  }
+  out.push({
+    label: tr(mode === 'sponsor' ? 'step.confirmed' : 'step.youConfirm'),
+    state: a.user_confirmed ? 'done' : a.status === 'awaiting_user' ? 'current' : bad ? 'bad' : 'todo',
+  });
   if (a.needs_sponsor_approval) {
     out.push({
       label: tr(mode === 'sponsor' ? 'step.youApprove' : 'step.dadApproves'),
@@ -153,7 +202,62 @@ function Timeline({ items }: { items: Step[] }) {
   );
 }
 
+// The sponsor's choice of transfer service for a money request: a compact true-cost list from the server,
+// cheapest first and preselected. What Aisha gets, what he sends (fee included), the margin and the speed.
+function RemitPicker({ a, value, onChange }: { a: Action; value: string; onChange: (key: string) => void }) {
+  const t = useTheme();
+  const tr = useT();
+  const opts: RemitOption[] = a.remit_options ?? [];
+  const src = a.sponsor_source;
+  return (
+    <View style={[styles.box, { backgroundColor: t.sunken, gap: 6 }]}>
+      <Body style={{ fontSize: 12, fontFamily: fonts.bodyBold }}>{tr('rm.choose')}</Body>
+      {src ? (
+        <Mono style={{ fontSize: 10.5, color: t.faint }}>
+          {tr('rm.from', { account: `${tr.d(src.label)} ${src.number}`, balance: src.balance !== undefined ? money(src.balance, src.currency) : '—' })}
+        </Mono>
+      ) : null}
+      {opts.map((o) => {
+        const on = o.provider_key === value;
+        return (
+          <Pressable
+            key={o.provider_key}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: on }}
+            onPress={() => onChange(o.provider_key)}
+            style={{ borderWidth: 1, borderColor: on ? t.accent : t.border, borderRadius: 10, padding: 8, backgroundColor: on ? t.accentSoft : t.surface }}
+          >
+            <Row style={{ justifyContent: 'space-between', gap: 8 }}>
+              <Row style={{ gap: 6, flex: 1 }}>
+                <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: on ? t.accent : t.border, backgroundColor: on ? t.accent : 'transparent' }} />
+                <Body style={{ fontSize: 12.5, fontFamily: on ? fonts.bodyBold : fonts.body, flexShrink: 1 }} numberOfLines={1}>
+                  {tr.d(o.provider)}
+                </Body>
+                {o.cheapest ? <Pill label={tr('rm.cheapest')} tone="ok" /> : null}
+              </Row>
+              <Mono style={{ fontSize: 12, fontFamily: fonts.monoBold }}>{tr('rm.gets', { v: money(o.receive_amount, o.receive_currency) })}</Mono>
+            </Row>
+            <Mono style={{ fontSize: 10.5, color: t.muted, marginTop: 3 }} numberOfLines={2}>
+              {[
+                tr('rm.youSend', { v: money(o.send_amount, o.send_currency) }),
+                tr('rm.fee', { v: money(o.fee, o.fee_currency) }),
+                o.receive_currency !== o.send_currency ? tr('rm.margin', { v: o.spread_pct }) : null,
+                tr.d(o.speed),
+                o.cheapest ? null : tr('rm.more', { v: money(o.extra_vs_cheapest, o.send_currency) }),
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </Mono>
+          </Pressable>
+        );
+      })}
+      <Body style={{ fontSize: 11, color: t.faint }}>{tr('rm.lockNote')}</Body>
+    </View>
+  );
+}
+
 const STATUS_KEY: Record<string, Key> = {
+  in_transit: 'status.in_transit',
   executed: 'status.executed',
   rejected: 'status.rejected',
   cancelled: 'status.cancelled',
@@ -213,7 +317,11 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
   const [note, setNote] = useState('');
   // After the device check, the sponsor enters their PIN, which the server checks.
   const [askPin, setAskPin] = useState(false);
-  const now = useNow(a.status === 'awaiting_user');
+  // A money request: the transfer service the sponsor picks (the cheapest is preselected).
+  const options = a.remit_options ?? [];
+  const [provider, setProvider] = useState(options[0]?.provider_key ?? '');
+  const picked = options.find((o) => o.provider_key === provider);
+  const now = useNow(a.status === 'awaiting_user' || a.status === 'in_transit');
   const risky = a.risk_score >= 40;
   const untrusted = Object.entries(a.provenance ?? {}).filter(([, v]) => v === 'untrusted').map(([k]) => k);
   const h = headline(a, tr);
@@ -270,10 +378,10 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
         <Mono style={{ fontFamily: fonts.monoBold, fontSize: a.kind === 'add_payee' ? 18 : 24, letterSpacing: -0.5 }}>{h.big}</Mono>
         {h.sub ? <Body style={{ color: t.muted, fontSize: 14, marginTop: 2 }}>{h.sub}</Body> : null}
 
-        {details(a, tr).length > 0 && (
+        {details(a, tr, mode, now).length > 0 && (
           <View style={styles.details}>
             <DashedRule color={t.border} style={{ marginBottom: 8 }} />
-            {details(a, tr).map(([k, v]) => (
+            {details(a, tr, mode, now).map(([k, v]) => (
               <Row key={k} style={{ justifyContent: 'space-between', paddingVertical: 3, gap: 12 }}>
                 <Body style={{ fontSize: 12, color: t.muted }}>{k}</Body>
                 <Body style={{ fontSize: 13, flexShrink: 1, textAlign: 'right' }} numberOfLines={2}>
@@ -355,7 +463,7 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
         )}
         {STATUS_KEY[a.status] && (
           <Row style={{ marginTop: 10, gap: 8 }}>
-            <Pill label={tr(STATUS_KEY[a.status]).toUpperCase()} tone={a.status === 'executed' ? 'ok' : 'danger'} />
+            <Pill label={tr(STATUS_KEY[a.status]).toUpperCase()} tone={a.status === 'executed' ? 'ok' : a.status === 'in_transit' ? 'gold' : 'danger'} />
             {a.status === 'executed' && a.result?.new_balance !== undefined && (
               <Mono style={{ fontSize: 11, color: t.muted }}>{tr('act.newBalance', { v: amount(a.result.new_balance) })}</Mono>
             )}
@@ -394,15 +502,17 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
               maxLength={200}
               style={[styles.note, { color: t.text, borderColor: t.border, backgroundColor: t.bg, fontFamily: fonts.body }]}
             />
+            {/* A money request: pick the transfer service before the PIN step. */}
+            {a.kind === 'topup' && options.length > 0 && !askPin && <RemitPicker a={a} value={provider} onChange={setProvider} />}
             {askPin && onApprove ? (
               <PinEntry
-                title={tr('act.pinApprove', { what })}
+                title={picked ? tr('act.pinApproveVia', { what, provider: tr.d(picked.provider) }) : tr('act.pinApprove', { what })}
                 submitLabel={tr('btn.approve')}
                 busy={busy === 'approve'}
                 onCancel={() => setAskPin(false)}
                 onSubmit={(pin) => {
                   setAskPin(false);
-                  run('approve', () => onApprove(a, note, pin))();
+                  run('approve', () => onApprove(a, note, pin, a.kind === 'topup' ? provider : ''))();
                 }}
               />
             ) : (
