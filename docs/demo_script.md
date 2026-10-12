@@ -4,7 +4,7 @@ For the 5-minute demo video, the 10-minute presentation and the Q&A. Every scrip
 end to end on the offline engine on 2026-10-12 and works without an API key. The live model (DeepSeek) is
 supported but has not been run live yet, so the video uses the offline engine and the header says so.
 
-<!-- counts: tests=619, tasks=95, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=23, f1=0.854 -->
+<!-- counts: tests=619, tasks=95, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=23, f1=0.854; also spoken at video 4:40, outline item 4, Q12, Q13 -->
 **Numbers to quote (offline engine):** 95 / 95 scripted tasks, 79 / 79 attacks blocked, 619 automated tests,
 23 agent tools (none can execute, approve, unlock or change limits), classifier macro F1 0.854.
 

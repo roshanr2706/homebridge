@@ -320,7 +320,7 @@ The full threat model, tier table and known-risk list are in `docs/security_self
 
 Run with `pytest -q` and `python scripts/run_evidence.py` (from `backend/`). The evidence script writes `evidence/offline/` for the offline engine.
 
-<!-- counts: tests=619, tasks=95, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=23, f1=0.854 on 902 rows, audit=1059 -->
+<!-- counts: tests=619, tasks=95, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=23, f1=0.854 on 902 rows, audit=1059; tools also in §2 table and §4 intro, guard-flagged also in the §7 defence-in-depth paragraph -->
 **Headline numbers (offline engine, measured 2026-10-12):** 619 automated tests passing; 95 / 95 scripted tasks; 79 / 79 attacks blocked (induced transfer 27, extraction 11, escalation 21, injection 20); classifier macro F1 0.854 over 902 rows; evidence audit log 1,059 entries with a valid hash chain.
 
 | Suite | Result |
