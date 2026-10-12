@@ -227,17 +227,15 @@ function RemitPicker({ a, value, onChange }: { a: Action; value: string; onChang
             onPress={() => onChange(o.provider_key)}
             style={{ borderWidth: 1, borderColor: on ? t.accent : t.border, borderRadius: 10, padding: 8, backgroundColor: on ? t.accentSoft : t.surface }}
           >
-            <Row style={{ justifyContent: 'space-between', gap: 8 }}>
-              <Row style={{ gap: 6, flex: 1 }}>
-                <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: on ? t.accent : t.border, backgroundColor: on ? t.accent : 'transparent' }} />
-                <Body style={{ fontSize: 12.5, fontFamily: on ? fonts.bodyBold : fonts.body, flexShrink: 1 }} numberOfLines={1}>
-                  {tr.d(o.provider)}
-                </Body>
-                {o.cheapest ? <Pill label={tr('rm.cheapest')} tone="ok" /> : null}
-              </Row>
-              <Mono style={{ fontSize: 12, fontFamily: fonts.monoBold }}>{tr('rm.gets', { v: money(o.receive_amount, o.receive_currency) })}</Mono>
+            <Row style={{ gap: 6 }}>
+              <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: on ? t.accent : t.border, backgroundColor: on ? t.accent : 'transparent' }} />
+              <Body style={{ fontSize: 12.5, fontFamily: on ? fonts.bodyBold : fonts.body, flexShrink: 1 }} numberOfLines={2}>
+                {tr.d(o.provider)}
+              </Body>
+              {o.cheapest ? <Pill label={tr('rm.cheapest')} tone="ok" /> : null}
             </Row>
-            <Mono style={{ fontSize: 10.5, color: t.muted, marginTop: 3 }} numberOfLines={2}>
+            <Mono style={{ fontSize: 12, fontFamily: fonts.monoBold, marginTop: 4 }}>{tr('rm.gets', { v: money(o.receive_amount, o.receive_currency) })}</Mono>
+            <Mono style={{ fontSize: 10.5, color: t.muted, marginTop: 3 }} numberOfLines={3}>
               {[
                 tr('rm.youSend', { v: money(o.send_amount, o.send_currency) }),
                 tr('rm.fee', { v: money(o.fee, o.fee_currency) }),
