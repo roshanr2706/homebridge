@@ -1,12 +1,12 @@
 # HomeBridge: Demo Script
 
 For the 5-minute demo video, the 10-minute presentation and the Q&A. Every scripted input below was run
-end to end on the offline engine on 2026-10-12 and works without an API key. The live model (DeepSeek) is
+end to end on the offline engine on 2026-10-16 and works without an API key. The live model (DeepSeek) is
 supported but has not been run live yet, so the video uses the offline engine and the header says so.
 
 <!-- counts: tests=746, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854; also spoken at video 4:40, outline item 4, Q12, Q13 -->
 **Numbers to quote (offline engine):** 119 / 119 scripted tasks, 79 / 79 attacks blocked, 746 automated tests,
-23 agent tools (none can execute, approve, unlock or change limits), classifier macro F1 0.854.
+24 agent tools (none can execute, approve, unlock or change limits), classifier macro F1 0.854.
 
 ## Before recording
 
@@ -57,7 +57,7 @@ of the money steps and reset (↺) before the presentation.
 - **Wrong PIN:** on Dad's phone enter `000000` → "Wrong PIN. 4 tries left"; five wrong tries lock PIN approval for 15 minutes.
 - **Rules:** Dad → Rules, lower "Per payment" to CAD 1,000, save with the PIN. "Only the sponsor can change these; the AI has no tool for it."
 - **New payee + cooling period:** `add a new payee Campus Books, business, CAD, account 1111-2222-3333` → T3 → Dad approves → the payee shows a COOLING countdown (60 s in demo mode, 24 h in production).
-- **Sanctions hit:** `add a new payee Crimsen Harbor Trading, business, CAD, account 6612-0048-2290` → blocked by the sample watchlist (score 0.95). Say that production would show a neutral "can't be processed" (no tipping off).
+- **Sanctions hit:** `add a new payee Crimsen Harbor Trading, business, CAD, account 6612-0048-2290` → blocked: Aisha sees only "This payee can't be paid. Contact support." (no tipping off); the watchlist match is in the audit log and the compliance report.
 - **Limit splitting:** `pay hydro 1450`, `pay hydro 1450 again`, `pay hydro 1450 once more` → the third draft is T3 because pending drafts count toward the daily limit.
 - **Indirect injection:** `show my recent transactions` → one seeded memo contains instructions; the tool-output scan marks it as data, and the next ordinary payment is still T2.
 - **Compliance report:** `GET /compliance/report` with either token shows the role-scoped evidence.
