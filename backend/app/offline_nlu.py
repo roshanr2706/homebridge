@@ -17,9 +17,9 @@ from .i18n import t
 MAX_AMOUNT = 100_000.0   # anything above this in one chat request is treated as a typo and asked about
 MIN_AMOUNT = 0.01
 
-_CUR_PREFIX = r"(?:rm|cad|myr|usd|c\$|us\$|\$)"
-_CUR_SUFFIX = (r"(?:rm|cad|myr|usd|ringgit|dollars?|bucks|canadian dollars?|"
-               r"块钱|块|元|加币|加元|马币|令吉|美元|美金)")
+_CUR_PREFIX = r"(?:rmb|cny|rm|cad|myr|usd|c\$|us\$|\$|¥)"
+_CUR_SUFFIX = (r"(?:rmb|cny|yuan|renminbi|rm|cad|myr|usd|ringgit|dollars?|bucks|canadian dollars?|"
+               r"块钱|块|元人民币|人民币|元|加币|加元|马币|令吉|美元|美金)")
 _AMOUNT_RE = re.compile(
     r"(?P<neg>-\s*|\bminus\s+|\bnegative\s+)?"
     rf"(?P<pre>(?<![a-z]){_CUR_PREFIX}\s*)?"
@@ -40,7 +40,7 @@ _LABEL_BEFORE = re.compile(r"(?:\b(?:installment|instalment|term|step|number|lev
 _CN_DIGITS = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8,
               "九": 9}
 _CN_UNITS = {"十": 10, "百": 100, "千": 1000, "万": 10000}
-_CN_RE = re.compile(r"[零〇一二两三四五六七八九十百千万\d]+(?=\s*(?:块|元|加币|加元|马币|令吉|美元|美金|给|到|去|换))")
+_CN_RE = re.compile(r"[零〇一二两三四五六七八九十百千万\d]+(?=\s*(?:块|元|加币|加元|马币|令吉|美元|美金|人民币|给|到|去|换))")
 
 
 @dataclass
@@ -86,6 +86,8 @@ def _cur_word(w: str) -> Optional[str]:
         return "MYR"
     if w in ("usd", "us$", "美元", "美金"):
         return "USD"
+    if w in ("rmb", "cny", "yuan", "renminbi", "人民币", "元人民币", "¥"):
+        return "CNY"
     if w in ("cad", "c$", "加币", "加元") or w.startswith("canadian"):
         return "CAD"
     return None   # "$", "dollars", "块" do not say which dollar
@@ -150,8 +152,8 @@ def amount_issue(text: str, lang: str = "en") -> Optional[str]:
 
 
 # --------------------------------------------------------------- currencies
-_CUR_RE = re.compile(r"(?<![a-z])(myr|ringgit|rm(?=\s*\d)|rm(?![a-z])|cad|canadian|c\$|usd|us\$|"
-                     r"dolar kanada|令吉|马币|加币|加元|美元|美金)(?![a-z])", re.I)
+_CUR_RE = re.compile(r"(?<![a-z])(myr|ringgit|rmb|cny|yuan|renminbi|rm(?=\s*\d)|rm(?![a-z])|cad|canadian|c\$|usd|"
+                     r"us\$|dolar kanada|令吉|马币|加币|加元|美元|美金|人民币)(?![a-z])", re.I)
 
 
 def currencies(text: str) -> List[str]:
@@ -231,21 +233,55 @@ def payment_clauses(low: str) -> Optional[List[Tuple[Optional[str], Optional[flo
 
 
 # ---------------------------------------------------------- question forms
+# Question forms in English, Malaysian English, Malay and Chinese. A question mark anywhere counts ("tuition
+# need to pay when ah? still short how much"), as do question words after the verb ("pay when ah", "还差多少")
+# and the Malay and Chinese question words and particles.
 _QUESTION = re.compile(
-    r"^(what|what's|whats|how|why|when|where|which|who|is|are|does|do|will|would|should|am|was|were)\b|"
-    r"\bwhat if\b|\bcan i\b|\bcould i\b|\bam i able\b|\bis it (ok|okay|possible|safe)\b|\bhow (do|can|should|to)\b|"
-    r"吗|怎么|如何|什么|多少|几号|是不是|\bboleh ke\b|\bmacam mana\b|\bbila\b|\bberapa\b")
+    r"^(what|what's|whats|how|why|when|where|which|who|is|are|does|do|did|will|would|should|am|was|were)\b|"
+    r"\bwhat (if|happens|happen)\b|\bcan i\b|\bcould i\b|\bam i able\b|\bis it (ok|okay|possible|safe)\b|"
+    r"\bhow (do|can|should|to|much|many|long)\b|\b(when|where|why|what time)\b.{0,12}\b(ah|ar|leh|hor|one)\b|"
+    r"[?？]|"
+    r"吗|呢|怎么|如何|什么|多少|几号|几时|是不是|为什么|为啥|哪(个|里|天|儿)|能不能|可不可以|有没有|"
+    r"\b(boleh ke|macam mana|bila|berapa|kenapa|mengapa|bagaimana|adakah|bolehkah|apakah)\b")
 _COMMAND = re.compile(r"\b(can|could|would|will) you\b|\bcan help\b|\bhelp me\b|\bplease\b|\bpls\b|\bplz\b|"
                       r"\btolong\b|帮我|\bor not\b|\bboleh tak\b|\bfor me\b")
 
 
 def is_question(raw: str) -> bool:
-    """An informational question ('can I pay tuition in installments?'), not a polite command
-    ('can you pay my rent?', 'can pay landlord or not')."""
+    """An informational question ('can I pay tuition in installments?', 'tuition need to pay when ah?',
+    '学费要交多少呢', 'bila kena bayar sewa'), not a polite command ('can you pay my rent?', 'can pay landlord
+    or not', '帮我交学费'). Questions are answered from the data and never draft money."""
     low = raw.lower().strip()
     if _COMMAND.search(low):
         return False
-    return bool(_QUESTION.search(low)) or low.endswith("?") or low.endswith("？")
+    return bool(_QUESTION.search(low))
+
+
+# --------------------------------------------------------- relayed messages
+_RELAY_WORDS = (r"\b(whats ?app(ed)?|texted|text(ed)? me|messaged|message[ds]? me|e-?mailed|sms(ed)?|wechat(ed)?|"
+                r"dm(ed)?|sent me|wrote|says?|said|told me|got (a|an|this) (message|text|email|sms))\b|"
+                r"发来|发给我|发消息|短信|微信|\bmesej\b|\bkata\b")
+_OWN_REQUEST = (r"\b(pay|send|transfer|convert|bayar|tukar|e-?transfer|draft|add)\b|付|转|交|帮我|"
+                r"\bis (this|it) (real|legit|a scam)\b")
+_CHANGED_DETAILS = (r"\b(new|different|another|changed|updated) (bank )?(account|acc|bank details|details)\b|"
+                    r"\b\d{4}[- ]\d{4}[- ]\d{3,4}\b|新的?(银行)?(账户|账号)|\bakaun baru\b")
+
+
+def relayed_message(text: str) -> bool:
+    """A message passed on from someone else, with no request of the user's own: "My landlord WhatsApp me:
+    'rent go up to 1,600 … new account 4444-5555-6666'", or unquoted, "landlord texted me rent now 1600, new
+    account 4444-…". Such a message is checked for scam signs and nothing is drafted; "pay it" outside the
+    quote is the user's own request and is handled as a payment (the amount is still marked as untrusted)."""
+    from .guard import quoted_segments   # guard imports nothing from here; kept local to keep this module pure
+    quotes = quoted_segments(text)
+    if quotes:
+        outside = text
+        for q in quotes:
+            outside = outside.replace(q, " ")
+        outside = outside.lower()
+        return not re.search(_OWN_REQUEST, outside) and bool(re.search(_RELAY_WORDS + r"|:", outside))
+    low = text.lower()
+    return bool(re.search(_RELAY_WORDS, low)) and bool(re.search(_CHANGED_DETAILS, low))
 
 
 # --------------------------------------------------------------- dates

@@ -16,10 +16,12 @@ from typing import Any, Callable, Dict, List, Optional
 from . import credit
 from .audit import AuditLog
 from .bank import Bank, to_minor
-from .fx import FxMarket, FxUnavailable
+from .fx import CNY_NOTE, FxMarket, FxUnavailable
 from .guard import SCAM_SUSPICIOUS_CONFIDENCE, check as guard_check
 from .classifier import shared as shared_classifier
+from .compliance import STUDENT_BLOCK_MESSAGE
 from .policy import PendingAction, PolicyEngine, PolicyError
+from .privacy import SHARING, data_flow
 
 
 @dataclass
@@ -37,6 +39,7 @@ class ToolContext:
     strong_flags: List[str] = field(default_factory=list)    # this turn's flags that will carry to later turns
     untrusted_texts: List[str] = field(default_factory=list)
     created_actions: List[PendingAction] = field(default_factory=list)
+    model: str = "offline"   # the provider answering this chat (privacy.data_flow says where its text goes)
 
     def flags(self) -> List[str]:
         return list(dict.fromkeys(self.guard_flags + self.earlier_flags))
@@ -160,8 +163,9 @@ def list_payees(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
 @tool("get_fx_quotes",
       "Compare providers for converting or sending money between currencies. Ranks by what the recipient gets "
       "and shows the true cost (fees plus exchange-rate margin) against the mid-market rate.",
-      {"from_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]},
-       "to_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]},
+      {"from_currency": {"type": "string", "enum": ["MYR", "CAD", "USD", "CNY"],
+                         "description": "CNY (Chinese yuan) is for comparisons only: there is no CNY wallet"},
+       "to_currency": {"type": "string", "enum": ["MYR", "CAD", "USD", "CNY"]},
        "amount": {"type": "number", "description": "Amount in from_currency"},
        "own_wallet": {"type": "boolean", "description": "True if converting between the user's own wallets "
                       "(includes in-app conversion). False for money sent from someone else, e.g. a parent's bank."}},
@@ -180,15 +184,18 @@ def get_fx_quotes(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
             qs = [q for q in ctx.fx.cached_quotes(src, dst, amt) if own or not q["own_wallet_only"]]
             note = "Live quotes are unavailable right now; these are cached quotes and may be slightly out of date."
     best, worst = qs[0], qs[-1]
-    return {"quotes": qs, "amount": amt, "from_currency": src, "best": best["provider"],
-            "saving_vs_worst": round(best["you_receive"] - worst["you_receive"], 2),
-            "saving_currency": dst, "note": note,
-            "disclosure": "Rates are a simulated snapshot for the sandbox. Not financial advice."}
+    out = {"quotes": qs, "amount": amt, "from_currency": src, "best": best["provider"],
+           "saving_vs_worst": round(best["you_receive"] - worst["you_receive"], 2),
+           "saving_currency": dst, "note": note,
+           "disclosure": "Rates are a simulated snapshot for the sandbox. Not financial advice."}
+    if src == "CNY":
+        out["regulatory_note"] = CNY_NOTE
+    return out
 
 
 @tool("get_fx_history", "Range of the exchange rate over the last 30 days. Use this instead of predicting rates.",
-      {"from_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]},
-       "to_currency": {"type": "string", "enum": ["MYR", "CAD", "USD"]}},
+      {"from_currency": {"type": "string", "enum": ["MYR", "CAD", "USD", "CNY"]},
+       "to_currency": {"type": "string", "enum": ["MYR", "CAD", "USD", "CNY"]}},
       ["from_currency", "to_currency"])
 def get_fx_history(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     return ctx.fx.history(a["from_currency"], a["to_currency"])
@@ -206,8 +213,11 @@ def get_tuition_schedule(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
         out.append({**t, "days_until_due": days})
     nxt = out[0] if out else None
     shortfall = round(max(0.0, nxt["amount"] - fund), 2) if nxt else 0.0
+    # MYR to convert in the app so the shortfall arrives in full: the same maths (and rounding) as the forecast's
+    # suggestion, so "convert about MYR 3,887" and the drafted conversion agree to the ringgit.
+    cover = ctx.fx.quote_to_receive("CAD", shortfall, ctx.fx.provider("inapp"))["send_amount"] if shortfall else 0.0
     return {"installments": out, "tuition_fund_cad": round(fund, 2),
-            "next_shortfall_cad": shortfall,
+            "next_shortfall_cad": shortfall, "cover_shortfall_myr": cover,
             "myr_wallet_value_cad": round(myr_cad, 2),
             "hint": "Cover a shortfall with prepare_conversion(MYR to CAD, destination='tuition') or by asking "
                     "the sponsor with request_sponsor_topup."}
@@ -416,6 +426,21 @@ def get_limits(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+@tool("get_data_sharing",
+      "Who can see the student's data and where the chat goes: what the sponsor sees (only the accounts he funds, "
+      "requests sent to him, safety alerts and a daily activity count; never her own account, wages, spending or "
+      "chat), which language model answers and in which region, and what that model can and cannot see. Use it "
+      "for privacy questions ('can my dad see my spending?', 'is my data sent to China?'). Read-only.", {})
+def get_data_sharing(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
+    funded = [x["label"] for x in ctx.bank.accounts(ctx.user_id) if x["sponsor_funded"]]
+    user = ctx.bank.user(ctx.user_id) or {}
+    sponsor = ctx.bank.user(user.get("sponsor_id") or "") or {}
+    return {"sponsor": {"name": sponsor.get("name", ""), "sees": SHARING["sponsor_sees"],
+                        "never_sees": SHARING["sponsor_never_sees"], "funded_accounts": funded,
+                        "consented_at_onboarding": SHARING["consented_at_onboarding"]},
+            "model": data_flow(ctx.model)}
+
+
 # ---------------------------------------------------------------- T1 writes
 @tool("set_budget", "Set a monthly budget for a spending category.",
       {"category": {"type": "string"}, "monthly_amount": {"type": "number"},
@@ -555,8 +580,9 @@ def _drafted(ctx: ToolContext, act: Any) -> Dict[str, Any]:
     layer blocked comes back to the model as a refusal, so it never tells the user to confirm it."""
     ctx.created_actions.append(act)
     if act.status == "blocked":
-        return {"error": f"{(act.result or {}).get('error', 'Blocked by compliance screening.')} Nothing was saved "
-                         "or sent.", "refused_by_policy": True, "action": act.for_model()}
+        # Neutral wording for the student (no tipping off); the card is shown, and the sponsor sees the reason
+        return {"error": f"{STUDENT_BLOCK_MESSAGE} Nothing was saved or sent.", "refused_by_policy": True,
+                "blocked": True}
     return {"action": act.for_model()}
 
 
@@ -629,11 +655,9 @@ def _forecast_end(today: date, until: str, days: Any, unpaid: List[Dict[str, Any
 def _myr_to_receive(ctx: ToolContext, cad: float) -> List[Dict[str, Any]]:
     """MYR each provider needs so that CAD `cad` arrives, cheapest first (inverts the true-cost maths in fx.py)."""
     out = []
-    mid = ctx.fx.mid("MYR", "CAD")
     for p in PROVIDERS:
-        rate = mid * (1 - p.spread_pct / 100)
-        myr = math.ceil((cad / rate + p.fee_fixed) / (1 - p.fee_pct / 100))
-        q = ctx.fx.quote("MYR", "CAD", myr, p)
+        q = ctx.fx.quote_to_receive("CAD", cad, p)   # shared with get_tuition_schedule's cover_shortfall_myr
+        myr = q["send_amount"]
         out.append({"provider": p.name, "provider_key": p.key, "myr": float(myr), "you_receive": q["you_receive"],
                     "true_cost_cad": q["true_cost"], "true_cost_pct": q["true_cost_pct"], "speed": p.speed})
     return sorted(out, key=lambda x: x["myr"])
@@ -696,6 +720,25 @@ def forecast_cashflow(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
             continue
         included.append(act.summary)
 
+    # Money the sponsor has already sent (a remittance in transit, remit.py) counts on its expected arrival date,
+    # at the locked amount. Reading the action also settles it if it has already arrived (then it's in `bal`).
+    arrivals: List[Tuple[date, Dict[str, Any]]] = []
+    for act in ctx.policy.list_for(uid, ["in_transit"]):
+        q, acc_id = act.params.get("quote") or {}, act.params.get("to_account_id")
+        if act.kind != "topup" or not q or acc_id not in bal:
+            continue
+        secs = max(0.0, float(act.remittance.get("settle_after") or 0) - ctx.policy.remit.clock())
+        arrive = today + timedelta(days=int(secs // 86400))
+        item = {"account_id": acc_id, "amount": float(q["receive_amount"]), "currency": q["receive_currency"],
+                "label": f"Arriving: {act.summary}"}
+        if arrive <= today:
+            bal[acc_id] += item["amount"]
+            events.append({"date": today.isoformat(), "label": item["label"], "amount": item["amount"],
+                           "currency": item["currency"], "account": labels[acc_id], "kind": "remittance"})
+        elif arrive <= end:
+            arrivals.append((arrive, item))
+        included.append(f"{act.summary} (in transit, arriving {arrive.isoformat()})")
+
     # Day-to-day spending: the last 30 days of spending-account outflows that are not recurring items.
     recurring = [r for r in ctx.bank.recurring(uid) if r["account_id"] in bal]
     fixed = {r["counterparty"] for r in recurring}
@@ -714,6 +757,8 @@ def forecast_cashflow(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
         due = date.fromisoformat(t["due"])
         if today < due <= end and t["id"] not in covered:
             schedule.setdefault(due, []).append(("tuition", t))
+    for d, item in arrivals:
+        schedule.setdefault(d, []).append(("remittance", item))
 
     series = [round(bal[spend_id], 2)]
     myr_series = [bal[wallet["id"]] if wallet else 0.0]
@@ -722,6 +767,11 @@ def forecast_cashflow(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
         d = today + timedelta(days=i)
         bal[spend_id] -= daily_spend
         for what, x in schedule.get(d, []):
+            if what == "remittance":
+                bal[x["account_id"]] += x["amount"]
+                events.append({"date": d.isoformat(), "label": x["label"], "amount": x["amount"],
+                               "currency": x["currency"], "account": labels[x["account_id"]], "kind": "remittance"})
+                continue
             if what == "recurring":
                 bal[x["account_id"]] += x["amount"]
                 kind = "bill" if x["amount"] < 0 else ("allowance" if x["category"] == "allowance" else "income")
@@ -813,7 +863,8 @@ def forecast_cashflow(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
         "suggestions": suggestions[:3],
         "assumptions": ["Day-to-day spending continues at the last 30 days' average.",
                         "Recurring pay, allowance, rent and bills follow your schedule.",
-                        "Pending drafts count as if confirmed today; sponsor top-up requests do not.",
+                        "Pending drafts count as if confirmed today; sponsor top-up requests do not until he "
+                        "sends them, and money he has sent counts on its expected arrival date.",
                         "The sponsor allowance arrives in MYR and stays in the MYR Wallet unless converted."],
         "disclosure": "An estimate, not a guarantee or financial advice. This forecast does not move money.",
     }

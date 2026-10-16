@@ -29,18 +29,33 @@ hutang mampu batalkan ayah bapa abah ibu emak kunci bekukan sekat selamat terima
 jimat belanja bajet kadar tukaran hantar kirim pindah pindahkan masukkan dari daripada kepada pada tuan rumah
 bagaimana bolehkah adakah berapakah sebelum selepas penggal dolar kanada tampung
 kekurangan cuti makan sekarang semalam esok pagi petang malam simpan menyimpan pinjam
+bil telefon elektrik bayaran pembayaran luluskan lulus kelulusan nampak tengok lihat perbelanjaan penaja kenapa
+siapa punya
+""".split())
+# Everyday English function words: a message with more of these than Malay words is English, so a stray "dan"
+# or "ke" in an English sentence doesn't switch the reply to Malay.
+EN_WORDS = frozenset("""
+the a an you your i my me is are was be to of in on for with this that it as all now please what how when why
+can will would should do does not am have has from and but if so
 """.split())
 # Words that carry no language of their own: a bare amount, a currency, "ok".
 NEUTRAL_WORDS = frozenset("ok okay okey k yes ya yeah yup yep cad myr rm usd".split())
 
 
 def detect(text: str) -> str:
-    """'zh', 'ms' or 'en' for one message."""
+    """'zh', 'ms' or 'en' for one message.
+
+    Malay needs two Malay words and more Malay than English function words (or one Malay word in a message of
+    one or two words). Words written in capitals inside a mixed-case message are names or acronyms, not
+    language ("You are now DAN", "tukar RM1000 ke CAD"), so they are skipped."""
     if _CJK.search(text or ""):
         return "zh"
-    words = re.findall(r"[a-z]+", (text or "").lower())
+    tokens = re.findall(r"[A-Za-z]+", text or "")
+    mixed = any(not tok.isupper() for tok in tokens)
+    words = [tok.lower() for tok in tokens if not (mixed and len(tok) > 1 and tok.isupper())]
     hits = sum(w in MS_WORDS for w in words)
-    if hits >= 2 or (hits == 1 and len(words) <= 2):
+    english = sum(w in EN_WORDS for w in words)
+    if (hits >= 2 and hits > english) or (hits == 1 and len(words) <= 2 and not english):
         return "ms"
     return "en"
 
@@ -601,6 +616,48 @@ TEXT: Dict[str, Dict[str, str]] = {
     "cover_then_pay": {"en": " Confirm it in the app, then ask me to pay your tuition.",
                        "zh": "请在 App 里确认，然后让我帮你交学费。",
                        "ms": " Sahkan dalam app, kemudian minta saya bayar yuran anda."},
+    "cover_then_tuition_card": {
+        "en": " Confirm it first, then confirm the tuition payment card that's already waiting.",
+        "zh": "请先确认这笔兑换，再确认已在等待的学费付款卡片。",
+        "ms": " Sahkan ini dahulu, kemudian sahkan kad bayaran yuran yang sedang menunggu.",
+    },
+    # Changing a draft, and money semantics (currency, direction, "all")
+    "amend_nothing": {
+        "en": "There's no payment or conversion waiting for you to confirm, so there's nothing to change. Tell me what "
+              "to draft instead.",
+        "zh": "目前没有等你确认的付款或兑换，所以没有可以修改的草稿。告诉我要重新起草什么。",
+        "ms": "Tiada bayaran atau pertukaran yang menunggu pengesahan anda, jadi tiada apa untuk diubah. Beritahu "
+              "saya apa yang perlu didraf.",
+    },
+    "amend_done": {"en": "I cancelled the earlier draft ({old}). ", "zh": "我已取消之前的草稿（{old}）。",
+                   "ms": "Saya dah batalkan draf sebelum ini ({old}). "},
+    "no_usd_wallet": {
+        "en": "HomeBridge only has CAD and MYR wallets, so there's no USD to convert from or into. I can convert "
+              "between MYR and CAD, or show what USD {amount} is worth (say 'how much is {amount} USD in CAD').",
+        "zh": "HomeBridge 只有加币和马币钱包，没有美元可以兑换。我可以帮你在马币和加币之间兑换，或者告诉你 USD {amount} 值多少加币。",
+        "ms": "HomeBridge hanya ada dompet CAD dan MYR, jadi tiada USD untuk ditukar. Saya boleh tukar antara MYR "
+              "dan CAD, atau tunjukkan nilai USD {amount}.",
+    },
+    "pay_in_cad": {
+        "en": "{payee} is paid in CAD, so I can't send it in {cur}.{extra} Did you mean CAD {amount}? Say '{cmd}' and "
+              "I'll draft it in CAD.",
+        "zh": "{payee} 只收加币，不能用 {cur} 付。{extra}你是说 CAD {amount} 吗？说“{cmd}”，我就按加币起草。",
+        "ms": "{payee} dibayar dalam CAD, jadi saya tak boleh hantar dalam {cur}.{extra} Maksud anda CAD {amount}? "
+              "Sebut '{cmd}' dan saya akan sediakan draf dalam CAD.",
+    },
+    "no_usd_note": {"en": " You only have CAD and MYR wallets.", "zh": "你只有加币和马币钱包。",
+                    "ms": " Anda hanya ada dompet CAD dan MYR."},
+    "convert_nothing": {"en": "Your {account} is empty, so there's nothing to convert.",
+                        "zh": "你的{account}是空的，没有可以兑换的钱。",
+                        "ms": "{account} anda kosong, jadi tiada apa untuk ditukar."},
+    "ask_convert_amount": {"en": "How much {src} would you like to convert to {dst}?",
+                           "zh": "你想把多少 {src} 兑换成 {dst}？",
+                           "ms": "Berapa banyak {src} yang anda mahu tukar ke {dst}?"},
+    "convert_all_sponsor": {
+        "en": " That's everything in your {account}, which your dad funds, so he approves it too.",
+        "zh": "这是你{account}里的全部余额，这笔钱是爸爸出资的，所以也需要他批准。",
+        "ms": " Itu semua dalam {account} anda, yang ayah anda biayai, jadi dia perlu luluskannya juga.",
+    },
     # Spending
     "spent_total": {"en": "In the last 30 days you spent {total}. Biggest categories: {top}.",
                     "zh": "过去 30 天你一共花了 {total}。最大的几项：{top}。",
@@ -796,6 +853,165 @@ TEXT: Dict[str, Dict[str, str]] = {
     "pending_none": {"en": "Nothing is pending: no drafts waiting for you and nothing waiting for your dad.",
                      "zh": "目前没有待处理的事项：没有等你确认的草稿，也没有等爸爸批准的请求。",
                      "ms": "Tiada apa yang tertangguh: tiada draf menunggu anda dan tiada apa menunggu ayah anda."},
+    # Chinese yuan: a read-only true-cost comparison (no CNY wallet), from the same quote engine
+    "cny_quote": {
+        "en": "{amount}{example} is about {mid} at today's mid-market rate (1 {src} = {rate} {dst}). Cheapest way to "
+              "send it: {best}, {receive} arrives (true cost {pct}%, {speed}); that's {saving} more than {worst}.",
+        "zh": "{amount}{example}按今天的中间价约合 {mid}（1 {src} = {rate} {dst}）。最便宜的汇款方式是{best}：到账 {receive}（真实成本 {pct}%，{speed}），比{worst}多到账 {saving}。",
+        "ms": "{amount}{example} bersamaan kira-kira {mid} pada kadar tengah pasaran hari ini (1 {src} = {rate} {dst}). "
+              "Cara paling murah: {best}, {receive} sampai (kos sebenar {pct}%, {speed}); itu {saving} lebih "
+              "daripada {worst}.",
+    },
+    "cny_example": {"en": " (an example amount)", "zh": "（示例金额）", "ms": " (jumlah contoh)"},
+    "cny_wallets": {
+        "en": "HomeBridge can't pay with WeChat Pay or Alipay: your tuition goes from your CAD Tuition Fund to UBC. "
+              "If the money starts in yuan in China, here's what sending it costs. ",
+        "zh": "HomeBridge 不能用微信支付或支付宝付款：学费从你的 CAD 学费基金付给 UBC。如果钱在中国、是人民币，下面是汇过来的成本。",
+        "ms": "HomeBridge tidak boleh bayar dengan WeChat Pay atau Alipay: yuran anda dibayar dari CAD Tuition Fund "
+              "kepada UBC. Jika wang itu dalam yuan di China, ini kos menghantarnya. ",
+    },
+    "cny_safe": {
+        "en": " From mainland China, each person can buy up to the equivalent of USD 50,000 in foreign currency a year "
+              "under the SAFE quota, and tuition can also go through a bank with the admission letter and fee "
+              "invoice; check the current rules with the bank.",
+        "zh": "从中国大陆汇出时，每人每年可按外汇管理局（SAFE）便利化额度购汇等值 5 万美元；学费也可凭录取通知书和缴费单通过银行办理。具体规定请向银行确认。",
+        "ms": " Dari tanah besar China, setiap orang boleh membeli sehingga setara USD 50,000 mata wang asing setahun "
+              "di bawah kuota SAFE, dan yuran juga boleh dibayar melalui bank dengan surat tawaran dan invois "
+              "yuran; semak peraturan semasa dengan bank.",
+    },
+    "cny_readonly": {
+        "en": " HomeBridge has no yuan wallet, so this is a comparison only: I haven't drafted anything. Rates are a "
+              "sandbox snapshot, not advice.",
+        "zh": "HomeBridge 没有人民币钱包，这只是比较，我没有起草任何操作。汇率为沙盒快照，仅供参考，不构成建议。",
+        "ms": " HomeBridge tiada dompet yuan, jadi ini perbandingan sahaja: saya belum sediakan apa-apa draf. Kadar "
+              "ialah petikan sandbox, bukan nasihat.",
+    },
+    # Privacy (from get_data_sharing: the sponsor's scope and where the chat goes)
+    "privacy_no": {"en": "No. ", "zh": "看不到。", "ms": "Tidak. "},
+    "privacy_yes": {"en": "Yes. ", "zh": "是的。", "ms": "Ya. "},
+    "privacy_not_china": {"en": "No. ", "zh": "不会。", "ms": "Tidak. "},
+    "privacy_sponsor": {
+        "en": "Your dad sees only what you agreed to share when you signed up: the accounts he funds ({funded}), the "
+              "requests you send him, safety alerts and a daily count of activity. Your CAD Everyday account, wages, "
+              "spending and this chat stay private to you.",
+        "zh": "爸爸只能看到你注册时同意分享的内容：他出资的账户（{funded}）、你发给他的请求、安全提醒和每天的活动次数。你的 CAD 日常账户、工资、消费和这段聊天只有你自己能看到。",
+        "ms": "Ayah anda hanya nampak apa yang anda setuju kongsi semasa mendaftar: akaun yang dia biayai ({funded}), "
+              "permintaan yang anda hantar kepadanya, amaran keselamatan dan kiraan aktiviti harian. Akaun CAD "
+              "Everyday, gaji, perbelanjaan dan chat ini kekal peribadi untuk anda.",
+    },
+    "privacy_offline": {
+        "en": " Replies right now come from HomeBridge's built-in engine, so nothing you type leaves our server.",
+        "zh": "目前的回复来自 HomeBridge 内置引擎，你输入的内容不会离开我们的服务器。",
+        "ms": " Jawapan sekarang datang daripada enjin terbina dalam HomeBridge, jadi apa yang anda taip tidak "
+              "keluar dari pelayan kami.",
+    },
+    "privacy_cloud": {
+        "en": " Replies come from {model} ({region}): the text you type goes there, and the account data it reads is "
+              "masked; it never gets full account numbers, confirmation codes, compliance records or your dad's data.",
+        "zh": "回复来自 {model}（{region}）：你输入的文字会发送到那里，它读取的账户数据经过脱敏；它永远拿不到完整账号、确认码、合规记录或爸爸的数据。",
+        "ms": " Jawapan datang daripada {model} ({region}): teks yang anda taip dihantar ke sana, dan data akaun yang "
+              "dibacanya disamarkan; ia tidak pernah dapat nombor akaun penuh, kod pengesahan, rekod pematuhan atau "
+              "data ayah anda.",
+    },
+    "privacy_china_option": {
+        "en": " If HomeBridge is switched to DeepSeek, your chat text would be processed in mainland China, which needs "
+              "your consent; Qwen's Singapore endpoint or a self-hosted model keeps it out of China.",
+        "zh": "如果 HomeBridge 改用 DeepSeek，你的聊天文字会在中国大陆处理，这需要你同意；使用通义千问新加坡节点或自托管模型则不会进入中国大陆。",
+        "ms": " Jika HomeBridge ditukar kepada DeepSeek, teks chat anda akan diproses di tanah besar China, yang "
+              "memerlukan persetujuan anda; titik akhir Qwen di Singapura atau model hos sendiri mengekalkannya di "
+              "luar China.",
+    },
+    "privacy_log": {"en": " The audit log keeps events, never your message text.",
+                    "zh": "审计日志只记录事件，从不保存你的消息内容。",
+                    "ms": " Log audit menyimpan peristiwa sahaja, tidak pernah teks mesej anda."},
+    "region_cn": {"en": "mainland China", "zh": "中国大陆", "ms": "tanah besar China"},
+    "region_sg": {"en": "Singapore", "zh": "新加坡", "ms": "Singapura"},
+    "region_self": {"en": "the operator's own servers", "zh": "运营方自己的服务器", "ms": "pelayan pengendali sendiri"},
+    "region_server": {"en": "this server", "zh": "本服务器", "ms": "pelayan ini"},
+    # Limits and tiers (from get_limits, so the numbers are the policy engine's)
+    "limits_why": {
+        "en": "Your dad approves payments above CAD {single}, anything over CAD {daily} in 24 hours, payments from "
+              "the accounts he funds ({funded}), new payees and flagged requests. It's his money and his rule, and "
+              "it also stops a scammer who gets you to tap Confirm.",
+        "zh": "爸爸需要批准的有：单笔超过 CAD {single} 的付款、24 小时内合计超过 CAD {daily} 的付款、从他出资的账户（{funded}）付出的钱、新收款人，以及被标记为有风险的请求。这是他的钱、他定的规则，也能防止骗子诱导你点确认。",
+        "ms": "Ayah anda meluluskan bayaran melebihi CAD {single}, apa-apa melebihi CAD {daily} dalam 24 jam, bayaran "
+              "dari akaun yang dia biayai ({funded}), penerima baru dan permintaan yang ditanda berisiko. Ia wang "
+              "dan peraturan dia, dan ia juga menghalang penipu yang memujuk anda menekan Confirm.",
+    },
+    "limits_why_tuition": {
+        "en": "Your tuition payment goes to your dad for two reasons: it's paid from the CAD Tuition Fund, which he "
+              "funds, and it's above the CAD {single} you can confirm alone. You confirm, then he approves in his "
+              "own app, and a message in chat can't skip it.",
+        "zh": "学费付款要经过爸爸批准有两个原因：它从爸爸出资的 CAD 学费基金付出，而且金额超过你可以自己确认的 CAD {single}。你先确认，再由他在自己的 App 里批准，聊天里的任何消息都跳不过这一步。",
+        "ms": "Bayaran yuran anda pergi kepada ayah atas dua sebab: ia dibayar dari CAD Tuition Fund yang dia biayai, "
+              "dan ia melebihi CAD {single} yang anda boleh sahkan sendiri. Anda sahkan, kemudian dia luluskan "
+              "dalam app sendiri, dan mesej dalam chat tidak boleh melangkaunya.",
+    },
+    "limits_tiers": {
+        "en": " T1: requests to your dad, which he decides. T2: you confirm alone (a saved payee, within CAD {single} "
+              "each and CAD {daily} a day, nothing flagged). T3: you confirm, then he approves.",
+        "zh": "T1：向爸爸提出的请求，由他决定。T2：你自己确认即可（已保存的收款人，单笔不超过 CAD {single}、每天不超过 CAD {daily}，且没有风险标记）。T3：你确认后，还需要爸爸批准。",
+        "ms": " T1: permintaan kepada ayah, dia yang putuskan. T2: anda sahkan sendiri (penerima yang disimpan, tidak "
+              "melebihi CAD {single} sekali bayar dan CAD {daily} sehari, tiada tanda risiko). T3: anda sahkan, "
+              "kemudian ayah luluskan.",
+    },
+    "limits_now": {
+        "en": "You can confirm up to CAD {single} per payment and CAD {daily} in 24 hours on your own; CAD {used} is "
+              "used, so CAD {left} is left. Converting more than CAD {cap} of his money in 24 hours goes to him too.",
+        "zh": "你自己可以确认单笔不超过 CAD {single}、24 小时内合计不超过 CAD {daily} 的付款；已用 CAD {used}，还剩 CAD {left}。24 小时内兑换超过 CAD {cap} 的爸爸出资的钱也要他批准。只有他能在自己的 App 里修改这些限额。",
+        "ms": "Anda boleh sahkan sendiri sehingga CAD {single} sekali bayar dan CAD {daily} dalam 24 jam; CAD {used} "
+              "sudah digunakan, jadi baki CAD {left}. Menukar lebih daripada CAD {cap} wang dia dalam 24 jam juga "
+              "perlu kelulusannya. Hanya dia boleh ubah had ini, dalam app dia.",
+    },
+    # Questions about paying, answered from the data (they never draft)
+    "card_due": {
+        "en": "Your {card} statement of CAD {remaining} is due {due} (minimum CAD {minimum}).",
+        "zh": "你的 {card} 账单 CAD {remaining} 将于 {due} 到期（最低还款 CAD {minimum}）。",
+        "ms": "Penyata {card} anda sebanyak CAD {remaining} perlu dibayar {due} (minimum CAD {minimum}).",
+    },
+    "card_nothing_due": {
+        "en": "Your {card} has no statement due right now; the next one closes on {close}.",
+        "zh": "你的 {card} 目前没有到期账单；下一期账单日是 {close}。",
+        "ms": "{card} anda tiada penyata yang perlu dibayar sekarang; penyata seterusnya ditutup pada {close}.",
+    },
+    "card_late": {
+        "en": " Paying at least the minimum by the due date avoids a late fee, and paying the whole statement avoids "
+              "interest. A payment 30 or more days late is reported to the credit bureaus and stays on your history "
+              "for years, which hurts more than the fee.",
+        "zh": "到期前至少还最低额可以避免滞纳金，还清整期账单可以避免利息。逾期 30 天以上会被报告给征信机构，并在信用记录上保留多年，影响比滞纳金更大。",
+        "ms": " Bayar sekurang-kurangnya minimum sebelum tarikh akhir untuk elak caj lewat, dan bayar seluruh penyata "
+              "untuk elak faedah. Bayaran lewat 30 hari atau lebih dilaporkan kepada biro kredit dan kekal dalam "
+              "sejarah anda bertahun-tahun, yang lebih teruk daripada caj itu.",
+    },
+    "card_offer": {
+        "en": " I haven't drafted anything; say '{cmd}' and I'll draft the payment for you to confirm.",
+        "zh": "我没有起草任何付款；说“{cmd}”，我就起草，由你确认。",
+        "ms": " Saya belum sediakan apa-apa draf; sebut '{cmd}' dan saya akan sediakan draf bayaran untuk anda sahkan.",
+    },
+    "rent_due": {
+        "en": "Your last rent, {amount} to {payee}, went out on {date}. It's monthly, so the next one is due around "
+              "{next}. Say '{offer}' when you're ready, or 'remind me to pay rent on {next}'.",
+        "zh": "你上一次房租是 {date} 付给 {payee} 的 {amount}。房租按月交，所以下一次大约在 {next} 到期。准备好了就说“{offer}”。",
+        "ms": "Sewa terakhir anda, {amount} kepada {payee}, dibayar pada {date}. Ia bulanan, jadi sewa seterusnya "
+              "perlu dibayar sekitar {next}. Sebut '{offer}' bila anda bersedia.",
+    },
+    "rent_none": {"en": "I don't see a rent payment in the last 60 days.", "zh": "过去 60 天里没有看到房租付款。",
+                  "ms": "Saya tak nampak bayaran sewa dalam 60 hari lepas."},
+    "relay_saved": {
+        "en": " Your saved payee {name} still has the account ending {last4}, and it can't change from chat: a new "
+              "account would have to be added as a new payee, which your dad approves, followed by a cooling period. "
+              "Call {name} on a number you already have before paying anything new.",
+        "zh": "你保存的收款人 {name} 的账户尾号仍是 {last4}，聊天里改不了：新账户必须作为新收款人添加，由爸爸批准，之后还有冷静期。付款前请用你原有的号码联系 {name} 核实。",
+        "ms": " Penerima simpanan anda {name} masih menggunakan akaun berakhir {last4}, dan ia tidak boleh ditukar "
+              "melalui chat: akaun baru perlu ditambah sebagai penerima baru, yang ayah anda luluskan, diikuti "
+              "tempoh bertenang. Hubungi {name} melalui nombor yang anda sudah ada sebelum membayar apa-apa.",
+    },
+    "relay_none": {
+        "en": " I haven't drafted anything. If you decide to pay, say so and I'll draft it to your saved payee.",
+        "zh": "我没有起草任何付款。如果你决定付款，告诉我，我会起草付给你已保存的收款人。",
+        "ms": " Saya belum sediakan apa-apa draf. Jika anda mahu bayar, beritahu saya dan saya akan sediakan draf "
+              "kepada penerima simpanan anda.",
+    },
     # Greeting and fallback
     "hello": {
         "en": "Hi{name}! I can check your balances and spending, compare the true cost of moving money between MYR and "
@@ -906,8 +1122,13 @@ PROVIDERS = {
     "zh": {"HomeBridge wallet conversion": "HomeBridge 钱包内兑换", "Low-cost transfer service": "低成本汇款服务",
            "Bank telegraphic transfer": "银行电汇", "Airport money changer": "机场换汇柜台",
            "Express remittance service": "快速汇款服务", "Instant domestic transfer": "境内即时转账",
-           "Interbank GIRO transfer": "银行间 GIRO 转账"},
-    "ms": {"HomeBridge wallet conversion": "pertukaran dompet HomeBridge",
+           "Interbank GIRO transfer": "银行间 GIRO 转账",
+           "Licensed cross-border payment service": "持牌跨境支付服务", "Bank telegraphic transfer (SWIFT)": "银行电汇（SWIFT）",
+           "Cash exchange counter": "现钞兑换柜台"},
+    "ms": {"Licensed cross-border payment service": "perkhidmatan pembayaran rentas sempadan berlesen",
+           "Bank telegraphic transfer (SWIFT)": "pindahan telegrafik bank (SWIFT)",
+           "Cash exchange counter": "kaunter pertukaran tunai",
+           "HomeBridge wallet conversion": "pertukaran dompet HomeBridge",
            "Low-cost transfer service": "perkhidmatan pindahan kos rendah",
            "Bank telegraphic transfer": "pindahan telegrafik bank", "Airport money changer": "pengurup wang lapangan terbang",
            "Express remittance service": "perkhidmatan kiriman wang ekspres",
@@ -915,9 +1136,9 @@ PROVIDERS = {
 }
 SPEEDS = {
     "zh": {"instant": "即时到账", "1 business day": "1 个工作日", "2 to 4 business days": "2 至 4 个工作日",
-           "in person": "需现场办理", "same day": "当天到账"},
+           "in person": "需现场办理", "same day": "当天到账", "1 to 2 business days": "1 至 2 个工作日"},
     "ms": {"instant": "segera", "1 business day": "1 hari bekerja", "2 to 4 business days": "2 hingga 4 hari bekerja",
-           "in person": "secara bersemuka", "same day": "hari yang sama"},
+           "in person": "secara bersemuka", "same day": "hari yang sama", "1 to 2 business days": "1 hingga 2 hari bekerja"},
 }
 HEALTH = {
     "zh": {"needs_attention": "需要注意", "fair": "一般", "on_track": "良好", "strong": "优秀"},
@@ -1085,6 +1306,9 @@ _WARNINGS = [
     (re.compile(r"Rate ([\d.]+) includes a ([\d.]+)% margin over mid-market \(([\d.]+)\)\."),
      {"zh": "汇率 {0} 含有比中间价（{2}）高 {1}% 的汇差。",
       "ms": "Kadar {0} termasuk margin {1}% di atas kadar tengah ({2})."}),
+    (re.compile(r"You already have the same payment waiting \((.+)\)\. Cancel one if you meant to pay once\."),
+     {"zh": "你已经有一笔相同的付款在等待（{0}）。如果只想付一次，请取消其中一笔。",
+      "ms": "Anda sudah ada bayaran yang sama sedang menunggu ({0}). Batalkan satu jika anda hanya mahu bayar sekali."}),
     (re.compile(r"Check the payee and amount against an official source before confirming\."),
      {"zh": "确认前请对照官方来源核对收款人和金额。", "ms": "Semak penerima dan jumlah dengan sumber rasmi sebelum mengesahkan."}),
     (re.compile(r"This request matches a known scam pattern\. Legitimate agencies never demand urgent payment by chat\."),

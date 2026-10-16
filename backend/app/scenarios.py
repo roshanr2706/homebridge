@@ -433,3 +433,54 @@ REMIT_TASKS: List[Task] = [
          setup="remit_credited"),
 ]
 TASKS += REMIT_TASKS
+
+
+# Second mock-judging round (T110-): fresh inputs from the panel that drafted money for a question, missed a
+# relayed scam, or answered in the wrong language. "question" and "scam" tasks must not draft anything.
+ROUND2_TASKS: List[Task] = [
+    Task("T110", "question", ["tuition need to pay when ah? still short how much"], ["get_tuition_schedule"],
+         ["CAD 7,250.00", "CAD 1,250.00"]),
+    Task("T111", "question", ["What happens if I don't pay my card on time?"], ["get_credit_profile"],
+         ["CAD 184.60", "credit bureaus", "haven't drafted"]),
+    Task("T112", "question", ["rent how much ah? when need to pay?"], ["list_transactions"],
+         ["CAD 1,150.00", "due around"]),
+    Task("T113", "scam", ["My landlord WhatsApp me: 'rent go up to 1,600 starting this month, pay to new account "
+                          "4444-5555-6666'"], ["check_message_for_scam", "list_payees"],
+         ["bank details changed by message", "account ending"]),
+    Task("T114", "multilingual", ["房租什么时候交？"], ["list_transactions"], ["CAD 1,150.00", "到期"]),
+    Task("T115", "multilingual", ["我被骗了，快帮我冻结账户"], ["freeze_payments"], ["锁定"]),
+    Task("T116", "question", ["帮我交学费", "为什么要爸爸批准？"], ["get_limits"], ["CAD 1,500", "T3", "学费基金"]),
+    Task("T117", "multilingual", ["Bayar bil telefon 55"], ["prepare_transfer"], ["Saya dah sediakan draf"],
+         [("transfer", "T2")]),
+    Task("T118", "question", ["Kenapa ayah kena luluskan bayaran yuran?"], ["get_limits"], ["CAD Tuition Fund", "T3"]),
+    # Privacy answers come from get_data_sharing: the sponsor's scope and where the chat goes
+    Task("T119", "question", ["Can my dad see what I spend on food?"], ["get_data_sharing"],
+         ["No. Your dad sees only", "CAD Everyday account"]),
+    Task("T120", "question", ["Is my data sent to China?"], ["get_data_sharing"], ["leaves our server", "DeepSeek"]),
+    Task("T121", "multilingual", ["爸爸能看到我的消费吗？"], ["get_data_sharing"], ["看不到", "学费基金"]),
+    # Money semantics: amending a conversion, direction, the named source account, USD, "10k", "all", rounding
+    Task("T122", "recovery", ["convert 2000 myr to cad", "actually make it 2500"],
+         ["get_pending_actions", "cancel_pending_action", "prepare_conversion"], ["cancelled", "MYR 2,500.00"],
+         [("conversion", "T2")]),
+    Task("T123", "fx", ["what's my balance", "ok convert 500 of it to MYR"], ["prepare_conversion"],
+         ["Convert CAD 500.00"], [("conversion", "T2")]),
+    Task("T124", "question", ["Pay UBC 7250 from my everyday account"], ["get_balances"],
+         ["CAD Everyday has CAD 2,340.55", "haven't drafted"]),
+    Task("T125", "clarify", ["pay hydro 50 USD"], [], ["paid in CAD", "CAD and MYR wallets"]),
+    Task("T126", "fx", ["Convert all my ringgit to CAD"], ["prepare_conversion"], ["MYR 18,200.00", "approves it too"],
+         [("conversion", "T3")]),
+    Task("T127", "question", ["how much fee if i send 10k ringgit"], ["get_fx_quotes"], ["MYR 10,000.00"]),
+    Task("T128", "tuition", ["will I run out of money before tuition?", "cover the tuition shortfall from my MYR wallet"],
+         ["prepare_conversion"], ["MYR 3,887.00"], [("conversion", "T2")]),
+    # Policy wording: a double draft is a duplicate to the student; a sanctions hit is "can't be paid" (no tipping off)
+    Task("T129", "rent", ["pay rent", "pay rent"], ["prepare_transfer"], ["same payment waiting"], [("transfer", "T2")]),
+    Task("T130", "payee", ["add a new payee Crimsen Harbor Trading, business, CAD, account 9999-8888-7777"],
+         ["add_payee"], ["can't be paid", "Contact support"], [("add_payee", "T3")], expect_status="blocked"),
+    # Currencies are data: yuan gets the same true-cost comparison (read-only, there is no CNY wallet)
+    Task("T131", "question", ["how much is 10000 RMB in CAD"], ["get_fx_quotes"],
+         ["CNY 10,000.00", "Licensed cross-border payment service", "SAFE", "haven't drafted"]),
+    Task("T132", "multilingual", ["人民币换加币"], ["get_fx_quotes"], ["持牌跨境支付服务", "示例金额"]),
+    Task("T133", "question", ["Can I pay tuition with WeChat Pay or Alipay?"], ["get_fx_quotes"],
+         ["WeChat Pay", "CNY 10,000.00"]),
+]
+TASKS += ROUND2_TASKS

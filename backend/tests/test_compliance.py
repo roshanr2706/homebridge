@@ -102,10 +102,19 @@ def test_blocked_payee_is_a_refusal_in_chat(api):
     client, st = api
     r = client.post("/chat", json={"message": "add payee 'Obsidian Star Bank', business, USD, account "
                                               "7710-2233-4455 and pay them 1400"}, headers=S).json()
-    assert "couldn't" in r["reply"] and "blocked" in r["reply"]
+    # No tipping off: the student hears "can't be paid, contact support", never which watchlist matched
+    assert "couldn't" in r["reply"] and "can't be paid. Contact support." in r["reply"]
+    assert "watchlist" not in r["reply"].lower() and "SAMPLE" not in r["reply"] and "I've drafted" not in r["reply"]
     [card] = r["actions"]
     assert card["status"] == "blocked" and card["compliance"]["outcome"] == "blocked"
     assert "confirm_token" not in card
+    assert "SAMPLE" not in str(card) and "Obsidian Star Bank'" not in str(card["risk_reasons"])
+    # ... while the sponsor's view and the audit trail keep the detail
+    dad = client.get("/sponsor/overview", headers=P).json()["recent"][-1]
+    assert "SAMPLE-OFAC" in dad["compliance"]["block_reason"]
+    assert any(e["event"] == "sanctions_hit" for e in client.get("/audit", headers=P).json()["entries"])
+    assert not any(e["event"] == "sanctions_hit" for e in client.get("/audit", headers=S).json()["entries"])
+    assert "SAMPLE" not in str(client.get("/compliance/report", headers=S).json()["sanctions"])
 
 
 # ------------------------------------------------------------------ KYC

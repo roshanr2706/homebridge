@@ -32,6 +32,7 @@ from .bank import Bank
 from .config import Limits, Settings, load_settings
 from .fx import FxMarket
 from .policy import PendingAction, PolicyEngine, PolicyError
+from .privacy import SHARING as PRIVACY_SHARING
 from .safety import SafetyError
 from .seed import SPONSOR, STUDENT, seed_security, seed_sponsor_account
 from .tools import ToolContext, budget_summary, get_credit_profile, get_tuition_schedule
@@ -74,17 +75,14 @@ class LimitsIn(BaseModel):
 
 
 # Audit events the sponsor never sees (the student's chat and tool use), and ones the student never sees
-# (the sponsor's own PIN attempts).
+# (the sponsor's own PIN attempts, and which watchlist entry a payee matched: no tipping off).
 CHAT_EVENTS = {"user_message", "assistant_reply", "tool_call", "tool_denied", "rate_limited", "llm_error"}
-SPONSOR_PRIVATE_EVENTS = {"sponsor_pin_failed", "sponsor_pin_locked"}
+SPONSOR_PRIVATE_EVENTS = {"sponsor_pin_failed", "sponsor_pin_locked", "sanctions_hit", "sanctions_review"}
 SAFETY_EVENTS = {"payments_frozen", "payments_unfrozen", "unfreeze_denied", "alert_raised"}
 
-# What the student agreed to share at onboarding (shown on both phones).
-SHARING = {"scope": "sponsor_funded",
-           "summary": "Your sponsor sees the accounts they fund (MYR, linked Malaysian account; CAD Tuition Fund), the "
-                      "requests sent to them, safety alerts and a daily count of activity. Not your CAD Everyday "
-                      "account, wages, spending or chat.",
-           "consented_at_onboarding": True}
+# What the student agreed to share at onboarding (shown on both phones). privacy.py is the one source; the agent
+# answers "can my dad see my spending?" from the same data.
+SHARING = PRIVACY_SHARING
 
 
 def sponsor_sees(bank: Bank, a: PendingAction) -> bool:

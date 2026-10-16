@@ -120,6 +120,44 @@ def screen_name(name: str) -> Dict[str, Any]:
     return {"status": status, "score": score, "match": e.get("name"), "list": e.get("list")}
 
 
+# What the account holder is told on a sanctions hit or near match. No tipping off: the reason, the list and the
+# score stay on the sponsor's card, in the compliance report he sees and in the audit log.
+STUDENT_BLOCK_MESSAGE = "This payee can't be paid. Contact support."
+STUDENT_REVIEW_MESSAGE = "Held for a routine compliance review."
+
+
+def student_reason(reason: str) -> str:
+    """A risk or block reason as the student sees it (sanctions detail replaced by the neutral wording)."""
+    if reason.startswith("Sanctions screening"):
+        return STUDENT_BLOCK_MESSAGE
+    if "watchlist entry" in reason:
+        return STUDENT_REVIEW_MESSAGE
+    return reason
+
+
+def for_student(comp: Dict[str, Any]) -> Dict[str, Any]:
+    """The compliance block as the student's card and the chat model see it: sanctions hits and near matches in
+    neutral words, and a double draft of the same payment called a duplicate rather than possible structuring."""
+    if not comp:
+        return comp
+    out = dict(comp)
+    dup = (comp.get("structuring") or {}).get("duplicate")
+    checks = []
+    for c in comp.get("checks", []):
+        if c["id"] == "sanctions" and c["status"] in ("block", "flag"):
+            c = {**c, "detail": STUDENT_BLOCK_MESSAGE if c["status"] == "block" else STUDENT_REVIEW_MESSAGE}
+        elif c["id"] == "structuring" and c["status"] == "flag" and dup:
+            s = comp["structuring"]
+            c = {**c, "label": "Duplicate payment",
+                 "detail": f"You already have the same payment waiting ({s['count']} identical payments to "
+                           f"{s['counterparty']}). Cancel one if you meant to pay once."}
+        checks.append(c)
+    out["checks"] = checks
+    if out.get("block_reason"):
+        out["block_reason"] = STUDENT_BLOCK_MESSAGE
+    return out
+
+
 def _check(cid: str, label: str, status: str, detail: str) -> Dict[str, str]:
     # status: pass (nothing to do), flag (needs attention / manual review), block, report (a regulatory
     # report or record is due), na (does not apply)
@@ -253,6 +291,12 @@ class Compliance:
             # A flag for review, not extra risk points: the 24h limit (which counts pending drafts) already
             # sends the payment that crosses it to the sponsor, and the flag lands in the compliance report.
             out["structuring"] = {"count": len(prior) + 1, "total_cad": round(total, 2), "counterparty": to}
+            # The same payment drafted twice (a double "pay rent") is most likely a mistake, not a split: the
+            # student is told it's a duplicate; the report and the sponsor's card keep the structuring label.
+            # Three or more, or amounts just under the single limit (2 x 1,499), stay "possible structuring".
+            if (kind == "transfer" and len(prior) == 1 and prior[0].status in ("awaiting_user", "awaiting_sponsor")
+                    and abs(prior[0].params["amount"] - params["amount"]) < 0.005 and amount_cad < 0.9 * limit):
+                out["structuring"]["duplicate"] = True
             out["checks"].append(_check("structuring", "Structuring detection", "flag", msg))
         else:
             out["checks"].append(_check("structuring", "Structuring detection", "pass",
@@ -429,7 +473,8 @@ class Compliance:
         hits, eftr, structuring, purposes, decisions = [], [], [], {}, []
         screened = 0
         for a in actions:
-            c = a.compliance or {}
+            # The student's own report uses the same neutral wording as her cards (no tipping off)
+            c = for_student(a.compliance or {}) if scope == "student" else (a.compliance or {})
             if not c:
                 continue
             screened += 1

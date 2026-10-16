@@ -85,6 +85,7 @@ const TOOL_LABEL_ZH: Record<string, string> = {
   forecast_cashflow: '现金流预测',
   get_limits: '限额',
   freeze_payments: '锁定付款',
+  get_data_sharing: '数据共享',
 };
 
 const TOOL_LABEL: Record<string, string> = {
@@ -108,6 +109,7 @@ const TOOL_LABEL: Record<string, string> = {
   prepare_conversion: 'draft conversion',
   add_payee: 'new payee',
   cancel_pending_action: 'cancel draft',
+  get_data_sharing: 'data sharing',
 };
 
 function Thinking() {
