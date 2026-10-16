@@ -113,3 +113,17 @@ def test_balance_warning_is_recomputed_when_shown(api):
     st.bank._x("UPDATE accounts SET balance=balance+125000 WHERE id='acc_tui'")
     queued = client.get("/sponsor/queue", headers=P).json()["actions"][0]
     assert not any("lower than this amount" in w for w in queued["warnings"])
+
+
+def test_dotenv_fills_gaps_but_never_overrides(tmp_path, monkeypatch):
+    from app.config import load_dotenv
+    env = tmp_path / ".env"
+    env.write_text("# comment\nHB_TEST_DOTENV_A=from-file\nHB_TEST_DOTENV_B='quoted'\nLLM_PROVIDER=deepseek\n", encoding="utf-8")
+    monkeypatch.delenv("HB_TEST_DOTENV_A", raising=False)
+    monkeypatch.delenv("HB_TEST_DOTENV_B", raising=False)
+    monkeypatch.setenv("LLM_PROVIDER", "offline")
+    load_dotenv(env)
+    import os
+    assert os.environ["HB_TEST_DOTENV_A"] == "from-file"
+    assert os.environ["HB_TEST_DOTENV_B"] == "quoted"
+    assert os.environ["LLM_PROVIDER"] == "offline"   # already set: the file never overrides it

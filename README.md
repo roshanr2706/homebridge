@@ -103,7 +103,7 @@ Demo values (all overridable, see `backend/.env.example`):
 | `HB_OPERATOR_TOKEN` | `demo-operator` | Needed in an `X-Operator` header for `/demo/reset` (the web app sends it in demo mode) |
 | `HB_STUDENT_TOKEN`, `HB_SPONSOR_TOKEN` | `demo-student`, `demo-sponsor` | Bearer tokens |
 
-The backend reads these from the environment; it does not load `.env` files itself (Docker Compose does).
+The backend reads these from the environment, and at startup also from `backend/.env` if it exists (copy `backend/.env.example`; the file is gitignored and never overrides a variable that is already set).
 The app talks to `http://localhost:8000` by default. To point it elsewhere, copy `app/.env.example` to
 `app/.env` and set `EXPO_PUBLIC_API_URL`.
 

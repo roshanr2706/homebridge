@@ -12,6 +12,22 @@ from pathlib import Path
 from typing import List, Optional
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def load_dotenv(path: Path = BASE_DIR / ".env") -> None:
+    """Read KEY=VALUE lines from backend/.env (gitignored) so a key works with plain uvicorn too.
+    Variables already set in the environment win, so tests (which pin LLM_PROVIDER=offline) stay offline."""
+    if os.getenv("HB_NO_DOTENV") or not path.is_file():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_dotenv()
 VAR_DIR = Path(os.getenv("HB_VAR_DIR", BASE_DIR / "var"))
 
 
