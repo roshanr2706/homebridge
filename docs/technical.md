@@ -355,7 +355,7 @@ Several attacks show defence in depth: the limit-splitting attack (A04) passes t
 **Mainland China considerations.**
 
 - Default provider: the offline engine (no network). Intended live provider: DeepSeek, reachable from mainland China; Qwen (DashScope, Singapore or mainland endpoint) as the alternative. Live run pending an API key.
-- Fonts are bundled from npm packages into the build. The app uses no Google Fonts CDN, Google Maps, Firebase or analytics, and loads nothing from a CDN at runtime. The size of the exported web bundle has not yet been measured.
+- Fonts are bundled from npm packages into the build. The app uses no Google Fonts CDN, Google Maps, Firebase or analytics, and loads nothing from a CDN at runtime. The exported web build (`npm run build:web`, `app/dist`) is 1.4 MB in total, measured 2026-10-16.
 - FX rates come from a local snapshot, not an external rate API.
 - Suggested hosting for the live demo: a small Alibaba Cloud or Tencent Cloud instance in Hong Kong or Singapore, reachable from both mainland China and Canada.
 - Android: an APK can be built with EAS (`eas build --profile preview`) for sideloading, since Google Play is unavailable in China; it needs an HTTPS server. The web build runs in any browser.

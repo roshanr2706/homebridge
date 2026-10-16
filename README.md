@@ -14,6 +14,10 @@ with a PIN checked on the server.
 |---|---|---|---|
 | ![](docs/img/fx-card.png) | ![](docs/img/scam-shield.png) | ![](docs/img/confirm-card.png) | ![](docs/img/ledger.png) |
 
+| Cash-flow runway | Credit builder | Dad picks the transfer service | 中文 |
+|---|---|---|---|
+| ![](docs/img/runway.png) | ![](docs/img/credit.png) | ![](docs/img/remittance.png) | ![](docs/img/chinese.png) |
+
 - **Technical documentation:** [`docs/technical.md`](docs/technical.md)
 - **Security self-assessment:** [`docs/security_self_assessment.md`](docs/security_self_assessment.md)
 - **Demo script and Q&A:** [`docs/demo_script.md`](docs/demo_script.md)
