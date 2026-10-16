@@ -3,6 +3,8 @@
 An AI finance agent for international students whose family supports them from abroad.
 FinTechathon 2026, International Track, Topic C (Cross-border & Student Finance Assistant).
 
+**Team HomeBridge:** Roshan R and Shinnosuke Maeda, University of British Columbia.
+
 The agent plans and talks. It never holds the power to move money: every payment is a draft
 that the student confirms in the app with a single-use token the model never sees, and large,
 unusual or sponsor-funded payments also need the sponsor (parent) to approve on their own device
