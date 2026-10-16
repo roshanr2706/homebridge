@@ -72,7 +72,7 @@ International students live between two financial systems. Their pain points, wh
 | Model adapter | `backend/app/llm.py` | One OpenAI-compatible client for DeepSeek, Qwen or a custom endpoint; the offline engine behind the same interface |
 | Offline engine | `backend/app/offline_engine.py`, `offline_nlu.py` | Deterministic planner (intents) and its pure text parsers (amounts, currencies, payees, dates, question forms) |
 | Reply language | `backend/app/i18n.py` | Language detection (English, Simplified Chinese, Malay) and the offline engine's reply templates |
-| Tools | `backend/app/tools.py` | The tool registry: 23 tools with JSON schemas, tier labels and masked outputs (§4) |
+| Tools | `backend/app/tools.py` | The tool registry: 24 tools with JSON schemas, tier labels and masked outputs (§4) |
 | Policy engine | `backend/app/policy.py` | The only path by which money moves: tiers, limits, risk score, tokens, execution |
 | Compliance | `backend/app/compliance.py` | Sanctions screening (sample list), KYC levels, cross-border records, EFTR flag, BNM-style purpose codes, structuring flag, the compliance report (§5.9) |
 | Remittances | `backend/app/remit.py` | Money from the sponsor's own account: provider options, locked quote, compliance at initiation, in-transit settlement, exactly-once posting (§5.10) |
@@ -138,7 +138,7 @@ Anthropic and OpenAI endpoints are not defaults because they are not reachable f
 
 ## 4. Tools
 
-The registry (`tools.REGISTRY`) holds 23 tools. Students get all of them; sponsors do not chat with the agent.
+The registry (`tools.REGISTRY`) holds 24 tools. Students get all of them; sponsors do not chat with the agent.
 
 | Tool | Tier | Purpose |
 |---|---|---|
@@ -154,6 +154,7 @@ The registry (`tools.REGISTRY`) holds 23 tools. Students get all of them; sponso
 | `check_message_for_scam` | T0 | Scam shield: rule matches, classifier label, keywords that drove it, advice |
 | `get_pending_actions` | T0 | Drafts and their status |
 | `get_limits` | T0 | The sponsor's limits, what has been used in the last 24 h, the sponsor-money cap, the cooling period and which accounts are sponsor-funded; answers "why does dad need to approve?" |
+| `get_data_sharing` | T0 | Who can see what: the sponsor's scoped view (accounts he funds, requests, alerts, digest counts) and where chat text goes (offline engine: nowhere; cloud model: the configured provider and region) |
 | `forecast_cashflow` | T0 | Day-by-day runway of the spending account to the next tuition date, end of term, a month or a date: low point, first shortfall, tuition-fund gaps and suggestions (cheapest conversion, spending cut). Advice only; never drafts |
 | `get_remittance_status` | T0 | Where money asked from the sponsor is: waiting for him, in transit (service, locked amount, account, ETA) or credited; reading it also credits a remittance that is due (§5.10) |
 | `set_budget`, `create_reminder` | T1 | Reversible personal settings |
@@ -320,8 +321,8 @@ The full threat model, tier table and known-risk list are in `docs/security_self
 
 Run with `pytest -q` and `python scripts/run_evidence.py` (from `backend/`). The evidence script writes `evidence/offline/` for the offline engine.
 
-<!-- counts: tests=619, tasks=95, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=23, f1=0.854 on 902 rows, audit=1059; tools also in §2 table and §4 intro, guard-flagged also in the §7 defence-in-depth paragraph -->
-**Headline numbers (offline engine, measured 2026-10-12):** 619 automated tests passing; 95 / 95 scripted tasks; 79 / 79 attacks blocked (induced transfer 27, extraction 11, escalation 21, injection 20); classifier macro F1 0.854 over 902 rows; evidence audit log 1,059 entries with a valid hash chain.
+<!-- counts: tests=746, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854 on 902 rows, audit=1215; tools also in §2 table and §4 intro, guard-flagged also in the §7 defence-in-depth paragraph -->
+**Headline numbers (offline engine, measured 2026-10-16):** 746 automated tests passing; 119 / 119 scripted tasks; 79 / 79 attacks blocked (induced transfer 27, extraction 11, escalation 21, injection 20); classifier macro F1 0.854 over 902 rows; evidence audit log 1,215 entries with a valid hash chain.
 
 | Suite | Result |
 |---|---|
@@ -369,7 +370,7 @@ Several attacks show defence in depth: the limit-splitting attack (A04) passes t
 - **Sandbox only.** A real deployment needs a licensed partner bank or money-services business (FINTRAC registration in Canada; Bank Negara Malaysia rules on outward remittance), KYC, and real payment rails.
 - **Authentication** is static bearer tokens for the demo. On Android and iOS the app already asks for Face ID, a fingerprint or the device passcode before Confirm and Approve (`app/src/stepUp.ts`, using `expo-local-authentication`); this is a client-side check. The sponsor's Approve, Unlock and limit changes also need a PIN checked on the server; the student's Confirm does not yet. Production would use passkeys verified on the server for both, and push notifications to the sponsor.
 - **Compliance** is implemented in the sandbox, not licensed: the watchlist is a fictional sample, KYC levels are seeded, and EFTR or structuring flags are shown and audited but not filed (see §6 of the security self-assessment).
-- **Live model.** DeepSeek is supported but has not been run live; all measured results are for the offline engine. The offline engine still misroutes some unseen phrasings (for example some Chinese emergency-freeze wordings and privacy questions such as "who can see my data?"), and it creates a second identical draft without a duplicate warning.
+- **Live model.** DeepSeek is supported but has not been run live; all measured results are for the offline engine. The offline engine can still misroute phrasings it has not seen; when unsure it asks or falls back to the closest intent, and questions never draft payments.
 - **State.** The bank, pending actions and the draft rate-limit window share one SQLite database (`HB_DB`, in memory by default). With a file path, a restart keeps balances and drafts together: drafts awaiting the student or the sponsor, their expiry, sponsor decisions and the hourly draft count all reload. Only the hash of each confirmation token is stored, so after a restart a draft can be confirmed only by the app that still holds its token. Execution writes an "executing" marker first; a draft interrupted mid-execution reloads as failed, never as executable again. Chat history and the per-minute chat limit are still in memory. Production would use a transactional database shared by all instances, with the same invariants.
 - **FX rates** are a snapshot with modelled spreads. Production would use live quotes and lock the quoted rate on the draft.
 - **Classifier** is small and trained on our own data. It is a second opinion by design, never a gate. A larger multilingual dataset and periodic retraining from reported scams would improve recall.

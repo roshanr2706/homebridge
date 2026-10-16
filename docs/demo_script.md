@@ -4,8 +4,8 @@ For the 5-minute demo video, the 10-minute presentation and the Q&A. Every scrip
 end to end on the offline engine on 2026-10-12 and works without an API key. The live model (DeepSeek) is
 supported but has not been run live yet, so the video uses the offline engine and the header says so.
 
-<!-- counts: tests=619, tasks=95, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=23, f1=0.854; also spoken at video 4:40, outline item 4, Q12, Q13 -->
-**Numbers to quote (offline engine):** 95 / 95 scripted tasks, 79 / 79 attacks blocked, 619 automated tests,
+<!-- counts: tests=746, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854; also spoken at video 4:40, outline item 4, Q12, Q13 -->
+**Numbers to quote (offline engine):** 119 / 119 scripted tasks, 79 / 79 attacks blocked, 746 automated tests,
 23 agent tools (none can execute, approve, unlock or change limits), classifier macro F1 0.854.
 
 ## Before recording
@@ -42,7 +42,7 @@ supported but has not been run live yet, so the video uses the offline engine an
 | 3:40 | Aisha · Assistant | Type: `冻结我的账户` | **Freeze**: payments locked, reply in Chinese. Dad's phone shows the alert and the lock; every card shows FROZEN. "She can unlock her own money in the Wallet. What Dad funds stays locked until he unlocks it with his PIN. There is no unlock tool for the AI." |
 | 4:00 | Header, then Ledger | Tap **EN**. Open **Ledger** | "Chain verified, N entries." Tap any entry → "EDITED #N · DETECTED AT #N", that row in red. "Every step you just saw is in this hash chain." |
 | 4:20 | Aisha · Assistant | **One unscripted question.** Ask someone who has not seen the engine to type one money question, and keep whatever happens | Usually an answer with a card; otherwise a clarifying question or a short menu. Say: "It never guesses with money: anything it drafts still waits for her tap, and Dad above the limits." |
-| 4:40 | | "79 of 79 attacks blocked, 95 of 95 tasks, 619 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
+| 4:40 | | "79 of 79 attacks blocked, 119 of 119 tasks, 746 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
 
 Timing notes: steps 2:05 to 2:55 rely on the 20-second demo settlement; if it is still in transit at 2:55,
 say "still on its way" and come back to it after the credit card. The lock at 3:40 stays on, so do it last
@@ -112,6 +112,6 @@ Today the request waits for him (approval windows are 24 hours), and her card sh
 We don't let it decide anything. It can only add friction (a flag, risk points, escalation to Dad); it never approves or unblocks. The rules catch exact patterns in three languages, the classifier catches paraphrases, and the hard limits do the blocking. 62 of the 79 attacks are flagged by the guard; the other 17 are stopped by later layers.
 
 **13. "What did you build versus call? And what if the model is jailbroken?"**
-The model is a replaceable component behind one adapter. Everything that decides what is allowed is ours: the policy engine, tiers, limits, risk score, token scheme, compliance layer, remittance flow, sponsor PIN, sandbox bank, true-cost FX maths, the classifier (trained on our own 902-row multilingual dataset), taint tracking, the tool-output scanner, the offline planner and the audit chain. A jailbroken model can say anything, but it can only call the 23 registered tools, none of which executes, approves, unlocks or changes limits, and the confirmation token is never in its context. `tests/test_attacks.py` replaces the model with an attacker-controlled script to prove it.
+The model is a replaceable component behind one adapter. Everything that decides what is allowed is ours: the policy engine, tiers, limits, risk score, token scheme, compliance layer, remittance flow, sponsor PIN, sandbox bank, true-cost FX maths, the classifier (trained on our own 902-row multilingual dataset), taint tracking, the tool-output scanner, the offline planner and the audit chain. A jailbroken model can say anything, but it can only call the 24 registered tools, none of which executes, approves, unlocks or changes limits, and the confirmation token is never in its context. `tests/test_attacks.py` replaces the model with an attacker-controlled script to prove it.
 
 **If asked about WeBank's own users:** currencies, providers, payees, purpose codes and scam rules are data, and the Chinese scam rules (冒充公检法, "safe account") are already in. A CNY → CAD persona with the SAFE annual quota as data has not been built yet.

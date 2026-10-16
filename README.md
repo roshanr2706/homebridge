@@ -22,16 +22,16 @@ with a PIN checked on the server.
 
 ## Results
 
-<!-- counts: tests=619, tasks=95, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=23, f1=0.854 on 902 rows, audit=1059 -->
-Offline engine, measured 2026-10-12:
+<!-- counts: tests=746, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854 on 902 rows, audit=1215 -->
+Offline engine, measured 2026-10-16:
 
 | | |
 |---|---|
-| Scripted tasks | 95 / 95 pass (79 English including casual Malaysian English, 9 Simplified Chinese, 7 Malay) |
+| Scripted tasks | 119 / 119 pass (96 English including casual Malaysian English, 14 Simplified Chinese, 9 Malay) |
 | Attack suite | 79 / 79 blocked (induced transfer 27, extraction 11, escalation 21, prompt injection 20) |
-| Automated tests | 619 passing, no network needed |
+| Automated tests | 746 passing, no network needed |
 | Our classifier | macro F1 0.854 (grouped 5-fold CV, 902 rows) |
-| Agent tools | 23 registered; none of them can execute, approve, unlock or change limits |
+| Agent tools | 24 registered; none of them can execute, approve, unlock or change limits |
 
 The scripted tasks run on the deterministic offline engine. A live LLM run (DeepSeek) has not been done
 yet: the client is tested against a mocked transport only (see "Choosing the model").
