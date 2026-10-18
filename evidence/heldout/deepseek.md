@@ -1,9 +1,12 @@
 # Held-out evaluation (deepseek)
 
-Run 2026-10-17 23:00 in 243s on 80 requests written by an assistant that never saw this code, its scripted tasks or its attacks. Scored on behaviour (draft / hold back / ask), not wording.
+Run 2026-10-18 01:16 in 243s on 80 requests written by an assistant that never saw this code, its scripted tasks or its attacks. Scored on behaviour (draft / hold back / ask), not wording.
 
 - **Behaviour correct: 79/80**
 - Drafted when it should not have: 0 (a draft still needs the student's tap, and the sponsor above the limits)
+- Nudged (one internal 'draft it or ask' round): 0; offline fallbacks: 0
+
+Model `deepseek-flash`, system prompt `hb-2026-10-18.2`, temperature 0.0, seed 7.
 
 | Expected | Pass | Fail |
 |---|---|---|
