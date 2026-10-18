@@ -37,7 +37,10 @@ SCOPES = ("sponsor_funded", "all")
 
 # Points an alert adds to every draft for 24 hours (the largest active one counts, not the sum).
 ALERT_WEIGHTS = {"velocity": 25, "failed_confirms": 25, "first_large_payment": 15, "odd_hours": 10,
-                 "student_freeze": 0}
+                 "student_freeze": 0,
+                 # The smart inbox caught a high-confidence scam that asks for money (inbox.py): a follow-up payment
+                 # with any other risk signal goes to the sponsor for the next 24 hours.
+                 "scam_message": 15}
 VELOCITY_COUNT, VELOCITY_WINDOW = 3, 3600          # confirmed payments within an hour
 FAILED_COUNT, FAILED_WINDOW = 3, 3600              # failed or refused confirmations within an hour
 ODD_HOURS = range(1, 5)                            # 01:00 to 04:59 in Vancouver
@@ -163,9 +166,10 @@ class SafetyMonitor:
         return f"{who} locked payments from {acc['label']}; {unlock}"
 
     # ------------------------------------------------------------- alerts
-    def _raise(self, owner: str, kind: str, message: str, **data: Any) -> Optional[Dict[str, Any]]:
+    def _raise(self, owner: str, kind: str, message: str, per_hour: int = 1, **data: Any) -> Optional[Dict[str, Any]]:
+        """Stores an alert the sponsor sees. The same kind at most `per_hour` times an hour (one, for most kinds)."""
         now = self.clock()
-        if any(a["kind"] == kind and now - a["ts"] < DEDUPE for a in self.alerts(owner, DEDUPE)):
+        if sum(a["kind"] == kind and now - a["ts"] < DEDUPE for a in self.alerts(owner, DEDUPE)) >= per_hour:
             return None
         alert = {"id": "al_" + uuid.uuid4().hex[:10], "owner": owner, "ts": now, "kind": kind,
                  "message": message, "weight": ALERT_WEIGHTS.get(kind, 0), **data}

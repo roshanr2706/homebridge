@@ -144,6 +144,15 @@ AUTO_LIST_RE = (r"what (did|has) (the |my )?auto-?pilot (do|done)|auto-?pilot (a
                 r"apa (yang )?auto-?pilot")
 
 
+# Smart inbox (inbox.py): "anything suspicious in my messages?", "收到的短信有没有诈骗？", "ada mesej penipuan dalam
+# peti masuk saya?". Only short questions about her own messages; a pasted message is a scam check instead.
+INBOX_RE = (r"\binbox\b|\b(my|the|any|new|recent|latest) (messages|texts|text messages|sms|emails|mail)\b|"
+            r"\b(did i|have i|i) (get|got|receive[d]?)\b.{0,25}\b(messages?|texts?|sms|emails?|bills?)\b|"
+            r"\b(messages?|texts?|sms|emails?) (i|that i) (got|received|have)\b|"
+            r"收到的?(短信|消息|邮件|信息)|(短信|消息|邮件)(里|中|有没有|有无)|收件箱|"
+            r"\bpeti masuk\b|\bmesej (saya|yang saya terima)\b|\bsms saya\b")
+
+
 # Cash-flow forecast intent, in English, Malay ("cukup" = enough) and Chinese ("够用" = enough to live on).
 FORECAST_WORDS = (r"run(ning)? out of (money|cash|funds)|cash ?flow|forecast|runway|\bsurvive\b|"
                   r"\blast (me )?(until|till|til|through)\b|how long .{0,25}\blast\b|"
@@ -392,6 +401,13 @@ class OfflineEngine:
         lock = self._lock_request(text, low, res, done)
         if lock:
             return lock
+
+        # 0b. The smart inbox (read-only): what HomeBridge already found in her incoming messages
+        if "list_inbox" in done:
+            from .inbox import reply as inbox_reply   # local: inbox imports tools, which the engine never needs
+            return _say(inbox_reply(_result(res, "list_inbox") or {}, L))
+        if len(text) <= 160 and "\n" not in text and not quoted_segments(text) and re.search(INBOX_RE, low):
+            return _call("list_inbox")
 
         # 1. Scam check of a pasted or quoted message
         pasted = state.get("slot") == "scam_text" and len(text.strip()) >= 12

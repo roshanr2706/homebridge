@@ -27,6 +27,7 @@ const ALERT_TITLE: Record<string, Key> = {
   odd_hours: 'alert.odd_hours',
   failed_confirms: 'alert.failed_confirms',
   student_freeze: 'alert.student_freeze',
+  scam_message: 'alert.scam_message',
 };
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
@@ -241,7 +242,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
                 <Body style={{ fontFamily: fonts.bodyBold, fontSize: 13, flex: 1 }}>{ALERT_TITLE[a.kind] ? tr(ALERT_TITLE[a.kind]) : a.kind}</Body>
                 <Mono style={{ fontSize: 11, color: t.faint }}>{tr('sp.vancouverTime', { time: cityTime('America/Vancouver', new Date(a.ts * 1000)) })}</Mono>
               </Row>
-              <Body style={{ fontSize: 12.5, color: t.muted, lineHeight: 18 }}>{a.message}</Body>
+              <Body style={{ fontSize: 12.5, color: t.muted, lineHeight: 18 }}>{(tr.lang === 'zh' && a.message_zh) || a.message}</Body>
             </View>
           ))}
         </Surface>

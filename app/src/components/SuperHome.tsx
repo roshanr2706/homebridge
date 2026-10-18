@@ -6,10 +6,11 @@ import { Pressable, TextInput, View } from 'react-native';
 
 import { api, type ForecastCard, type Overview } from '../api';
 import { useT } from '../i18n';
+import { useInboxBadge } from '../inboxBadge';
 import { amount, money, useFontSet, useTheme } from '../theme';
 import { Body, Mono, Row } from '../ui';
 
-export type Tab = 'assistant' | 'wallet' | 'ledger' | 'approvals' | 'rules';
+export type Tab = 'assistant' | 'inbox' | 'wallet' | 'ledger' | 'approvals' | 'rules';
 type Bi = { en: string; zh: string };
 type Go = { ask?: Bi; fill?: Bi; tab?: Tab };
 
@@ -29,7 +30,7 @@ const TILES: Tile[] = [
   { key: 'budget', icon: '预', color: '#00B578', label: { en: 'Budget', zh: '预算' }, go: { ask: { en: 'Where did my money go this month?', zh: '我这个月花了多少？' } } },
   { key: 'lock', icon: '锁', color: '#5B6475', label: { en: 'Lock', zh: '冻结' }, go: { tab: 'wallet' } },
   { key: 'sponsor', icon: '爸', color: '#7A5AF8', label: { en: 'Sponsor', zh: '爸爸' }, go: { ask: { en: 'Did dad send the money?', zh: '爸爸的钱到了吗？' } } },
-  { key: 'ledger', icon: '明', color: '#1677FF', label: { en: 'Ledger', zh: '明细' }, go: { tab: 'ledger' } },
+  { key: 'inbox', icon: '消', color: '#FF3141', label: { en: 'Inbox', zh: '消息' }, go: { tab: 'inbox' } },
   { key: 'runway', icon: '跑', color: '#FF7A00', label: { en: 'Runway', zh: '跑道' }, go: { ask: { en: 'Will I run out of money before tuition?', zh: '我的钱够用到学期末吗？' } } },
   { key: 'fx', icon: '汇', color: '#13A8A8', label: { en: 'FX rates', zh: '汇率' }, go: { ask: { en: 'Is now a good time to convert MYR?', zh: '马币汇率最近怎么样' } } },
 ];
@@ -109,6 +110,7 @@ export function SuperStudentHome({
   const pendingDad = o.pending.filter((a) => a.status === 'awaiting_sponsor').length;
   const next = o.tuition.installments[0];
   const credit = o.credit && o.credit.has_card ? o.credit : null;
+  const unreadInbox = useInboxBadge();
   const badge: Record<string, string | true | undefined> = {
     tuition: next && o.tuition.next_shortfall_cad > 0 ? tr('sa.days', { n: next.days_until_due }) : undefined,
     credit: credit?.statement && credit.statement.remaining > 0 ? true : undefined,
@@ -116,6 +118,7 @@ export function SuperStudentHome({
     budget: o.budget.categories.some((c) => c.over_budget) ? true : undefined,
     sponsor: pendingDad ? String(pendingDad) : undefined,
     runway: fc && fc.verdict !== 'on_track' ? true : undefined,
+    inbox: unreadInbox ? String(unreadInbox) : undefined,
   };
 
   return (

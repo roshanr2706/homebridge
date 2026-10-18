@@ -13,9 +13,12 @@ import { Geist_700Bold } from '@expo-google-fonts/geist/700Bold';
 
 import { PersonScope, usePerson, type Person } from './src/account';
 import { engineLabel, ModelChip } from './src/components/TracePanel';
-import { api, type Role } from './src/api';
+import { api, type InboxSample, type Role } from './src/api';
+import { useDemoMode } from './src/hooks';
+import { InboxBadgeScope } from './src/inboxBadge';
 import { LangScope, setLang, useT, type Key, type Lang } from './src/i18n';
 import { AssistantScreen } from './src/screens/AssistantScreen';
+import { InboxScreen } from './src/screens/InboxScreen';
 import { LedgerScreen } from './src/screens/LedgerScreen';
 import { Onboarding } from './src/screens/Onboarding';
 import { RulesScreen } from './src/screens/RulesScreen';
@@ -26,11 +29,12 @@ import { cityTime, SkinProvider, themeFor, useFontSet, useSkin, useTheme } from 
 import { ToastProvider, useToast } from './src/toast';
 import { Body, Mono, Row } from './src/ui';
 
-type Tab = 'assistant' | 'wallet' | 'ledger' | 'approvals' | 'rules';
+type Tab = 'assistant' | 'inbox' | 'wallet' | 'ledger' | 'approvals' | 'rules';
 
 const TABS: Record<Role, { key: Tab; label: Key; glyph: string }[]> = {
   student: [
     { key: 'assistant', label: 'tab.assistant', glyph: '◐' },
+    { key: 'inbox', label: 'tab.inbox', glyph: '✉' },
     { key: 'wallet', label: 'tab.wallet', glyph: '▤' },
     { key: 'ledger', label: 'tab.ledger', glyph: '⛓' },
   ],
@@ -130,7 +134,31 @@ function Phone({ person, children }: { person: Person; children: ReactNode }) {
   );
 }
 
-function TabBar({ role, current, onTab, bottomInset }: { role: Role; current: Tab; onTab: (k: Tab) => void; bottomInset: number }) {
+// A red count on a tab (the inbox's unread messages), drawn on the glyph's top-right corner.
+function TabBadge({ n }: { n: number }) {
+  const t = useTheme();
+  const fonts = useFontSet();
+  if (!n) return null;
+  return (
+    <View style={[styles.badge, { backgroundColor: t.badge, borderColor: t.tabbarBg }]}>
+      <Body style={{ color: '#FFFFFF', fontSize: 9.5, lineHeight: 12, fontFamily: fonts.bodyBold }}>{n > 9 ? '9+' : String(n)}</Body>
+    </View>
+  );
+}
+
+function TabBar({
+  role,
+  current,
+  onTab,
+  bottomInset,
+  badges = {},
+}: {
+  role: Role;
+  current: Tab;
+  onTab: (k: Tab) => void;
+  bottomInset: number;
+  badges?: Partial<Record<Tab, number>>;
+}) {
   const t = useTheme();
   const fonts = useFontSet();
   const tr = useT();
@@ -153,7 +181,10 @@ function TabBar({ role, current, onTab, bottomInset }: { role: Role; current: Ta
                 accessibilityLabel={tr(x.label)}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 7, height: 42, paddingHorizontal: on ? 18 : 16, borderRadius: 999, backgroundColor: on ? roleColor : 'transparent' }}
               >
-                <Body style={{ fontSize: 16, lineHeight: 20, color: on ? t.accentText : t.muted }}>{x.glyph}</Body>
+                <View>
+                  <Body style={{ fontSize: 16, lineHeight: 20, color: on ? t.accentText : t.muted }}>{x.glyph}</Body>
+                  <TabBadge n={badges[x.key] ?? 0} />
+                </View>
                 {on && <Body style={{ fontSize: 13.5, lineHeight: 18, fontFamily: fonts.bodyBold, color: t.accentText }}>{tr(x.label)}</Body>}
               </Pressable>
             );
@@ -179,7 +210,10 @@ function TabBar({ role, current, onTab, bottomInset }: { role: Role; current: Ta
             accessibilityState={{ selected: on }}
             accessibilityLabel={tr(x.label)}
           >
-            <Body style={{ fontSize: 18, lineHeight: 21, color }}>{x.glyph}</Body>
+            <View>
+              <Body style={{ fontSize: 18, lineHeight: 21, color }}>{x.glyph}</Body>
+              <TabBadge n={badges[x.key] ?? 0} />
+            </View>
             <Body style={{ fontSize: 11, lineHeight: 14, color, fontFamily: on ? fonts.bodyBold : fonts.bodyMedium }} numberOfLines={1}>
               {tr(x.label)}
             </Body>
@@ -210,6 +244,7 @@ function Shell({ epoch, provider, onReset, people, role, onRole, fixed }: ShellP
   const person = people[role];
   const [tab, setTab] = useState<Record<Role, Tab>>({ student: 'assistant', sponsor: 'approvals' });
   const [settings, setSettings] = useState(false);
+  const [inboxBadge, setInboxBadge] = useState(0);
   const current = tab[role];
   const roles: Role[] = fixed ? [role] : ['student', 'sponsor'];
   // The mock phones on the stage sit inside the stage's own safe area, so they take no insets.
@@ -297,7 +332,14 @@ function Shell({ epoch, provider, onReset, people, role, onRole, fixed }: ShellP
       <View style={{ flex: 1 }}>
         {/* Every pane stays mounted so the chat and polling survive tab and role switches (and a replayed onboarding). */}
         <View style={{ flex: 1 }} key={epoch}>
-          {pane('student', 'assistant', <AssistantScreen active={visible('student', 'assistant')} onTab={(k) => setTab((p) => ({ ...p, student: k }))} />)}
+          <InboxBadgeScope value={inboxBadge}>
+            {pane('student', 'assistant', <AssistantScreen active={visible('student', 'assistant')} onTab={(k) => setTab((p) => ({ ...p, student: k }))} />)}
+          </InboxBadgeScope>
+          {pane(
+            'student',
+            'inbox',
+            <InboxScreen active={visible('student', 'inbox')} onBadge={setInboxBadge} onTab={(k) => setTab((p) => ({ ...p, student: k }))} />,
+          )}
           {pane('student', 'wallet', <WalletScreen active={visible('student', 'wallet')} />)}
           {pane('student', 'ledger', <LedgerScreen role="student" active={visible('student', 'ledger')} />)}
           {pane('sponsor', 'approvals', <SponsorScreen active={visible('sponsor', 'approvals')} />)}
@@ -311,7 +353,13 @@ function Shell({ epoch, provider, onReset, people, role, onRole, fixed }: ShellP
           {onboarding && <Onboarding key={`${role}-${epoch}`} person={person} />}
         </View>
         {!onboarding && !loading && (
-          <TabBar role={role} current={current} onTab={(k) => setTab((p) => ({ ...p, [role]: k }))} bottomInset={inset.bottom} />
+          <TabBar
+            role={role}
+            current={current}
+            onTab={(k) => setTab((p) => ({ ...p, [role]: k }))}
+            bottomInset={inset.bottom}
+            badges={role === 'student' ? { inbox: inboxBadge } : {}}
+          />
         )}
         {settings && !onboarding && <Settings person={person} onClose={() => setSettings(false)} />}
       </View>
@@ -341,15 +389,38 @@ function Stage() {
       .catch(() => setProvider(''));
   }, [epoch]);
 
-  // Stage control for the Autopilot moment: nudge the sandbox MYR/CAD rate up; a rate watch at its target converts on
-  // its own and both phones announce it.
-  const nudgeRate = async () => {
+  const demo = useDemoMode();
+  // Operator controls for the presentation (demo mode only; each call carries the X-Operator header). Moving the rate
+  // lets a rate watch fire, the time skip brings tuition week, and a new message lands in Aisha's inbox, which
+  // announces it on her phone by itself.
+  const stage = async (fn: () => Promise<void>) => {
     try {
-      const r = await api.fxShift(0.0015);
-      toast(tr('stage.rateMoved', { mid: r.rate.mid.toFixed(4) }), tr('stage.rateMovedBody'), 'info');
+      await fn();
     } catch (e) {
-      toast(tr('reset.failed'), (e as Error).message, 'danger');
+      toast(tr('demo.failed'), (e as Error).message, 'danger');
     }
+  };
+  const controls: DemoControls = {
+    rate: (delta) =>
+      stage(async () => {
+        const r = await api.fxShift(delta);
+        toast(tr('stage.rateMoved', { mid: r.rate.mid.toFixed(4) }), tr('stage.rateMovedBody'), 'info');
+      }),
+    tuitionWeek: () =>
+      stage(async () => {
+        const r = await api.timeSkip({ to: 'tuition_week' });
+        toast(tr('demo.skipped', { date: tr.date(r.today) }), tr('demo.skippedBody', { n: r.skipped_days }), 'info');
+      }),
+    autopilot: () =>
+      stage(async () => {
+        const r = await api.runAutopilot();
+        toast(tr('demo.autopilotRan'), tr('demo.autopilotRanBody', { n: r.decisions.length }), 'info');
+      }),
+    inject: (sample) =>
+      stage(async () => {
+        await api.injectInbox(sample);
+      }),
+    reset: () => void reset(),
   };
 
   const reset = async () => {
@@ -397,7 +468,7 @@ function Stage() {
   return (
     // The stage chrome follows the student's look.
     <SkinProvider skin={student.skin}>
-      <StageChrome provider={provider} onReset={reset} onNudge={nudgeRate} onOnePhone={() => setSplit(false)} onLang={switchBoth} lang={student.lang}>
+      <StageChrome provider={provider} demo={demo ? controls : null} onOnePhone={() => setSplit(false)} onLang={switchBoth} lang={student.lang}>
         {(['student', 'sponsor'] as Role[]).map((r) => {
           const pt = themeFor(people[r].skin, r === 'sponsor');
           return (
@@ -422,18 +493,92 @@ function Stage() {
   );
 }
 
+type DemoControls = {
+  rate: (delta: number) => void;
+  tuitionWeek: () => void;
+  autopilot: () => void;
+  inject: (sample: string) => void;
+  reset: () => void;
+};
+
+// Operator-facing names for the inbox samples (backend/app/inbox.py SAMPLES); an unknown one shows the server's label.
+const SAMPLE_LABEL: Record<string, Key> = {
+  scam_cra_giftcards: 'demo.s.cra',
+  scam_parcel_police_zh: 'demo.s.parcel',
+  scam_landlord_new_account: 'demo.s.landlord',
+  bill_bchydro: 'demo.s.hydro',
+  bill_northline: 'demo.s.northline',
+  tuition_reminder_ubc: 'demo.s.tuition',
+  dad_whatsapp_ms: 'demo.s.dad',
+  job_scam_fee: 'demo.s.job',
+};
+
+function MenuItem({ label, onPress, indent }: { label: string; onPress: () => void; indent?: boolean }) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="menuitem"
+      style={({ pressed }) => ({ paddingVertical: 7, paddingLeft: indent ? 24 : 12, paddingRight: 12, backgroundColor: pressed ? t.sunken : 'transparent' })}
+    >
+      <Body style={{ fontSize: indent ? 12.5 : 13, lineHeight: 18, color: indent ? t.muted : t.text }}>{label}</Body>
+    </Pressable>
+  );
+}
+
+// A compact menu on the two-phone stage bar, shown only when the server is in demo mode.
+function DemoMenu({ c }: { c: DemoControls }) {
+  const t = useTheme();
+  const tr = useT();
+  const [open, setOpen] = useState(false);
+  const [sub, setSub] = useState(false);
+  const [samples, setSamples] = useState<InboxSample[] | null>(null);
+  useEffect(() => {
+    if (!open || samples) return;
+    api
+      .inboxSamples()
+      .then((r) => setSamples(r.samples))
+      .catch(() => setSamples([]));
+  }, [open, samples]);
+  const pick = (fn: () => void) => () => {
+    setOpen(false);
+    setSub(false);
+    fn();
+  };
+  return (
+    <View style={{ zIndex: 30 }}>
+      <Pressable onPress={() => setOpen((v) => !v)} accessibilityRole="button" accessibilityLabel={tr('demo.menuLabel')} accessibilityState={{ expanded: open }}>
+        <Body style={{ fontSize: 13, color: open ? t.accent : t.muted }}>{tr('demo.menu')}</Body>
+      </Pressable>
+      {open && (
+        <View accessibilityRole="menu" style={[styles.menu, { backgroundColor: t.surface, borderColor: t.border, shadowColor: t.shadow, borderRadius: t.radiusSm }]}>
+          <MenuItem label={tr('stage.nudge')} onPress={pick(() => c.rate(0.0015))} />
+          <MenuItem label={tr('demo.rateDown')} onPress={pick(() => c.rate(-0.0015))} />
+          <MenuItem label={tr('demo.tuitionWeek')} onPress={pick(c.tuitionWeek)} />
+          <MenuItem label={tr('demo.runAutopilot')} onPress={pick(c.autopilot)} />
+          <MenuItem label={`${tr('demo.newMessage')} ${sub ? '▾' : '▸'}`} onPress={() => setSub((v) => !v)} />
+          {sub &&
+            (samples ?? []).map((s) => (
+              <MenuItem key={s.key} indent label={SAMPLE_LABEL[s.key] ? tr(SAMPLE_LABEL[s.key]) : s.label} onPress={pick(() => c.inject(s.key))} />
+            ))}
+          <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: t.border, marginVertical: 4 }} />
+          <MenuItem label={tr('reset.button')} onPress={pick(c.reset)} />
+        </View>
+      )}
+    </View>
+  );
+}
+
 function StageChrome({
   provider,
-  onReset,
-  onNudge,
+  demo,
   onOnePhone,
   onLang,
   lang,
   children,
 }: {
   provider: string;
-  onReset: () => void;
-  onNudge: () => void;
+  demo: DemoControls | null;
   onOnePhone: () => void;
   onLang: (l: Lang) => void;
   lang: Lang;
@@ -446,7 +591,7 @@ function StageChrome({
   return (
     <View style={{ flex: 1, backgroundColor: t.stage, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}>
       <StatusBar style={t.dark ? 'light' : 'dark'} />
-      <View style={[styles.stageBar, { borderBottomColor: t.border, backgroundColor: t.bg, paddingTop: 10 + insets.top }]}>
+      <View style={[styles.stageBar, { borderBottomColor: t.border, backgroundColor: t.bg, paddingTop: 10 + insets.top, zIndex: 20 }]}>
         <Row style={{ gap: 10 }}>
           <Mark />
           <View>
@@ -459,15 +604,10 @@ function StageChrome({
         </Row>
         <Row style={{ gap: 14 }}>
           <LangToggle lang={lang} onSwitch={onLang} />
-          <Pressable onPress={onNudge} accessibilityRole="button" accessibilityLabel={tr('stage.nudgeLabel')}>
-            <Body style={{ fontSize: 13, color: t.muted }}>{tr('stage.nudge')}</Body>
-          </Pressable>
           <Pressable onPress={onOnePhone} accessibilityRole="button">
             <Body style={{ fontSize: 13, color: t.muted }}>{tr('stage.onePhone')}</Body>
           </Pressable>
-          <Pressable onPress={onReset} accessibilityRole="button" accessibilityLabel={tr('reset.label')}>
-            <Body style={{ fontSize: 13, color: t.muted }}>{tr('reset.button')}</Body>
-          </Pressable>
+          {demo && <DemoMenu c={demo} />}
         </Row>
       </View>
       <View style={styles.stage}>{children}</View>
@@ -534,6 +674,30 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 18 },
     shadowOpacity: 1,
     shadowRadius: 40,
+    elevation: 8,
+  },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -9,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menu: {
+    position: 'absolute',
+    top: 26,
+    right: 0,
+    minWidth: 250,
+    borderWidth: 1,
+    paddingVertical: 4,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 1,
+    shadowRadius: 20,
     elevation: 8,
   },
   floating: { position: 'absolute', borderWidth: 1, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },

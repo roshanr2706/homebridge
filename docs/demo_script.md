@@ -22,7 +22,8 @@ cards, tiers, PIN and approvals are the same. The header shows which engine is a
    `HB_DEMO_TODAY=2026-10-08`, sponsor PIN `246810`, operator token `demo-operator`.
 3. **Record in the daytime (Vancouver).** Alerts use the real clock, and any action between 01:00 and 05:00
    in Vancouver raises an `odd_hours` alert that changes risk scores and cards.
-4. Press ↺ (top right) to reset the sandbox. Check the header reads `sandbox · offline`.
+4. Reset the sandbox: **Demo ▾ → ↺ Reset demo** on the stage bar (top right; the menu shows only in demo mode). Check the
+   header reads `sandbox · offline`.
 5. Keep this file open to paste the longer messages.
 
 ## 5-minute video
@@ -58,12 +59,31 @@ reset (↺), before the freeze: a lock halts the autopilot.
 |---|---|---|---|
 | 0:00 | Aisha · Assistant | Type: `convert my ringgit automatically when the rate is good, MYR 2,000 a week` | "I've proposed a Rate watch mandate: convert MYR to CAD Everyday when MYR/CAD reaches 0.3250 or better, up to MYR 2,000 a week. It does nothing until your dad approves it in his app with his PIN." An **Autopilot proposal** card, *waiting for approval*. Dad's phone toasts "New autopilot proposal" |
 | 0:08 | Dad · Rules | Scroll to **Autopilot**. Tap **Approve with PIN**, enter `246810` | "A standing permission, capped at MYR 2,000 a week, over the money he funds. The chat could only propose it." Both phones show the mandate **ON**, "Now 0.3236 · target 0.3250", MYR 0 of 2,000 used |
-| 0:18 | Stage bar | Operator taps **MYR/CAD ↑** (moves the sandbox mid rate to 0.3251) | Within a second, without anyone tapping Confirm: both phones toast **Autopilot acted**: "Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD 646.30 via HomeBridge wallet conversion, CAD 3.81 better than this week's average. Mandate: Rate watch, MYR 2,000/week, 2,000 used." (Aisha's in Chinese if her phone is in 中文.) The cap bar is full; the timeline says ACTED |
+| 0:18 | Stage bar | Operator opens **Demo ▾** and taps **MYR/CAD ↑** (moves the sandbox mid rate to 0.3251) | Within a second, without anyone tapping Confirm: both phones toast **Autopilot acted**: "Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD 646.30 via HomeBridge wallet conversion, CAD 3.81 better than this week's average. Mandate: Rate watch, MYR 2,000/week, 2,000 used." (Aisha's in Chinese if her phone is in 中文.) The cap bar is full; the timeline says ACTED |
 | 0:25 | | "It went through the same policy engine as a chat draft: T2, compliance checked, inside the cap, audited as `autopilot_executed`. Anything bigger, or riskier, comes back to a person. Revoke is one tap, no PIN." Optionally tap **Revoke** on Dad's phone | "Revoked: autopilot stops now" |
 
 Without the stage bar: `curl -X POST localhost:8000/demo/fx_shift -H "Authorization: Bearer demo-student" -H "X-Operator: demo-operator" -H "Content-Type: application/json" -d '{"rate": 0.3251}'`. The demo tick
 (`HB_AUTOPILOT_TICK`, 30 s) also picks it up on its own. A rate watch acts once per week of sandbox date, so reset
 before running it again.
+
+## The inbox moment (20 seconds)
+
+The AI acts first: a message arrives and HomeBridge has checked it before Aisha reads it. Do it after a reset, before
+the freeze, ideally with Aisha's phone in 中文 (header switch) so the Chinese scam reads naturally. Not between 01:00
+and 05:00 in Vancouver (the odd-hours alert changes the bill's risk score).
+
+| Time | Screen | Do / say | What the viewer sees |
+|---|---|---|---|
+| 0:00 | Stage bar | Operator: **Demo ▾ → New message ▸ → Scam: parcel and "police" (Chinese SMS)**. Say: "A text arrives on Aisha's phone. Nobody has asked HomeBridge anything." | Within two seconds Aisha's phone toasts **HomeBridge checked a new message: likely scam** (疑似诈骗：不要付款，不要透露验证码。) and the Inbox tab (super-app: the 消息 tile) gets a red badge. Dad's phone shows **Scam message caught** under Unusual activity: the warning signs, never the message |
+| 0:06 | Aisha · Inbox | Tap the message | The triage card: “安全账户”冒充警方诈骗, 包裹或海关问题被转给“警方”, 指控你涉嫌犯罪 …; what to do; **锁定所有付款** one tap away. "It flags and warns. It never pays, and it never follows what a message says." |
+| 0:12 | Stage bar, then Aisha · Inbox | **Demo ▾ → New message ▸ → Bill: BC Hydro CAD 62.15**. Open it, tap **Draft this payment** | "Bill from BC Hydro: CAD 62.15, due Oct 30", payee matched to her **saved** BC Hydro account (••••9988 ✓), "you usually pay about CAD 41.20". One tap makes a normal T2 draft to the saved account, with the card saying the amount came from a message; she taps **Confirm** herself |
+| 0:20 | | "Triage only adds friction: the scam got a warning and a lock button, the bill got a draft she still confirms. A bill that names a different account is treated as a scam." | |
+
+Then in chat: `anything suspicious in my messages?` or `收到的短信有没有诈骗？` lists the flagged message and the bill
+waiting. Without the stage bar: `curl -X POST localhost:8000/demo/inbox -H "Authorization: Bearer demo-student" -H
+"X-Operator: demo-operator" -H "Content-Type: application/json" -d '{"sample": "scam_parcel_police_zh"}'` (then
+`"bill_bchydro"`). **Demo ▾ → Skip to tuition week** moves the sandbox date to a week before tuition (Dec 30): the runway,
+the tuition card and an active tuition guard react; reset to go back.
 
 ## Extra flows (for Q&A or a longer cut)
 
@@ -129,7 +149,7 @@ Today the request waits for him (approval windows are 24 hours), and her card sh
 We don't let it decide anything. It can only add friction (a flag, risk points, escalation to Dad); it never approves or unblocks. The rules catch exact patterns in three languages, the classifier catches paraphrases, and the hard limits do the blocking. 62 of the 79 attacks are flagged by the guard; the other 17 are stopped by later layers.
 
 **13. "What did you build versus call? And what if the model is jailbroken?"**
-The model is a replaceable component behind one adapter. Everything that decides what is allowed is ours: the policy engine, tiers, limits, risk score, token scheme, compliance layer, remittance flow, sponsor PIN, sandbox bank, true-cost FX maths, the classifier (trained on our own 902-row multilingual dataset), taint tracking, the tool-output scanner, the offline planner and the audit chain. A jailbroken model can say anything, but it can only call the 26 registered tools, none of which executes, approves, unlocks or changes limits, and the confirmation token is never in its context. `tests/test_attacks.py` replaces the model with an attacker-controlled script to prove it.
+The model is a replaceable component behind one adapter. Everything that decides what is allowed is ours: the policy engine, tiers, limits, risk score, token scheme, compliance layer, remittance flow, sponsor PIN, sandbox bank, true-cost FX maths, the classifier (trained on our own 902-row multilingual dataset), taint tracking, the tool-output scanner, the offline planner and the audit chain. A jailbroken model can say anything, but it can only call the 27 registered tools, none of which executes, approves, unlocks or changes limits, and the confirmation token is never in its context. `tests/test_attacks.py` replaces the model with an attacker-controlled script to prove it.
 
 **14. "Your autopilot moves money without a tap. Isn't that exactly what you said the AI must never do?"**
 The *model* still can't: it can only propose a mandate, and there is no tool to turn one on, widen it or revoke it. A person turns it on in the app (Dad with his PIN for his money, Aisha with her tap for hers), and the autopilot is deterministic code, not the model. It drafts through the same policy engine, so only a T2, compliance-clear draft inside the mandate's caps runs on its own; above a limit, too much sponsor money in a day, a risky signal or a compliance flag, it becomes a normal draft for her. The caps are re-checked in policy code at execution, a freeze halts it, it never adds or pays a new payee, it reads no chat or memos, and every decision is audited and shown on both phones. Honest risk: a mis-set mandate does execute within its caps until someone pauses it (R22).
