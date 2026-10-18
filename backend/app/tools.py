@@ -888,3 +888,5 @@ def freeze_payments(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
 
 # Autopilot tools (list_mandates T0, propose_mandate T1) live with the mandate engine; importing registers them.
 from . import autopilot_tools  # noqa: E402,F401
+# The smart inbox's read-only tool (list_inbox, T0) lives with the inbox; importing registers it.
+from . import inbox  # noqa: E402,F401

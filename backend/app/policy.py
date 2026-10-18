@@ -276,7 +276,7 @@ class PolicyEngine:
             self.bank.log_draft(owner, now, now - 3600)
 
     def _daily_outflow_cad(self, owner: str) -> float:
-        since = (datetime.now() - timedelta(hours=24)).isoformat(timespec="seconds")
+        since = (self.bank.now() - timedelta(hours=24)).isoformat(timespec="seconds")
         spent = sum(self.cad(m / 100, c) for c, m in self.bank.outflow_since(owner, since).items())
         # Include drafts already confirmed or waiting, so splitting a payment cannot dodge the limit.
         for a in self.actions.values():
@@ -438,6 +438,12 @@ class PolicyEngine:
             risk += 30
             reasons.append("Payment details came from content the user did not type (e.g. a pasted message)")
             warnings.append("Check the payee and amount against an official source before confirming.")
+        elif any(v == "inbox" for v in provenance.values()):
+            # A bill the smart inbox read (inbox.py): the payee and its account are the saved ones, only the amount
+            # came from the message, and the student tapped "draft this payment" herself.
+            risk += 10
+            reasons.append("Amount read from a bill message in the inbox (payee and account are the saved ones)")
+            warnings.append("Check the amount against your account with the biller before confirming.")
         for flag in guard_flags or []:
             risk += 40 if flag in ("scam", "injection") else 10
             reasons.append(f"Conversation was flagged by the safety check: {flag}")

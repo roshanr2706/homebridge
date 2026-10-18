@@ -118,6 +118,14 @@ CREATE TABLE IF NOT EXISTS autopilot_activity (
 );
 """
 SCHEMA += AUTOPILOT_SCHEMA
+# Smart inbox (inbox.py): incoming SMS / email / WhatsApp messages and the triage done on arrival. Part of the sandbox,
+# so a demo reset clears it.
+INBOX_SCHEMA = """
+CREATE TABLE IF NOT EXISTS inbox (
+  id TEXT PRIMARY KEY, owner TEXT, received_at REAL, channel TEXT, sender TEXT, body TEXT, status TEXT, data TEXT
+);
+"""
+SCHEMA += INBOX_SCHEMA
 
 
 class Bank:
@@ -126,8 +134,10 @@ class Bank:
         self.db = sqlite3.connect(db_path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.today: Optional[date] = None  # the sandbox's "today", set by reset(); card payments use it
+        # Days the demo operator skipped ahead (demo_clock.py). New transactions are stamped on the sandbox's clock.
+        self.skew_days = 0
         with self._lock:  # a file database from an older version gets the newer (empty) tables
-            self.db.executescript(CARD_SCHEMA + SECURITY_SCHEMA + PREFS_SCHEMA + AUTOPILOT_SCHEMA)
+            self.db.executescript(CARD_SCHEMA + SECURITY_SCHEMA + PREFS_SCHEMA + AUTOPILOT_SCHEMA + INBOX_SCHEMA)
             self.db.commit()
 
     # ------------------------------------------------------------------ setup
@@ -142,8 +152,13 @@ class Bank:
                 cur.execute(f"DROP TABLE IF EXISTS {name}")
             cur.executescript(SCHEMA)
             self.today = today or date.today()
+            self.skew_days = 0
             seed(self, self.today)
             self.db.commit()
+
+    def now(self) -> datetime:
+        """The sandbox's wall clock: real time, plus any days the demo operator skipped ahead."""
+        return datetime.now() + timedelta(days=self.skew_days)
 
     def is_seeded(self) -> bool:
         """True when the database already holds a sandbox (a file DB from an earlier run)."""
@@ -329,7 +344,7 @@ class Bank:
         tid = "tx_" + uuid.uuid4().hex[:10]
         self._x(
             "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?)",
-            (tid, account_id, ts or datetime.now().isoformat(timespec="seconds"),
+            (tid, account_id, ts or self.now().isoformat(timespec="seconds"),
              amount_minor, currency, category, counterparty, memo),
         )
         return tid
@@ -558,7 +573,7 @@ class Bank:
                 raise BankError(f"Insufficient funds in {acc['label']}")
             self.db.execute("UPDATE accounts SET balance=balance+? WHERE id=?", (delta_minor, account_id))
             self.db.execute("INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?)",
-                            (tx_id, account_id, datetime.now().isoformat(timespec="seconds"), delta_minor,
+                            (tx_id, account_id, self.now().isoformat(timespec="seconds"), delta_minor,
                              acc["currency"], category, counterparty, memo))
             self.db.commit()
             return {"transaction_id": tx_id, "account": acc["label"], "currency": acc["currency"],

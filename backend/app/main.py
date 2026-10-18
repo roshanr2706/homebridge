@@ -31,6 +31,7 @@ from .agent import Agent
 from .audit import AuditLog
 from .authn import PinChecker, PinError
 from .autopilot_api import register as register_autopilot
+from .inbox_api import register as register_inbox
 from .bank import Bank
 from .config import Limits, Settings, load_settings
 from .fx import FxMarket
@@ -135,6 +136,8 @@ class AppState:
     audit: AuditLog
     policy: PolicyEngine
     agent: Agent
+    # The pinned date the sandbox started on; a demo time skip (demo_clock.py) moves agent.today, a reset restores it.
+    base_today: Optional[date] = None
 
     @property
     def pins(self) -> PinChecker:
@@ -143,6 +146,8 @@ class AppState:
     def reset(self) -> None:
         defaults = Limits()
         self.settings.limits.single_cad, self.settings.limits.daily_cad = defaults.single_cad, defaults.daily_cad
+        if self.base_today:
+            self.agent.today = self.base_today
         self.bank.reset(self.agent.today)
         self.policy.reset()
         self.agent.reset()
@@ -167,7 +172,7 @@ def build_state(settings: Optional[Settings] = None, today: Optional[date] = Non
         if not bank.has_security_seed():  # a file database from before KYC and the sponsor PIN existed
             seed_security(bank, agent.today)
         seed_sponsor_account(bank)        # ... or from before remittances (a no-op once it exists)
-    return AppState(settings, bank, fx, audit, policy, agent)
+    return AppState(settings, bank, fx, audit, policy, agent, base_today=agent.today)
 
 
 def create_app(state: Optional[AppState] = None) -> FastAPI:
@@ -514,6 +519,8 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
 
     # Autopilot mandates and the operator's stage controls (autopilot_api.py).
     register_autopilot(app, st, auth, student, sponsor, _pin, _my_student)
+    # The smart inbox, and the operator's inbox injection and time skip (inbox_api.py).
+    register_inbox(app, st, auth, student)
 
     # Serve the exported web app from the same origin when it has been built (npm run build:web).
     # Registered last so API routes always win.
