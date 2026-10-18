@@ -2657,5 +2657,221 @@
     "passed": true,
     "problems": [],
     "notes": []
+  },
+  {
+    "id": "T134",
+    "group": "autopilot",
+    "turns": [
+      "convert my ringgit automatically when the rate is good, MYR 2,000 a week"
+    ],
+    "reply": "I've proposed a Rate watch mandate: Convert MYR to CAD Everyday when MYR/CAD reaches 0.3250 or better, up to MYR 2,000 a week. It does nothing until your dad approves it in his app with his PIN, and he can pause or revoke it any time. Everything it does still goes through your limits and checks.",
+    "tools": [
+      "propose_mandate"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T135",
+    "group": "autopilot",
+    "turns": [
+      "汇率好的时候自动帮我把马币换成加币，每周2000马币"
+    ],
+    "reply": "我已提出「汇率监控」授权：当马币兑加币汇率达到 0.3250 或更好时，把马币换入 CAD 日常账户，每周最多 MYR 2,000。在爸爸用 PIN 在他的应用中批准之前，它不会做任何事；他随时可以暂停或撤销。它执行的每一步仍受你的限额和检查约束。",
+    "tools": [
+      "propose_mandate"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T136",
+    "group": "autopilot",
+    "turns": [
+      "pay my hydro bill automatically"
+    ],
+    "reply": "I've proposed a Bill autopay mandate: Pay BC Hydro from CAD Everyday when the bill is due, up to CAD 100 a bill. It does nothing until you tap Activate on the card below (or in Wallet, under Autopilot). You can pause or revoke it any time, and anything outside its caps comes back to you to confirm.",
+    "tools": [
+      "propose_mandate"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T137",
+    "group": "autopilot",
+    "turns": [
+      "bayar bil telefon secara automatik"
+    ],
+    "reply": "Saya dah cadangkan mandat Autobayar bil: Bayar Northline Mobile dari CAD Everyday apabila bil sampai tempoh, sehingga CAD 100 satu bil. Ia tak buat apa-apa sehingga anda tekan Aktifkan pada kad di bawah (atau di Dompet, bahagian Autopilot). Anda boleh jeda atau batalkan bila-bila masa.",
+    "tools": [
+      "propose_mandate"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T138",
+    "group": "autopilot",
+    "turns": [
+      "keep my tuition topped up automatically"
+    ],
+    "reply": "I've proposed a Tuition guard mandate: 30 days before each tuition due date, top up the Tuition Fund from the MYR Wallet if it is short, up to MYR 4,000 a month. It does nothing until your dad approves it in his app with his PIN, and he can pause or revoke it any time. Everything it does still goes through your limits and checks.",
+    "tools": [
+      "propose_mandate"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T139",
+    "group": "autopilot",
+    "turns": [
+      "自动交我的电费"
+    ],
+    "reply": "我已提出「账单自动支付」授权：账单到期时从 CAD 日常账户支付 BC Hydro，每张账单最多 CAD 100。在你点击下方卡片（或钱包里的自动驾驶）上的「启用」之前，它不会做任何事。你随时可以暂停或撤销，超出额度的操作仍会交给你确认。",
+    "tools": [
+      "propose_mandate"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T140",
+    "group": "question",
+    "turns": [
+      "what did autopilot do?"
+    ],
+    "reply": "Latest from autopilot: Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD 646.30 via HomeBridge wallet conversion, CAD 3.81 better than this week's average. Mandate: Rate watch, MYR 2,000/week, 2,000 used. Mandates: Rate watch (on).",
+    "tools": [
+      "list_mandates"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T141",
+    "group": "question",
+    "turns": [
+      "自动驾驶做了什么？"
+    ],
+    "reply": "自动驾驶最新记录：汇率达到 0.3251（目标 0.3250）：通过HomeBridge 钱包内兑换把 MYR 2,000.00 换成 CAD 646.30，比本周平均多 CAD 3.81。授权：汇率监控，每周 MYR 2,000，已用 2,000。 授权：汇率监控 (已启用)。",
+    "tools": [
+      "list_mandates"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T142",
+    "group": "question",
+    "turns": [
+      "autopilot buat apa?"
+    ],
+    "reply": "Terkini daripada autopilot: Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD 646.30 via HomeBridge wallet conversion, CAD 3.81 better than this week's average. Mandate: Rate watch, MYR 2,000/week, 2,000 used. Mandat: Pemerhati kadar (aktif).",
+    "tools": [
+      "list_mandates"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T143",
+    "group": "question",
+    "turns": [
+      "show my mandates"
+    ],
+    "reply": "Autopilot hasn't done anything yet. Mandates: Rate watch (waiting for approval).",
+    "tools": [
+      "list_mandates"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T144",
+    "group": "autopilot",
+    "turns": [
+      "convert when the rate is good"
+    ],
+    "reply": "I've proposed a Rate watch mandate: Convert MYR to CAD Everyday when MYR/CAD reaches 0.3250 or better, up to MYR 2,000 a week. It does nothing until your dad approves it in his app with his PIN, and he can pause or revoke it any time. Everything it does still goes through your limits and checks.",
+    "tools": [
+      "propose_mandate"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T145",
+    "group": "question",
+    "turns": [
+      "should I convert when the rate is good or wait?"
+    ],
+    "reply": "I can't predict exchange rates. Over the last 30 days MYR/CAD ranged from 0.31904 to 0.32733, and today is 0.32651 (average 0.32382). If you need the money for a fixed date like tuition, converting in a few smaller amounts over time reduces the risk of a bad day.",
+    "tools": [
+      "get_fx_history"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
   }
 ]

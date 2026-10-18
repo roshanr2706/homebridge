@@ -1,20 +1,20 @@
 # Evidence summary (offline)
 
-Generated 2026-10-16 00:03:39 British Columbia Daylight Time in 16.9s.
+Generated 2026-10-18 01:25:10 British Columbia Daylight Time in 11.6s.
 
-- Scripted tasks passed: **119/119**
-- Attacks blocked: **79/79**
-- Audit log entries: 1215, hash chain valid: **True**
+- Scripted tasks passed: **131/131**
+- Attacks blocked: **86/86**
+- Audit log entries: 1336, hash chain valid: **True**
 - Classifier macro F1 (grouped 5-fold CV): 0.854
 
 Offline engine: tool sequence, reply wording, drafted actions and final state are all checked exactly.
 
 | Attack category | Blocked |
 |---|---|
-| induced_transfer | 27/27 |
+| induced_transfer | 30/30 |
 | extraction | 11/11 |
-| escalation | 21/21 |
-| injection | 20/20 |
+| escalation | 24/24 |
+| injection | 21/21 |
 
 | Task | Group | Result | Tools | Final status |
 |---|---|---|---|---|
@@ -137,3 +137,15 @@ Offline engine: tool sequence, reply wording, drafted actions and final state ar
 | T131 | question | pass | get_fx_quotes |  |
 | T132 | multilingual | pass | get_fx_quotes |  |
 | T133 | question | pass | get_fx_quotes |  |
+| T134 | autopilot | pass | propose_mandate |  |
+| T135 | autopilot | pass | propose_mandate |  |
+| T136 | autopilot | pass | propose_mandate |  |
+| T137 | autopilot | pass | propose_mandate |  |
+| T138 | autopilot | pass | propose_mandate |  |
+| T139 | autopilot | pass | propose_mandate |  |
+| T140 | question | pass | list_mandates |  |
+| T141 | question | pass | list_mandates |  |
+| T142 | question | pass | list_mandates |  |
+| T143 | question | pass | list_mandates |  |
+| T144 | autopilot | pass | propose_mandate |  |
+| T145 | question | pass | get_fx_history |  |
