@@ -33,17 +33,18 @@ Offline engine, measured 2026-10-16:
 
 | | |
 |---|---|
-| Scripted tasks | 131 / 131 pass (103 English including casual Malaysian English, 17 Simplified Chinese, 11 Malay) |
-| Attack suite | 86 / 86 blocked (induced transfer 30, extraction 11, escalation 24, prompt injection 21) |
+| Scripted tasks | 134 / 134 pass (104 English including casual Malaysian English, 18 Simplified Chinese, 12 Malay) |
+| Attack suite | 89 / 89 blocked (induced transfer 32, extraction 11, escalation 24, prompt injection 22) |
 | Held-out set (80 requests in EN / Malaysian English / Malay / 中文, written by an assistant that never saw this code) | DeepSeek 79 / 80, offline engine 72 / 80 correct behaviour; neither drafted anything it shouldn't ([`evidence/heldout/`](evidence/heldout/deepseek.md)) |
 | Live model (DeepSeek `deepseek-flash`, 2026-10-17) | 118 / 119 tasks, 79 / 79 attacks blocked, audit chain valid ([`evidence/deepseek/`](evidence/deepseek/SUMMARY.md)) |
-| Automated tests | 809 passing, no network needed |
+| Automated tests | 941 passing, no network needed |
 | Our classifier | macro F1 0.854 (grouped 5-fold CV, 902 rows) |
-| Agent tools | 26 registered; none of them can execute, approve, unlock, change limits or turn on an autopilot mandate |
+| Agent tools | 27 registered; none of them can execute, approve, unlock, change limits or turn on an autopilot mandate |
 
 The scripted tasks run on the deterministic offline engine. The 12 Autopilot tasks (T134 to T145) and 7 Autopilot
-attacks (A28 to A30, C22 to C24, D21) were added on 2026-10-18; the evidence files and the live DeepSeek run
-above predate them (119 tasks and 79 attacks).
+attacks (A28 to A30, C22 to C24, D21) were added on 2026-10-18, and the 3 Smart inbox tasks (T146 to T148) and 3
+inbox attacks (A31, A32, D22) after them; the evidence files and the live DeepSeek run above predate them (119 tasks
+and 79 attacks).
 
 ## Features
 
@@ -64,6 +65,20 @@ above predate them (119 tasks and 79 attacks).
   anything else comes back to a person. Revoke is instant, the freeze halts it, it never pays a new payee, and every
   decision shows on both phones in plain words ("Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD
   646.30 …") with a toast.
+- **Smart inbox: the AI acts first.** Incoming SMS, email and WhatsApp messages are triaged the moment they arrive,
+  before Aisha reads them or asks: likely scam (named warning signs such as "'Safe account' police scam" or "Account
+  number differs from your saved payee"), bill (payee matched to a saved payee, amount and due date parsed
+  deterministically), tuition reminder, or personal. On its own the agent only adds friction: a red alert with "don't
+  pay, don't share codes" and the one-tap lock, a safety alert on Dad's phone for a high-confidence scam after money
+  (signs only, never the message), and a toast on her phone. A bill from a saved payee gets "Draft this payment": a
+  normal draft to the *saved* account, created only when she taps it, which she still confirms; with bill autopay on,
+  the autopilot handles it under its own rules. A tuition reminder opens the runway. The chat answers "anything
+  suspicious in my messages?" / "收到的短信有没有诈骗？" from the same triage (`list_inbox`). Works fully offline; a
+  configured model may only fill in a bill field the rules missed, and every value it returns is checked against the
+  message.
+- **Demo controls.** On the two-phone stage, a small **Demo ▾** menu (only in demo mode, operator token): MYR/CAD ↑ and
+  ↓, skip to tuition week (moves the sandbox's date everywhere, so the tuition guard, runway and bills react), deliver
+  any sample message to Aisha's inbox, run the autopilot now, and reset.
 - **Permission tiers T0 to T4.** Reads run freely; payments are drafts; large, risky or sponsor-funded ones
   go to the sponsor; confirm, approve, unlock and limit changes are not agent tools at all.
 - **Second opinion for the sponsor.** Each request waiting for Dad carries a short independent review ("Looks
@@ -133,7 +148,7 @@ Demo values (all overridable, see `backend/.env.example`):
 | `HB_DEMO_MODE` | `1` (default) | 60-second payee cooling, remittances settle in seconds, reset allowed |
 | `HB_DEMO_TODAY` | `2026-10-08` | Pins the sandbox date so screenshots, video and docs agree (empty = real date) |
 | `HB_SPONSOR_PIN` | `246810` | The sponsor's approval PIN, stored only as a salted hash |
-| `HB_OPERATOR_TOKEN` | `demo-operator` | Needed in an `X-Operator` header for `/demo/reset`, `/autopilot/run` and `/demo/fx_shift` (the web app sends it in demo mode) |
+| `HB_OPERATOR_TOKEN` | `demo-operator` | Needed in an `X-Operator` header for `/demo/reset`, `/autopilot/run`, `/demo/fx_shift`, `/demo/inbox` and `/demo/time_skip` (the web app sends it in demo mode) |
 | `HB_AUTOPILOT_TICK` | `30` | Seconds between background autopilot runs in demo mode (`0` turns it off; the tests do) |
 | `HB_STUDENT_TOKEN`, `HB_SPONSOR_TOKEN` | `demo-student`, `demo-sponsor` | Bearer tokens |
 
@@ -186,6 +201,7 @@ production each person signs in on their own phone and the server decides the ro
 | Student (Aisha) | Sponsor (Dad) |
 |---|---|
 | **Assistant**: chat. Answers come with cards built from the ledger (FX comparison, balances, forecast, tuition, budget, credit, scam check), labelled as not written by the AI. Drafted payments appear as confirmation cards with a "Compliance checks" block. | **Approvals**: requests waiting for him, why they came to him, risk signals, compliance checks, the transfer-service picker for money requests, the PIN pad, a note back to Aisha; alerts and the 24-hour digest at the top |
+| **Inbox** (super-app: the 消息 tile, with a red badge): her incoming messages with a verdict chip each (likely scam, bill, tuition, personal); tap one for the triage card: warning signs, what to do, the lock, "Draft this payment" for a saved payee's bill, the runway for a tuition reminder. A new arrival toasts on her phone wherever she is | Alerts include **Scam message caught** when HomeBridge stops a high-confidence scam aimed at her money (the warning signs, never the message) |
 | **Wallet**: balances, runway chart, tuition countdown and shortfall, credit gauge, spending against budget, payees, items in progress, **Autopilot** (her mandates, caps used, drafts it handed back to her, the timeline), lock/unlock | **Rules**: the limits Aisha can confirm alone (PIN to change), the one-tap lock (PIN to unlock), and **Autopilot** (mandates he grants: approve or resume with the PIN, widen caps with the PIN, pause or revoke instantly, the timeline) |
 | **Ledger**: the hash-chained audit log, with live verification and a tamper simulation | **Ledger**: his role-scoped view of the same log |
 
@@ -193,7 +209,8 @@ Try: "Cheapest way to change 5,000 MYR to CAD?", "Pay my spring tuition", "cover
 shortfall from my MYR wallet", "eh rent how much ah, can pay landlord or not", "Will I run out of money
 before tuition is due?", "How's my credit?", "Ask my dad for 800 for textbooks", "did dad send the money?",
 "我还有多少钱？", "帮我交房租", "我的钱够用到学期末吗？", "duit cukup tak sampai hujung sem?",
-or paste a suspicious message after "Is this a scam?". The ↺ button resets the sandbox.
+or paste a suspicious message after "Is this a scam?". After the Demo menu delivers a message: "anything suspicious in
+my messages?", "收到的短信有没有诈骗？". The ↺ button (or Demo ▾ → Reset) resets the sandbox.
 
 ## Choosing the model
 
@@ -272,6 +289,12 @@ All endpoints except `/health` take `Authorization: Bearer <token>`. Demo tokens
 | POST | `/sponsor/autopilot/mandates/{id}/pause`, `/revoke`, `/decline` | sponsor | | Instant, no PIN: they only take autonomy away |
 | POST | `/autopilot/run` | any | header `X-Operator` | Run the autopilot now; demo mode and the operator token only |
 | POST | `/demo/fx_shift` | any | `{"rate"}`, `{"delta"}` or `{"reset": true}`, header `X-Operator` | Move the sandbox MYR/CAD mid rate, then run the autopilot; demo mode and the operator token only |
+| GET | `/inbox` | student | | Her incoming messages, newest first, each with the verdict reached on arrival (verdict, confidence, named signals, bill extraction, suggested actions, headline and advice in en / zh / ms) and counts |
+| POST | `/inbox/{id}/read`, `/inbox/{id}/dismiss` | student | | Mark a message read or dismiss it |
+| POST | `/inbox/{id}/draft` | student | | Her tap on "Draft this payment": a normal draft to the **saved** payee and account (never one from the message), returned with its confirm token; she still confirms. Refused for anything but a saved payee's bill, or when bill autopay covers it |
+| POST | `/demo/inbox` | any | `{"sample"}` or `{"text", "sender", "channel"}`, header `X-Operator` | Deliver a message to Aisha's inbox (samples: `scam_cra_giftcards`, `scam_parcel_police_zh`, `scam_landlord_new_account`, `bill_bchydro`, `bill_northline`, `tuition_reminder_ubc`, `dad_whatsapp_ms`, `job_scam_fee`); triaged on arrival. Demo mode and the operator token only |
+| GET | `/demo/inbox/samples` | any | | The sample library's keys and labels (for the stage menu) |
+| POST | `/demo/time_skip` | any | `{"days"}` or `{"to": "tuition_week"}`, header `X-Operator` | Move the sandbox's date forward (the routine moves with it; tuition dates stay), then run the autopilot. Demo mode and the operator token only; a reset restores the pinned date |
 | POST | `/demo/reset` | any | header `X-Operator: <HB_OPERATOR_TOKEN>` | Reset the sandbox (including everyone's onboarding); only with `HB_DEMO_MODE=1` **and** the operator token |
 | GET | `/` | none | | The exported web app, when `app/dist` exists |
 
