@@ -335,7 +335,63 @@ export type ChatResponse = {
   trace: { tool: string; ok: boolean; ms: number }[];
   provider: string;
   fallback: boolean;
+  // "How I handled this" (backend/app/turn_trace.py). Optional so an older server still works.
+  turn_trace?: TurnTrace;
 };
+
+// The visible reasoning trace of one turn. Every string is already safe to show (allow-listed and scrubbed on the
+// server); `label` is the English wording, and the app builds its own from the structured fields.
+export type TraceEngine = {
+  provider: string;
+  label: string;
+  configured: string;
+  model: string;
+  live: boolean;
+  fallback: boolean;
+  fallback_reason: string | null;
+  prompt_version: string;
+  model_ms: number;
+  model_calls: number;
+  retries: number;
+};
+
+export type TraceStep =
+  | {
+      type: 'understood';
+      label: string;
+      lang: string;
+      verdict: 'clear' | 'flagged';
+      flags: string[];
+      signals: string[];
+      carried: string[];
+      classifier: { label: string; confidence: number } | null;
+      untrusted: boolean;
+    }
+  | {
+      type: 'plan';
+      label: string;
+      source: 'model' | 'offline_engine';
+      tools: string[];
+      rounds?: number;
+      intent?: string;
+      intent_label?: string;
+    }
+  | { type: 'tool'; label: string; tool: string; summary: string; ms: number; ok: boolean; tier: string; error?: string }
+  | {
+      type: 'policy';
+      label: string;
+      kind: string;
+      summary: string;
+      tier: string;
+      risk_score: number;
+      reasons: string[];
+      compliance: { outcome: string; checks: number; noted: string[] };
+      next: 'user' | 'user_then_sponsor' | 'sponsor' | 'blocked' | 'in_transit' | 'done' | 'closed';
+    }
+  | { type: 'safety'; label: string; kind: string; tool?: string; what?: string; reason?: string }
+  | ({ type: 'model'; name: string } & Omit<TraceEngine, 'label'> & { label: string });
+
+export type TurnTrace = { version: number; engine: TraceEngine; total_ms: number; step_count: number; steps: TraceStep[] };
 
 export type Overview = {
   accounts: Account[];
