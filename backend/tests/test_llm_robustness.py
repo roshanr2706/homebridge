@@ -408,7 +408,9 @@ def test_explicit_command_detection(msg, kind):
 
 
 @pytest.mark.parametrize("msg", ["how do I pay hydro 2000?", "pay hydro", "what if I pay hydro 2000",
-                                 "pay hydro 1e9", "please confirm hydro 2000", "x" * 200 + " pay hydro 20"])
+                                 "pay hydro 1e9", "please confirm hydro 2000", "x" * 200 + " pay hydro 20",
+                                 "set a reminder to pay rent on the 1st", "remind me to pay hydro 85 next friday",
+                                 "pay rent 1150 every month", "pay hydro at 10am"])
 def test_not_explicit_commands(msg):
     assert explicit_command(msg, {"hydro": 1}) is None
 

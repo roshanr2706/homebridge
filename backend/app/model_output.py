@@ -131,8 +131,12 @@ def guard_reply(text: str, fingerprint: Optional[PromptFingerprint] = None) -> T
 _VERB_EN = r"\b(pay|send|transfer|e-?transfer|convert|change|exchange|move|top ?up|put)\b"
 _VERB_MS = r"\b(bayar|bayarkan|hantar|kirim|pindah|pindahkan|tukar|tukarkan|masukkan)\b"
 _VERB_ZH = r"(支付|付款|付|转账|转|汇款|汇|兑换|换|交)"
-_AMOUNT = re.compile(r"(?<![\w.-])(?:rm|cad|myr|usd|\$|c\$)?\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\s?(k\b|千|万)?",
-                     re.I)
+_AMOUNT = re.compile(r"(?<![\w.-])(?:rm|cad|myr|usd|\$|c\$)?\s?(\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?\s?(k\b|千|万)?"
+                     r"(?![a-z0-9])", re.I)   # "1st", "2nd", "10am" are not amounts
+# Reminders, schedules and future dates are not "draft it now" commands ("set a reminder to pay rent on the 1st").
+_SCHEDULE = re.compile(r"\b(remind|reminder|schedule|every|each|tomorrow|tonight|next|later|on the|by the|"
+                       r"monday|tuesday|wednesday|thursday|friday|saturday|sunday|ingatkan|esok|setiap)\b|"
+                       r"提醒|每月|每周|明天|下周|下个月", re.I)
 _CURRENCY = re.compile(r"\b(myr|cad|usd|rm|ringgit|dollars?|ringgit)\b|令吉|加元|加币|马币|美元", re.I)
 _QUESTION_START = re.compile(
     r"^\s*(can|could|should|shall|would|will|do|does|did|is|are|am|how|what|when|why|which|where|who|if|"
@@ -151,7 +155,8 @@ def explicit_command(text: str, payee_words: Iterable[str]) -> Optional[Dict[str
         return None
     if t.endswith(("?", "？")) or "吗" in t or "呢" in t or _QUESTION_START.search(t):
         return None
-    if _NEGATION.search(t) or _SELF_REFERENCE.search(t) or re.search(r"[\"'“”‘’].{3,}[\"'“”‘’]", t):
+    if (_NEGATION.search(t) or _SELF_REFERENCE.search(t) or _SCHEDULE.search(t)
+            or re.search(r"[\"“”‘’].{3,}[\"“”‘’]|(?<![a-z])'.{3,}'(?![a-z])", t, re.I)):
         return None
     if re.search(r"(?<![\w])-\s?\d|\d[eE][+-]?\d", t):
         return None   # "-50", "1e9": the prompt says ask for the amount
