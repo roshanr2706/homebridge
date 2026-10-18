@@ -78,6 +78,16 @@ export type Action = {
   // Sponsor's view only: the true-cost comparison while it waits for him, and the account it is sent from.
   remit_options?: RemitOption[];
   sponsor_source?: { label: string; number: string; currency: string; balance?: number } | null;
+  // Sponsor's queue only: an advisory second opinion (backend/app/reviewer.py). It can't approve or change anything.
+  review?: Review;
+};
+
+export type Review = {
+  verdict: 'normal' | 'check' | 'scam';
+  label: string;          // already in the sponsor's language, e.g. "Check with Aisha"
+  text: string;
+  source: 'model' | 'rules';
+  language?: string;
 };
 
 export type RemitStep = 'initiated' | 'compliance_checked' | 'in_transit' | 'credited';

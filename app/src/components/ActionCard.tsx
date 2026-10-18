@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import type { Action, Compliance, ComplianceCheck, RemitOption, RemitQuote } from '../api';
+import type { Action, Compliance, ComplianceCheck, RemitOption, RemitQuote, Review } from '../api';
 import { stepUp, useStepUpNote } from '../stepUp';
 import { PinEntry } from './PinEntry';
 import { useT, type Key, type T } from '../i18n';
@@ -309,6 +309,33 @@ function ComplianceBlock({ c }: { c: Compliance }) {
   );
 }
 
+// The sponsor's advisory second opinion (backend/app/reviewer.py), labelled with where it came from: the AI model
+// or the rule-based fallback. It never changes the buttons below; the approval still needs his PIN.
+const VERDICT_TONE: Record<Review['verdict'], 'ok' | 'warn' | 'danger'> = { normal: 'ok', check: 'warn', scam: 'danger' };
+
+function SecondOpinion({ r }: { r: Review }) {
+  const t = useTheme();
+  const fonts = useFontSet();
+  const tr = useT();
+  const tone = VERDICT_TONE[r.verdict] ?? 'warn';
+  const edge = tone === 'ok' ? t.ok : tone === 'danger' ? t.danger : t.warn;
+  return (
+    <View
+      accessibilityLabel={`${tr('rev.title')}: ${r.label}. ${r.text}`}
+      style={[styles.box, { backgroundColor: t.sunken, borderLeftWidth: 3, borderLeftColor: edge }]}
+    >
+      <Row style={{ justifyContent: 'space-between', marginBottom: 6, gap: 8 }}>
+        <Body style={{ fontSize: 12, fontFamily: fonts.bodyBold, color: t.text }}>{tr('rev.title')}</Body>
+        <Pill label={r.label.toUpperCase()} tone={tone} />
+      </Row>
+      <Body style={{ fontSize: 13, lineHeight: 19, color: t.text }}>{r.text}</Body>
+      <Mono style={{ fontSize: 10.5, color: t.faint, marginTop: 6 }}>
+        {tr(r.source === 'model' ? 'rev.model' : 'rev.rules')} · {tr('rev.advisory')}
+      </Mono>
+    </View>
+  );
+}
+
 export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, onReject }: Props) {
   const t = useTheme();
   const fonts = useFontSet();
@@ -393,6 +420,8 @@ export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, on
             ))}
           </View>
         )}
+
+        {mode === 'sponsor' && a.review && a.status === 'awaiting_sponsor' && <SecondOpinion r={a.review} />}
 
         {untrusted.length > 0 && (
           <View style={[styles.box, { backgroundColor: t.dangerBg }]}>
