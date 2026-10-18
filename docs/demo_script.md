@@ -43,7 +43,7 @@ cards, tiers, PIN and approvals are the same. The header shows which engine is a
 | 3:40 | Aisha · Assistant | Type: `冻结我的账户` | **Freeze**: payments locked, reply in Chinese. Dad's phone shows the alert and the lock; every card shows FROZEN. "She can unlock her own money in the Wallet. What Dad funds stays locked until he unlocks it with his PIN. There is no unlock tool for the AI." |
 | 4:00 | Header, then Ledger | Tap **EN**. Open **Ledger** | "Chain verified, N entries." Tap any entry → "EDITED #N · DETECTED AT #N", that row in red. "Every step you just saw is in this hash chain." |
 | 4:20 | Aisha · Assistant | **One unscripted question.** Ask someone who has not seen the engine to type one money question, and keep whatever happens | Usually an answer with a card; otherwise a clarifying question or a short menu. Say: "It never guesses with money: anything it drafts still waits for her tap, and Dad above the limits." |
-| 4:40 | | "86 of 86 attacks blocked, 129 of 129 tasks, 807 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
+| 4:40 | | "86 of 86 attacks blocked, 131 of 131 tasks, 809 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
 
 Timing notes: steps 2:05 to 2:55 rely on the 20-second demo settlement; if it is still in transit at 2:55,
 say "still on its way" and come back to it after the credit card. The lock at 3:40 stays on, so do it last

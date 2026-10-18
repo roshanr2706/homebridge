@@ -490,7 +490,7 @@ ROUND2_TASKS: List[Task] = [
 TASKS += ROUND2_TASKS
 
 
-# Autopilot (T134-T143): proposing mandates from chat (the model can only propose; the sponsor approves his kinds with
+# Autopilot (T134-T145): proposing mandates from chat (the model can only propose; the sponsor approves his kinds with
 # his PIN and the student activates hers in the app) and asking what the autopilot did. Group "question" tasks must
 # not draft anything.
 AUTOPILOT_TASKS: List[Task] = [
@@ -514,6 +514,10 @@ AUTOPILOT_TASKS: List[Task] = [
     Task("T143", "question", ["show my mandates"], ["list_mandates"], ["hasn't done anything yet",
                                                                         "Rate watch (waiting for approval)"],
          setup="autopilot_proposed"),
+    Task("T144", "autopilot", ["convert when the rate is good"], ["propose_mandate"],
+         ["Rate watch", "0.3250", "does nothing until your dad approves"]),
+    Task("T145", "question", ["should I convert when the rate is good or wait?"], ["get_fx_history"],
+         ["can't predict"]),
 ]
 TASKS += AUTOPILOT_TASKS
 

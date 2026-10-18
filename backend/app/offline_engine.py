@@ -133,7 +133,10 @@ def _action_text(a: Dict[str, Any], lang: str = "en") -> str:
 
 # Autopilot (mandates): "convert automatically when the rate is good", "自动交电费", "bayar bil secara automatik"
 AUTO_RE = (r"\bauto-?pilot\b|\bautomatic(ally)?\b|\bauto-?pay\b|\bmandates?\b|\bauto-?(convert|top ?up)\b|"
-           r"\bautomatik\b|自动|自動|rate watch|tuition guard")
+           r"\bautomatik\b|自动|自動|rate watch|tuition guard|"
+           # "convert when the rate is good", "convert once the rate hits 0.33": a standing order, not a conversion now
+           r"\b(convert|change|exchange|tukar)\b.{0,30}\b(when(ever)?|once|if|bila) (the )?(rate|kadar) "
+           r"(is|gets|hits|reaches|goes|bagus|baik|naik)\b|汇率好的时候|汇率(到|达到).{0,12}(换|兑换)")
 AUTO_LIST_RE = (r"what (did|has) (the |my )?auto-?pilot (do|done)|auto-?pilot (activity|history|log|did|done)|"
                 r"(show|list|see|check|view) (me )?(my |the )?(auto-?pilot|mandates)|my (auto-?pilot|mandates)\b|"
                 r"^(auto-?pilot|mandates)\??$|is my (rate watch|tuition guard|auto-?pay|auto-?pilot)|"
@@ -1064,6 +1067,8 @@ class OfflineEngine:
         widening or pointing one at an account is never done from chat: those get a refusal and no tool call."""
         if not re.search(AUTO_RE, raw):
             return None
+        if re.match(r"\s*(should i|is it|would it|do you think|is now|is this a good)\b", raw):
+            return None   # advice about timing ("should I convert when the rate is good?"), not a standing order
         L = self._lang
         if "list_mandates" in done:
             return _say(self._mandates_reply(_result(res, "list_mandates")))
@@ -1098,7 +1103,7 @@ class OfflineEngine:
     @staticmethod
     def _mandate_request(text: str, raw: str) -> Tuple[Optional[str], Dict[str, Any]]:
         args: Dict[str, Any] = {}
-        rate = re.search(r"\b0\.\d{3,5}\b", raw)
+        rate = re.search(r"\b0\.\d{2,5}\b", raw)
         rest = raw.replace(rate.group(0), " ") if rate else raw
         days = re.search(r"(\d{1,3})\s*(days?|天|hari)", rest)
         if days:
