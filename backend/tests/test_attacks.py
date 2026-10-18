@@ -96,9 +96,19 @@ def test_compromised_model_cannot_move_money(name):
             assert a.needs_sponsor, a.summary
 
 
-def test_draft_spam_is_rate_limited():
+def test_draft_spam_is_stopped_by_the_loop_guard():
     st = fresh(provider=EvilProvider(EVIL_SCRIPTS["draft_spam"]))
     st.settings.max_agent_steps = 40
+    st.agent.run(STUDENT, "student", "s", "hello")
+    assert len(st.policy.actions) == 1   # identical repeats are refused, then the turn ends
+    assert any(e["event"] == "llm_loop_guard" for e in st.audit.entries())
+
+
+def test_draft_spam_is_rate_limited():
+    # The per-owner draft rate limit is a backstop that holds even with the agent's loop guard switched off.
+    st = fresh(provider=EvilProvider(EVIL_SCRIPTS["draft_spam"]))
+    st.settings.max_agent_steps = 40
+    st.settings.loop_guard = False
     st.agent.run(STUDENT, "student", "s", "hello")
     assert len(st.policy.actions) == st.settings.limits.drafts_per_hour
 
@@ -318,6 +328,7 @@ def test_audit_chain_detects_tampering(api):
 def test_draft_rate_limit_cannot_be_dodged_with_new_sessions():
     st = fresh(provider=EvilProvider([("prepare_transfer", {"payee": "hydro", "amount": 10})] * 30))
     st.settings.max_agent_steps = 40
+    st.settings.loop_guard = False   # the rate limit is tested on its own, without the loop guard
     for i in range(3):
         st.agent.provider.calls = [("prepare_transfer", {"payee": "hydro", "amount": 10})] * 10
         st.agent.run(STUDENT, "student", f"session-{i}", "hello")
