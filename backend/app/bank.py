@@ -109,6 +109,15 @@ PREFS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS user_prefs (user_id TEXT PRIMARY KEY, data TEXT, updated_at REAL);
 """
 SCHEMA += PREFS_SCHEMA
+# Autopilot (autopilot.py): standing, revocable mandates and every decision the autopilot made under them. Part of the
+# sandbox like the drafts, so a demo reset clears them. `ikey` makes each decision at most once per mandate and window.
+AUTOPILOT_SCHEMA = """
+CREATE TABLE IF NOT EXISTS mandates (id TEXT PRIMARY KEY, owner TEXT, status TEXT, created_at REAL, data TEXT);
+CREATE TABLE IF NOT EXISTS autopilot_activity (
+  id TEXT PRIMARY KEY, mandate_id TEXT, owner TEXT, ts REAL, outcome TEXT, ikey TEXT UNIQUE, data TEXT
+);
+"""
+SCHEMA += AUTOPILOT_SCHEMA
 
 
 class Bank:
@@ -118,7 +127,7 @@ class Bank:
         self.db.row_factory = sqlite3.Row
         self.today: Optional[date] = None  # the sandbox's "today", set by reset(); card payments use it
         with self._lock:  # a file database from an older version gets the newer (empty) tables
-            self.db.executescript(CARD_SCHEMA + SECURITY_SCHEMA + PREFS_SCHEMA)
+            self.db.executescript(CARD_SCHEMA + SECURITY_SCHEMA + PREFS_SCHEMA + AUTOPILOT_SCHEMA)
             self.db.commit()
 
     # ------------------------------------------------------------------ setup
@@ -554,3 +563,38 @@ class Bank:
             self.db.commit()
             return {"transaction_id": tx_id, "account": acc["label"], "currency": acc["currency"],
                     "amount": to_major(delta_minor)}
+
+    # Autopilot mandates and decisions (autopilot.py), one JSON document per row like the drafts.
+    def save_mandate(self, mandate_id: str, owner: str, status: str, created_at: float, data: Dict[str, Any]) -> None:
+        self._x("INSERT OR REPLACE INTO mandates VALUES (?,?,?,?,?)",
+                (mandate_id, owner, status, created_at, json.dumps(data, sort_keys=True, ensure_ascii=False)))
+
+    def load_mandates(self, owner: str) -> List[Dict[str, Any]]:
+        return [json.loads(r["data"]) for r in self._q("SELECT data FROM mandates WHERE owner=? ORDER BY created_at, id",
+                                                        (owner,))]
+
+    def load_mandate(self, mandate_id: str) -> Optional[Dict[str, Any]]:
+        rows = self._q("SELECT data FROM mandates WHERE id=?", (mandate_id,))
+        return json.loads(rows[0]["data"]) if rows else None
+
+    def has_autopilot_key(self, ikey: str) -> bool:
+        return bool(self._q("SELECT 1 FROM autopilot_activity WHERE ikey=?", (ikey,)))
+
+    def save_autopilot_activity(self, entry_id: str, mandate_id: str, owner: str, ts: float, outcome: str, ikey: str,
+                                data: Dict[str, Any]) -> bool:
+        """False if a decision with this key was already recorded (the run is idempotent)."""
+        with self._lock:
+            cur = self.db.execute("INSERT OR IGNORE INTO autopilot_activity VALUES (?,?,?,?,?,?,?)",
+                                  (entry_id, mandate_id, owner, ts, outcome, ikey,
+                                   json.dumps(data, sort_keys=True, ensure_ascii=False)))
+            self.db.commit()
+            return cur.rowcount == 1
+
+    def load_autopilot_activity(self, owner: str, limit: int = 50) -> List[Dict[str, Any]]:
+        rows = self._q("SELECT data FROM autopilot_activity WHERE owner=? ORDER BY ts DESC, id DESC LIMIT ?",
+                       (owner, limit))
+        return [json.loads(r["data"]) for r in rows]
+
+    def set_recurring_next_due(self, item_id: str, next_due: str) -> None:
+        """A bill the autopilot paid moves on to its next date, so the forecast doesn't count it twice."""
+        self._x("UPDATE recurring SET next_due=? WHERE id=?", (next_due, item_id))

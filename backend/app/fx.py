@@ -94,8 +94,11 @@ def remit_providers(dst: str) -> List[Provider]:
 class FxMarket:
     def __init__(self) -> None:
         self.fail_next = 0  # test hook: number of upcoming quote calls that time out
+        # Sandbox rate moves (POST /demo/fx_shift, operator only): pair -> mid rate. Empty means the snapshot.
+        self.overrides: Dict[str, float] = {}
 
-    def mid(self, src: str, dst: str) -> float:
+    def base_mid(self, src: str, dst: str) -> float:
+        """The snapshot rate, ignoring any sandbox move."""
         src, dst = src.upper(), dst.upper()
         if src == dst:
             return 1.0
@@ -103,6 +106,24 @@ class FxMarket:
         if key not in MID:
             raise ValueError(f"Unsupported currency pair {key}")
         return MID[key]
+
+    def mid(self, src: str, dst: str) -> float:
+        key = f"{src.upper()}/{dst.upper()}"
+        return self.overrides[key] if key in self.overrides else self.base_mid(src, dst)
+
+    def set_mid(self, src: str, dst: str, rate: Optional[float]) -> None:
+        """Moves the sandbox mid rate for one pair (and its inverse); None goes back to the snapshot. Used only by
+        the operator's /demo/fx_shift so the rate-watch mandate (autopilot.py) can be shown firing live."""
+        src, dst = src.upper(), dst.upper()
+        self.base_mid(src, dst)   # unsupported pairs raise
+        if rate is None:
+            self.overrides.pop(f"{src}/{dst}", None)
+            self.overrides.pop(f"{dst}/{src}", None)
+            return
+        if not (isinstance(rate, (int, float)) and math.isfinite(rate) and rate > 0):
+            raise ValueError("Rate must be a positive number")
+        self.overrides[f"{src}/{dst}"] = float(rate)
+        self.overrides[f"{dst}/{src}"] = 1 / float(rate)
 
     def quote(self, src: str, dst: str, amount: float, provider: Provider) -> Dict:
         mid = self.mid(src, dst)
@@ -150,9 +171,11 @@ class FxMarket:
 
     def history(self, src: str, dst: str, days: int = 30) -> Dict:
         """Deterministic synthetic 30-day history around the snapshot mid rate."""
-        mid = self.mid(src, dst)
+        mid = self.base_mid(src, dst)
         series = [round(mid * (1 + 0.012 * math.sin(i / 4.0) + 0.004 * math.cos(i / 1.7)), 5)
                   for i in range(days)]
+        if f"{src.upper()}/{dst.upper()}" in self.overrides:   # a sandbox move shows up as today's point
+            series[-1] = round(self.mid(src, dst), 5)
         return {
             "pair": f"{src.upper()}/{dst.upper()}",
             "today": series[-1],
