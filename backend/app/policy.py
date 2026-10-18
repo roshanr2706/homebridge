@@ -121,7 +121,13 @@ class PendingAction:
     # "autopilot" for a draft the autopilot made under a mandate (autopilot.py); "chat" otherwise.
     origin: str = "chat"
     mandate_id: str = ""
+    # When it was drafted on the sandbox's clock (Bank.now(), which a demo time skip moves). The 24h windows (the
+    # sponsor-money cap, structuring, the EFTR 24-hour rule) use it; created_at stays real time for expiry.
+    sandbox_at: float = 0.0
     _token: Optional[str] = None   # plaintext, handed to the app once, never to the model
+
+    def sandbox_time(self) -> float:
+        return self.sandbox_at or self.created_at
 
     def remit_brief(self) -> Dict[str, Any]:
         q = self.params.get("quote") or {}
@@ -286,15 +292,35 @@ class PolicyEngine:
         return spent
 
     def _sponsor_released_cad(self, owner: str) -> float:
-        """CAD value of conversions out of sponsor-funded accounts in the last 24h, including pending drafts."""
-        since = time.time() - 24 * 3600
+        """CAD value of conversions out of sponsor-funded accounts in the last 24h (sandbox clock, like the transfer
+        limit), including pending drafts and the autopilot's conversions under a sponsor mandate."""
+        since = self.bank.now().timestamp() - 24 * 3600
         total = 0.0
         for a in self.actions.values():
-            if (a.owner == owner and a.kind == "conversion" and a.created_at >= since
+            if (a.owner == owner and a.kind == "conversion" and a.sandbox_time() >= since
                     and a.status in ("awaiting_user", "awaiting_sponsor", "executed") and a.tier == "T2"
                     and a.params.get("uses_sponsor_money")):
                 total += self.cad(a.params["amount"], a.params["from_currency"])
         return total
+
+    def _sponsor_mandate_covers(self, owner: str, mandate_id: str, src: Dict[str, Any], dst: Dict[str, Any],
+                                amount: float) -> bool:
+        """True when an active, sponsor-granted conversion mandate covers this exact conversion within its caps."""
+        if not mandate_id:
+            return False
+        m = self.bank.load_mandate(mandate_id)
+        if not m or m["owner"] != owner or m["granted_by"] != "sponsor" or \
+                m["kind"] not in ("rate_watch", "tuition_guard"):
+            return False
+        ap = self.autopilot
+        if ap.effective_status(m) != "active":
+            return False
+        wallet = self.bank.find_account(owner, "MYR", "Wallet") or {}
+        dest = self.bank.find_account(owner, "CAD", "Tuition" if m["kind"] == "tuition_guard" else "Everyday") or {}
+        if src["id"] != wallet.get("id") or dst["id"] != dest.get("id"):
+            return False
+        left = m["caps"]["per_period"] - ap.used(m)
+        return amount <= m["caps"]["per_action"] + 1e-9 and amount <= left + 1e-9
 
     def _alert_risk(self, owner: str, reasons: List[str]) -> int:
         """Risk added by an unusual-activity alert from the last 24 hours (safety.py)."""
@@ -328,7 +354,7 @@ class PolicyEngine:
             sponsor_reasons=list(reasons_t3) + (["Risk score above sponsor threshold"] if risk >= self.limits.sponsor_risk_threshold and not reasons_t3 else []),
             needs_sponsor=needs_sponsor, params_hash=_hash_params(params), token_hash=_hash_token(token),
             created_at=now, expires_at=now + self.limits.pending_ttl_seconds, provenance=provenance,
-            compliance=Compliance.public(comp), _token=token,
+            compliance=Compliance.public(comp), sandbox_at=self.bank.now().timestamp(), _token=token,
         )
         if comp["blocked"]:  # e.g. a sanctions hit: recorded and shown, but it can never be confirmed
             action.status, action._token = "blocked", None
@@ -463,9 +489,15 @@ class PolicyEngine:
     def draft_conversion(
         self, owner: str, session_id: str, from_currency: str, to_currency: str, amount: float,
         guard_flags: Optional[List[str]] = None, destination: str = "everyday", source: str = "",
+        mandate_id: str = "",
     ) -> PendingAction:
         """A conversion between the user's own wallets, or (same currency) a move between two own accounts,
-        e.g. CAD Everyday to CAD Tuition Fund. Both go through the same tiers, caps and confirmation token."""
+        e.g. CAD Everyday to CAD Tuition Fund. Both go through the same tiers, caps and confirmation token.
+
+        mandate_id is passed only by the autopilot. When it names an active mandate the sponsor granted (with his PIN)
+        and this conversion is exactly what that mandate allows and fits its caps, the conversion is the sponsor's own
+        standing instruction: it is bounded by the mandate's caps instead of the student's 24h sponsor-money cap.
+        It still counts toward that cap for her own later conversions."""
         amount = _amount(amount)
         if destination not in ("everyday", "tuition"):
             raise PolicyError("Destination must be 'everyday' or 'tuition'.")
@@ -502,6 +534,8 @@ class PolicyEngine:
         # Converting sponsor money is capped per 24h, counting pending drafts, so it cannot be released in
         # small chunks. The cap also covers conversions into the tuition fund: the money stays earmarked, but
         # the sponsor still decides when large sums are exchanged and pays the spread.
+        elif src["sponsor_funded"] and self._sponsor_mandate_covers(owner, mandate_id, src, dst, amount):
+            pass   # the sponsor's own mandate: its caps bound this, and execute_mandated checks them again
         elif src["sponsor_funded"]:
             released = self._sponsor_released_cad(owner)
             if released + amount_cad > self.limits.single_cad:
@@ -520,6 +554,9 @@ class PolicyEngine:
                   "from_currency": src["currency"], "to_currency": dst["currency"],
                   "rate": q["rate"], "expected_receive": q["you_receive"],
                   "uses_sponsor_money": bool(src["sponsor_funded"])}
+        if src["sponsor_funded"] and "Tuition" not in src["label"] and \
+                self._sponsor_mandate_covers(owner, mandate_id, src, dst, amount):
+            params["sponsor_mandate"] = mandate_id
         if same:
             summary = f"Move {src['currency']} {amount:,.2f} from {src['label']} to {dst['label']}"
         else:

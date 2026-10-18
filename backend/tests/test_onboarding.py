@@ -37,7 +37,7 @@ def api():
 @pytest.fixture()
 def cloud():
     provider = CloudProvider()
-    st = fresh(provider=provider)
+    st = fresh(provider=provider, consented=False)
     return TestClient(create_app(st)), st, provider
 
 
@@ -159,6 +159,27 @@ def test_demo_reset_clears_onboarding(api):
     assert client.get("/me", headers=P).json()["prefs"]["onboarded_at"] is None
 
 
+def test_demo_reset_can_keep_onboarding(api):
+    client, st = api
+    client.post("/me/onboarding", json=STUDENT_OK, headers=S)
+    client.post("/me/onboarding", json=SPONSOR_OK, headers=P)
+    st.bank.save_prefs("nobody", {"display_name": "x"})                 # not a seeded user: not carried over
+    r = client.post("/demo/reset", json={"keep_onboarding": True}, headers={**S, **OP})
+    assert r.status_code == 200 and r.json()["kept_onboarding"] is True
+    me = client.get("/me", headers=S).json()["prefs"]
+    assert me["onboarded_at"] and me["language"] == "zh" and me["display_name"] == "Aisha R."
+    assert me["consents"]["ai_processing"]["agreed"] is True
+    assert client.get("/me", headers=P).json()["prefs"]["onboarded_at"]
+    assert st.bank.load_prefs("nobody") is None
+    assert events(st, "demo_reset")[-1]["data"]["keep_onboarding"] is True
+    # the rest of the sandbox is fresh
+    assert not st.policy.actions and st.bank.account("acc_myr")["balance"] > 0
+    # and a full reset still replays onboarding
+    assert client.post("/demo/reset", json={"keep_onboarding": False}, headers={**S, **OP}).status_code == 200
+    assert client.get("/me", headers=S).json()["prefs"]["onboarded_at"] is None
+    assert client.post("/demo/reset", json={"keep": True}, headers={**S, **OP}).status_code == 422
+
+
 def test_cloud_provider_needs_consent_or_offline_choice(cloud):
     client, _, _ = cloud
     me = client.get("/me", headers=S).json()
@@ -170,24 +191,66 @@ def test_cloud_provider_needs_consent_or_offline_choice(cloud):
 
 def test_offline_only_keeps_chat_off_the_cloud_model(cloud):
     client, st, provider = cloud
-    client.post("/chat", json={"message": "how much money do I have"}, headers=S)
-    assert provider.calls == 1  # not onboarded yet: the configured model
+    r = client.post("/chat", json={"message": "how much money do I have"}, headers=S).json()
+    assert provider.calls == 0 and r["provider"] == "offline"   # not onboarded yet: no consent, so offline
+    assert client.get("/me", headers=S).json()["chat_engine"] == "offline"
     body = {**STUDENT_OK, "consents": {"sponsor_sharing": True, "offline_only": True}}
     me = client.post("/me/onboarding", json=body, headers=S).json()
     assert me["chat_engine"] == "offline" and me["prefs"]["consents"]["offline_only"]["value"] is True
+    assert me["consent_stale"] is False                          # her own choice, not a changed provider
     r = client.post("/chat", json={"message": "how much money do I have"}, headers=S).json()
-    assert provider.calls == 1 and r["provider"] == "offline" and not r["fallback"]
+    assert provider.calls == 0 and r["provider"] == "offline" and not r["fallback"]
     assert any(c["type"] == "balances" for c in r["cards"])
     # The privacy answer reports the engine actually used for this person.
     r = client.post("/chat", json={"message": "is my data sent to China?"}, headers=S).json()
-    assert provider.calls == 1 and r["provider"] == "offline"
+    assert provider.calls == 0 and r["provider"] == "offline"
     # Turning it off in Settings (which shows the provider and region) records the consent and uses the model.
     me = client.post("/me/prefs", json={"offline_only": False}, headers=S).json()
     assert me["chat_engine"] == "deepseek" and me["prefs"]["consents"]["ai_processing"]["agreed"] is True
     assert me["prefs"]["consents"]["ai_processing"]["region"] == "cn"
     r = client.post("/chat", json={"message": "how much money do I have"}, headers=S).json()
-    assert provider.calls == 2 and r["provider"] == "deepseek"
+    assert provider.calls == 1 and r["provider"] == "deepseek"
     assert [e["data"]["consent"] for e in events(st, "consent_recorded")][-2:] == ["offline_only", "ai_processing"]
+
+
+def test_consent_given_on_an_offline_server_does_not_cover_a_cloud_provider():
+    # Onboarded while the server ran the offline engine, then the server restarts with DeepSeek (the DB persists).
+    st = fresh()
+    client = TestClient(create_app(st))
+    me = client.post("/me/onboarding", json={**STUDENT_OK, "consents": {"sponsor_sharing": True}}, headers=S).json()
+    assert me["prefs"]["consents"]["ai_processing"]["provider"] == "offline" and me["consent_stale"] is False
+    provider = CloudProvider()
+    st.agent.provider = provider
+    me = client.get("/me", headers=S).json()
+    assert me["chat_engine"] == "offline" and me["consent_stale"] is True
+    r = client.post("/chat", json={"message": "hello"}, headers=S).json()
+    assert provider.calls == 0 and r["provider"] == "offline"
+    # "Your AI provider changed: review consent" -> she agrees to DeepSeek (cn) in Settings.
+    me = client.post("/me/prefs", json={"ai_consent": True}, headers=S).json()
+    assert me["consent_stale"] is False and me["chat_engine"] == "deepseek"
+    ai = me["prefs"]["consents"]["ai_processing"]
+    assert ai["provider"] == "deepseek" and ai["region"] == "cn" and ai["agreed"] is True
+    assert events(st, "consent_recorded")[-1]["data"]["provider"] == "deepseek"
+    client.post("/chat", json={"message": "hello"}, headers=S)
+    assert provider.calls == 1
+    assert client.post("/me/prefs", json={"ai_consent": True}, headers=P).status_code == 400   # student only
+
+
+def test_consent_is_bound_to_the_provider_and_region(cloud):
+    from app import prefs
+    client, st, provider = cloud
+    client.post("/me/onboarding", json=STUDENT_OK, headers=S)             # agreed to DeepSeek (cn)
+    assert prefs.offline_only(st.bank, STUDENT, "deepseek") is False
+    assert prefs.offline_only(st.bank, STUDENT, "deepseek-pro") is False   # the same service and region
+    assert prefs.offline_only(st.bank, STUDENT, "qwen") is True            # another provider, Singapore
+    assert prefs.offline_only(st.bank, STUDENT, "custom") is True
+    assert prefs.consent_stale(st.bank, STUDENT, "qwen") is True
+    assert prefs.offline_only(st.bank, STUDENT, "offline") is False        # nothing leaves the server anyway
+    provider.name = "qwen"
+    me = client.get("/me", headers=S).json()
+    assert me["chat_engine"] == "offline" and me["consent_stale"] is True
+    client.post("/chat", json={"message": "hello"}, headers=S)
+    assert provider.calls == 0
 
 
 def test_consented_cloud_user_keeps_the_cloud_model(cloud):

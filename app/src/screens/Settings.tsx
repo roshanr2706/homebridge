@@ -60,6 +60,13 @@ export function Settings({ person, onClose }: { person: Person; onClose: () => v
         {student ? (
           <Surface>
             <Eyebrow>{tr('ob.aiTitle')}</Eyebrow>
+            {person.me?.consent_stale ? (
+              <View style={{ marginTop: 8, padding: 10, borderRadius: t.radiusSm, backgroundColor: t.goldSoft, gap: 6 }}>
+                <Body style={{ fontFamily: fonts.bodyBold, color: t.warn }}>{tr('set.providerChanged')}</Body>
+                <Body style={{ fontSize: 12.5, lineHeight: 17 }}>{tr('set.providerChangedBody')}</Body>
+                <Button label={tr('set.agreeProvider', { provider: route?.label ?? '' })} kind="ghost" onPress={() => person.save({ ai_consent: true })} />
+              </View>
+            ) : null}
             <Body style={{ fontSize: 13, lineHeight: 18, marginTop: 6 }}>{routeSentence(tr, route)}</Body>
             <CheckRow
               checked={offline}

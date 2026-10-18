@@ -6,10 +6,12 @@ WhatsApp-style message is triaged the moment it arrives, with the same guard rul
 to the assistant, an account number that differs from the saved payee's, a "new number" claiming to be family).
 
 * Verdicts. `scam` (named warning signs, with a confidence), `bill` (a bill from a saved payee: payee, amount and due
-  date parsed deterministically), `info` (e.g. a tuition reminder) or `personal` (a message from family).
+  date parsed deterministically), `info` (a tuition reminder, a payment receipt, an Interac deposit notice) or
+  `personal` (a message from family). Links that imitate an agency or bank (cra-refund-canada.com) are a scam sign.
 * What it does on its own. Only things that add friction or information, never money: it marks a scam and shows the
   warning signs with "don't pay, don't share codes", suggests the one-tap lock, and for a high-confidence scam that
-  asks for money it raises a safety alert the sponsor sees (no message text, only the named signs). A bill from a
+  asks for money it raises a safety alert the sponsor sees (no message text, only the named signs; not for one after
+  less than CAD 5 unless it asks for card details or codes). A bill from a
   saved payee gets a "draft this payment" suggestion: a normal T2 draft is created only when she taps it, it always
   pays the SAVED payee and account (never a number from the message), and she still confirms it. If an active
   bill_autopay mandate covers that payee, the autopilot handles it under its own rules (it pays the saved schedule's
@@ -66,6 +68,36 @@ INBOX_RULES: List[Tuple[str, str, re.Pattern]] = [
                 r"within|unless|tonight|24 hours)\b|\bto avoid (disconnection|suspension|a late fee today)\b",
                 re.IGNORECASE)),
 ]
+# Web addresses in a message, and the brands and agencies scammers imitate in them. A link whose name uses one of
+# these words but is not the organisation's own domain is a lookalike (cra-refund-canada.com, cpost-redeliver.co).
+DOMAIN = re.compile(r"(?<![@\w.-])((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|ca|co|net|org|info|xyz|top|io|"
+                    r"me|app|site|online|link|click|cc|biz|us|vip|shop))(?![\w-])", re.IGNORECASE)
+LOOKALIKE_WORDS = {"cra", "arc", "canada", "gc", "gov", "interac", "etransfer", "canadapost", "cpost", "postescanada",
+                   "ubc", "rbc", "td", "scotiabank", "bmo", "cibc", "servicecanada", "homebridge"}
+OFFICIAL_DOMAINS = {"canada.ca", "gc.ca", "interac.ca", "canadapost.ca", "canadapost-postescanada.ca", "ubc.ca",
+                    "rbc.com", "rbcroyalbank.com", "td.com", "tdcanadatrust.com", "scotiabank.com", "bmo.com",
+                    "cibc.com"}
+REFUND_LINK = re.compile(r"\b(refunds?|rebates?|reimbursement|tax return|overpayment)\b.{0,80}\b(claim|accept|deposit|"
+                         r"click|visit|tap|link|redeem|collect|apply)\b|\b(claim|accept|collect|redeem)\b.{0,40}"
+                         r"\b(refunds?|rebates?)\b|(退税|退款).{0,20}(领取|点击|链接)", re.IGNORECASE)
+# A payment confirmation or receipt: money already went out, so there is nothing to pay (and no draft to offer).
+RECEIPT = re.compile(r"\b(payment (received|confirmation|confirmed|successful|processed)|we('ve| have)? received your "
+                     r"payment|thank(s| you) for your payment|receipt|has been charged|charged to (your )?card|paid in "
+                     r"full)\b|已收到.{0,6}(付款|缴费)|付款成功|收据", re.IGNORECASE)
+STILL_DUE = re.compile(r"\b(is due|due on|due by|due date|amount due|balance owing|payment due|please pay|pay by|"
+                       r"pay now|overdue)\b|到期|请缴", re.IGNORECASE)
+# Money coming IN (an Interac e-Transfer deposit notice). Not a scam by itself, unless it also asks for something.
+INCOMING = re.compile(r"\b(has sent you|sent you|you('ve| have) received)\b.{0,60}(\$|cad|money|e-?transfer)|"
+                      r"\be-?transfer\b.{0,60}\b(sent you|deposited|received)\b|\b(automatically deposited|has been "
+                      r"deposited|was deposited)\b", re.IGNORECASE)
+ASKS = re.compile(r"\b(pay|fee|send (it |the money )?back|return the|refund the|verify|confirm your|log ?in|sign in|"
+                  r"password|code|pin|card|answer|security question|accept|claim)\b", re.IGNORECASE)
+# What makes even a small scam worth telling the sponsor about: it asks for card details or codes.
+SECRETS = re.compile(r"\b(card (number|details|info)|credit card|debit card|cvv|cvc|expiry|expiration|pin|password|"
+                     r"verification code|one[- ]time (code|password)|otp|security code|sin number|social insurance)\b|"
+                     r"验证码|密码|卡号", re.IGNORECASE)
+SMALL_SCAM_CAD = 5.0            # a scam asking for less than this alerts the sponsor only if it asks for card details
+
 ACCOUNT_NUMBER = re.compile(r"\b\d{4}-\d{4}-\d{4}\b|\b\d{10,16}\b")
 ACCOUNT_ENDING = re.compile(r"(?:ending(?: in)?|ends in|ending with|last (?:4|four) digits?|尾号|末四位)\s*[:：]?\s*"
                             r"(?:in\s*)?(\d{4})\b", re.IGNORECASE)
@@ -75,6 +107,7 @@ AMOUNT = re.compile(r"(?:CAD|C\$|\$|加元|加币)\s?(\d{1,3}(?:,\d{3})+(?:\.\d{
 BILL_WORDS = re.compile(r"\b(bill|invoice|statement|amount due|balance owing|payment due|is due|due on|due date)\b|"
                         r"账单|缴费|到期|\bbil\b", re.IGNORECASE)
 TUITION_WORDS = re.compile(r"\btuition\b|学费|\byuran\b", re.IGNORECASE)
+TUITION_CONTEXT = re.compile(r"\b(student account|student financial|fees?|installment|instalment|term)\b", re.IGNORECASE)
 MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
 DUE_EN = re.compile(r"\bdue(?: on| by| date)?[:\s]+(?:(\d{4}-\d{2}-\d{2})|([A-Za-z]{3,9})\.? (\d{1,2})(?:st|nd|rd|th)?"
                     r"|(\d{1,2}) ([A-Za-z]{3,9}))", re.IGNORECASE)
@@ -90,7 +123,7 @@ MONEY_SIGNALS = {
     "Impersonates police, courts or an embassy", "Caller claims to be the bank or police and asks for a transfer",
     "Account number differs from your saved payee", "Asks you to pay an account number given in a message",
     "Claims to be family from a new number", "Gives instructions to the assistant inside a message",
-    "Asks for confirmation codes or passwords",
+    "Asks for confirmation codes or passwords", "Refund offered through a link",
 }
 
 # The new signal names, for the Chinese and Malay views (the guard's own names are already in i18n.SIGNALS).
@@ -104,6 +137,8 @@ SIGNAL_TEXT = {
                                                      "ms": "Nombor akaun berbeza daripada penerima yang disimpan"},
     "Asks you to pay an account number given in a message": {"zh": "要求你付款到消息里给的账号",
                                                              "ms": "Minta anda bayar ke nombor akaun dalam mesej"},
+    "Link to a lookalike website": {"zh": "链接指向仿冒网站", "ms": "Pautan ke laman web tiruan"},
+    "Refund offered through a link": {"zh": "通过链接领取“退款”", "ms": "Bayaran balik ditawarkan melalui pautan"},
 }
 for _name, _tr in SIGNAL_TEXT.items():
     for _lang, _text in _tr.items():
@@ -238,6 +273,18 @@ def match_payee(bank: Any, owner: str, text: str, sender: str) -> Optional[Dict[
     return best[1] if best else None
 
 
+def _lookalike_links(folded: str) -> Tuple[List[str], List[str]]:
+    """(lookalike domains, official domains) among the links in the message."""
+    fake, real = [], []
+    for d in (m.group(1).lower() for m in DOMAIN.finditer(folded)):
+        official = any(d == o or d.endswith("." + o) for o in OFFICIAL_DOMAINS)
+        if official:
+            real.append(d)
+        elif set(re.split(r"[.-]", d)) & LOOKALIKE_WORDS:
+            fake.append(d)
+    return fake, real
+
+
 def _usual(bank: Any, owner: str, today: date, payee_name: str) -> Optional[float]:
     hist = sorted(abs(t["amount"]) for t in bank.transactions(owner, days=180, today=today)
                   if t["counterparty"] == payee_name and t["amount"] < 0)
@@ -289,6 +336,21 @@ TEXT: Dict[str, Dict[str, str]] = {
                      "in a message.",
                "zh": "这条消息试图给 AI 助手下指令。HomeBridge 绝不会执行消息里的指令。",
                "ms": "Mesej ini cuba memberi arahan kepada pembantu. HomeBridge tidak pernah ikut arahan dalam mesej."},
+    "adv.link": {"en": "Don't open the link. A real CRA refund arrives by direct deposit or in CRA My Account, never "
+                       "through a link in a text.",
+                 "zh": "不要打开链接。真正的加拿大税务局（CRA）退税会直接存入你的账户或显示在 CRA My Account 里，绝不会通过短信链接领取。",
+                 "ms": "Jangan buka pautan itu. Bayaran balik CRA yang sebenar masuk melalui deposit terus atau dalam CRA "
+                       "My Account, bukan melalui pautan dalam SMS."},
+    "adv.lookalike": {"en": "The link only looks like the organisation's website. Don't open it: go to the official "
+                            "site or app yourself.",
+                      "zh": "这个链接只是看起来像官方网站。不要打开，请自己前往官方网站或 App。",
+                      "ms": "Pautan itu hanya nampak seperti laman web organisasi itu. Jangan buka: pergi ke laman atau "
+                            "aplikasi rasmi sendiri."},
+    "head.receipt": {"en": "Payment confirmation: nothing to pay.", "zh": "付款确认：无需再付款。",
+                     "ms": "Pengesahan bayaran: tiada apa perlu dibayar."},
+    "head.incoming": {"en": "Money coming in: nothing to pay. Deposit it from your own banking app.",
+                      "zh": "这是一笔入账通知：无需付款。请在你自己的银行 App 里收款。",
+                      "ms": "Wang masuk: tiada apa perlu dibayar. Depositkan melalui aplikasi bank anda sendiri."},
     "adv.paid": {"en": "If you already paid, lock payments, call your bank and report it to the Canadian Anti-Fraud "
                        "Centre.",
                  "zh": "如果已经付款，请立即锁定付款、联系银行，并向加拿大反欺诈中心举报。",
@@ -371,6 +433,9 @@ def triage(bank: Any, owner: str, today: date, sender: str, channel: str, text: 
         if rx.search(folded):
             add(cat, name)
     payee = match_payee(bank, owner, text, sender)
+    # "UBC" alone (UBC Library, UBC Rec) is not the tuition payee: only a message about tuition or fees is.
+    if payee and payee["kind"] == "tuition" and not (TUITION_WORDS.search(folded) or TUITION_CONTEXT.search(folded)):
+        payee = None
     raw_number = bank.payee_raw_number(payee["id"]) if payee else ""
     numbers = [_digits(n) for n in ACCOUNT_NUMBER.findall(folded)]
     ending = ACCOUNT_ENDING.search(folded)
@@ -384,11 +449,22 @@ def triage(bank: Any, owner: str, today: date, sender: str, channel: str, text: 
             add("inbox", "Account number differs from your saved payee")
     if numbers and not payee and MONEY_VERB.search(folded):
         add("inbox", "Asks you to pay an account number given in a message")
+    fake_links, real_links = _lookalike_links(folded)
+    if fake_links:
+        add("inbox", "Link to a lookalike website")
+    unofficial_links = len(DOMAIN.findall(folded)) - len(real_links)
+    if REFUND_LINK.search(folded) and unofficial_links > 0:
+        add("inbox", "Refund offered through a link")
 
     probs = g.model.get("probs") or {}
     scam_p = float(probs.get("scam", 0.0))
     danger = [s for s in signals if s["category"] in ("scam", "injection", "escalation", "extraction", "inbox")]
     model_scam = "scam" in g.flags and g.sources.get("scam") == "model"
+    # Near miss: a deposit notice (money coming in) that asks for nothing and links only to official sites is not a
+    # scam just because its wording resembles one ("INTERAC e-Transfer: Priya sent you $20.00").
+    incoming = bool(INCOMING.search(folded)) and not ASKS.search(folded) and not danger and not unofficial_links
+    if incoming:
+        model_scam = False
     if model_scam:
         add("model", f"Wording similar to known scams ({round(scam_p * 100)}%)")
     is_scam = bool(danger) or model_scam
@@ -417,10 +493,15 @@ def triage(bank: Any, owner: str, today: date, sender: str, channel: str, text: 
                            "quote": g.quote if g.signals else "", "account_match": account_match}
     if is_scam:
         out.update(verdict="scam", confidence="high" if high else "medium", targets_money=targets_money,
-                   topic=_topic(names))
+                   topic=_topic(names), amount_asked=amount,
+                   asks_secrets=bool(SECRETS.search(folded)) or "Asks for confirmation codes or passwords" in names)
         if payee:
             out["claims_payee"] = {"payee_id": payee["id"], "name": payee["name"], "saved_last4": _digits(raw_number)[-4:],
                                    "message_last4": (numbers[0][-4:] if numbers else (ending.group(1) if ending else None))}
+    elif incoming:
+        out.update(verdict="info", topic="incoming")
+    elif RECEIPT.search(folded) and not STILL_DUE.search(folded):
+        out.update(verdict="info", topic="receipt")   # already paid: no "draft this payment"
     elif tuition:
         nxt = next((t for t in bank.tuition(owner) if not t["paid"]), None)
         out.update(verdict="info", topic="tuition",
@@ -445,9 +526,11 @@ def triage(bank: Any, owner: str, today: date, sender: str, channel: str, text: 
 def _topic(names: List[str]) -> str:
     joined = " ".join(names).lower()
     for key, words in (("ai", ("assistant",)), ("account", ("account number", "bank details")),
+                       ("link", ("refund offered",)),
                        ("police", ("police", "safe account", "parcel", "embassy", "crime")),
                        ("family", ("family", "friend", "new number")), ("job", ("job", "cheque")),
-                       ("government", ("government", "arrest", "gift card", "crypto"))):
+                       ("government", ("government", "arrest", "gift card", "crypto")),
+                       ("lookalike", ("lookalike website",))):
         if any(w in joined for w in words):
             return key
     return "other"
@@ -556,7 +639,7 @@ def receive(st: Any, owner: str, sender: str, channel: str, text: str, sample: s
 
     enhancer = None
     from .prefs import offline_only   # local: prefs imports bank only, but keep the import light
-    if not offline_only(bank, owner):
+    if not offline_only(bank, owner, getattr(getattr(st.agent, "provider", None), "name", "offline")):
         enhancer = model_enhancer(getattr(st.agent, "provider", None))
     tri = triage(bank, owner, today, sender, channel, text, enhancer)
     m = get(bank, owner, mid)
@@ -567,7 +650,10 @@ def receive(st: Any, owner: str, sender: str, channel: str, text: str, sample: s
     alerted = False
     if tri["verdict"] == "scam":
         m["actions"] = ["lock", "dismiss"]
-        if tri["confidence"] == "high" and tri.get("targets_money"):
+        # A CAD 1.99 "redelivery fee" text stays a scam on her phone, but Dad is paged only if it is after more than
+        # pocket change or asks for card details or codes.
+        small = tri.get("amount_asked") is not None and tri["amount_asked"] < SMALL_SCAM_CAD and not tri.get("asks_secrets")
+        if tri["confidence"] == "high" and tri.get("targets_money") and not small:
             alerted = _alert_sponsor(st, owner, tri)
     elif tri["verdict"] == "bill" and tri.get("bill"):
         mandate = _autopay_for(policy, owner, tri["bill"]["payee_id"])
@@ -622,6 +708,8 @@ def _headline(m: Dict[str, Any]) -> Dict[str, str]:
                          date=i18n.date(tu["due"], lang)) for lang in ("en", "zh", "ms")}
     if v == "personal":
         return both("head.personal", sender=m["sender"])
+    if m.get("topic") in ("receipt", "incoming"):
+        return both("head." + m["topic"])
     return both("head.info")
 
 
@@ -630,7 +718,9 @@ def _advice(m: Dict[str, Any]) -> List[Dict[str, str]]:
     if v == "scam":
         keys = ["adv.dont"]
         keys.append({"ai": "adv.ai", "account": "adv.account", "police": "adv.police", "family": "adv.family",
-                     "job": "adv.job", "government": "adv.government"}.get(m.get("topic", ""), "adv.government"))
+                     "job": "adv.job", "government": "adv.government", "link": "adv.link",
+                     "lookalike": "adv.lookalike"}.get(m.get("topic", ""),
+                                                                                                 "adv.government"))
         keys.append("adv.paid")
         return [both(k) for k in keys]
     if v == "bill" and m.get("bill"):

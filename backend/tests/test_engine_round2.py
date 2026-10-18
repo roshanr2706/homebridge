@@ -218,6 +218,8 @@ def test_data_to_china_offline():
 def test_data_flow_names_the_configured_cloud_model(provider, region):
     st = fresh()
     st.agent.provider.name = provider   # the offline engine answers; the tool reports the configured route
+    from app import prefs
+    prefs.seed_consent(st.bank, STUDENT, provider)   # she agreed to that provider at onboarding
     r = run(st, "Is my data sent to China?")
     assert region in r.reply and "masked" in r.reply
     assert r.reply.startswith("Yes. " if provider == "deepseek" else "No. ")

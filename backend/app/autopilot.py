@@ -608,7 +608,7 @@ class Autopilot:
             diff = round(amount * (1 - prov.spread_pct / 100) * (mid - avg), 2)
             return {**plan, "amount": amount, "within": True,
                     "draft": lambda a: self.policy.draft_conversion(owner, f"{owner}:{SESSION}", "MYR", "CAD", a, [],
-                                                                    "everyday", "wallet"),
+                                                                    "everyday", "wallet", mandate_id=m["id"]),
                     "facts": {"mid": f"{mid:.4f}", "target": f"{c['target_rate']:.4f}", "provider": best["provider"],
                               "diff": _m(abs(diff)), "better": diff >= 0},
                     "what": f"Converting MYR {_m(amount)} to CAD"}
@@ -636,7 +636,7 @@ class Autopilot:
             within = need <= caps["per_action"] + 1e-9 and need <= left + 1e-9
             return {**plan, "amount": need, "within": within,
                     "draft": lambda a: self.policy.draft_conversion(owner, f"{owner}:{SESSION}", "MYR", "CAD", a, [],
-                                                                    "tuition", "wallet"),
+                                                                    "tuition", "wallet", mandate_id=m["id"]),
                     "facts": {"term": inst["term"], "due": inst["due"], "gap": _m(gap), "provider": "HomeBridge wallet conversion"},
                     "what": f"Topping up the Tuition Fund (MYR {_m(need)})", "left": left}
         if m["kind"] == "bill_autopay":
@@ -749,7 +749,8 @@ class Autopilot:
         elif a.kind != "topup":
             if a.tier == "T3" or a.needs_sponsor:
                 reason = (a.sponsor_reasons or a.risk_reasons or ["needs the sponsor"])[0]
-                why.append(both("why.tier", reason=reason))
+                why.append({"en": tx("why.tier", "en", reason=reason),
+                            "zh": tx("why.tier", "zh", reason=i18n.reason(reason, "zh"))})
             if (a.compliance or {}).get("outcome", "clear") != "clear":
                 why.append(both("why.compliance"))
 

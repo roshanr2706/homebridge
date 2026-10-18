@@ -322,7 +322,7 @@ function Shell({ epoch, provider, onReset, people, role, onRole, fixed }: ShellP
           {fixed ? (
             <View style={[styles.dot, { backgroundColor: ink.colored ? '#FFFFFF' : role === 'student' ? t.accent : t.gold }]} />
           ) : (
-            <Pressable onPress={onReset} accessibilityRole="button" accessibilityLabel={tr('reset.label')} hitSlop={8}>
+            <Pressable onPress={() => void onReset()} accessibilityRole="button" accessibilityLabel={tr('reset.label')} hitSlop={8}>
               <Body style={{ color: ink.colored ? ink.fg : t.faint, fontSize: 18 }}>↺</Body>
             </Pressable>
           )}
@@ -420,12 +420,12 @@ function Stage() {
       stage(async () => {
         await api.injectInbox(sample);
       }),
-    reset: () => void reset(),
+    reset: (keep) => void reset(keep),
   };
 
-  const reset = async () => {
+  const reset = async (keepOnboarding = true) => {
     try {
-      await api.reset();
+      await api.reset(keepOnboarding);
       toast(tr('reset.done'), tr('reset.doneBody'), 'info');
     } catch (e) {
       toast(tr('reset.failed'), (e as Error).message, 'danger');
@@ -498,7 +498,7 @@ type DemoControls = {
   tuitionWeek: () => void;
   autopilot: () => void;
   inject: (sample: string) => void;
-  reset: () => void;
+  reset: (keepOnboarding: boolean) => void;
 };
 
 // Operator-facing names for the inbox samples (backend/app/inbox.py SAMPLES); an unknown one shows the server's label.
@@ -562,7 +562,8 @@ function DemoMenu({ c }: { c: DemoControls }) {
               <MenuItem key={s.key} indent label={SAMPLE_LABEL[s.key] ? tr(SAMPLE_LABEL[s.key]) : s.label} onPress={pick(() => c.inject(s.key))} />
             ))}
           <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: t.border, marginVertical: 4 }} />
-          <MenuItem label={tr('reset.button')} onPress={pick(c.reset)} />
+          <MenuItem label={tr('reset.keep')} onPress={pick(() => c.reset(true))} />
+          <MenuItem label={tr('reset.full')} onPress={pick(() => c.reset(false))} />
         </View>
       )}
     </View>

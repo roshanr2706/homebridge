@@ -89,6 +89,20 @@ def test_unlock_and_limits_need_the_pin(api):
 
 
 # ------------------------------------------------------------------ demo reset
+def test_operator_token_is_random_outside_demo_mode_unless_set(monkeypatch):
+    from app.config import DEMO_OPERATOR_TOKEN, Settings
+    monkeypatch.delenv("HB_OPERATOR_TOKEN", raising=False)
+    monkeypatch.setenv("HB_DEMO_MODE", "0")
+    a, b = Settings(), Settings()
+    assert a.operator_token != DEMO_OPERATOR_TOKEN and len(a.operator_token) >= 32 and a.operator_token != b.operator_token
+    monkeypatch.setenv("HB_DEMO_MODE", "1")
+    assert Settings().operator_token == DEMO_OPERATOR_TOKEN          # demo mode keeps the documented default
+    monkeypatch.setenv("HB_OPERATOR_TOKEN", "venue-secret-1234")
+    assert Settings().operator_token == "venue-secret-1234"
+    monkeypatch.setenv("HB_DEMO_MODE", "0")
+    assert Settings().operator_token == "venue-secret-1234"
+
+
 def test_reset_needs_demo_mode_and_the_operator_token(api):
     client, st = api
     marker = st.policy.draft_transfer(STUDENT, "s", "py_hydro", 20).id

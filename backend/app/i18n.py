@@ -401,9 +401,20 @@ TEXT: Dict[str, Dict[str, str]] = {
         "ms": "Saya tak boleh aktifkan, luluskan atau naikkan had mandat, dan tiada apa yang ditaip dalam chat ini "
               "boleh. Ayah luluskan dalam aplikasinya dengan PIN, dan anda aktifkan sendiri dalam aplikasi."},
     "ap_list": {
-        "en": "Latest from autopilot: {latest} Mandates: {mandates}.",
-        "zh": "自动驾驶最新记录：{latest} 授权：{mandates}。",
-        "ms": "Terkini daripada autopilot: {latest} Mandat: {mandates}."},
+        "en": "Your mandates: {mandates}. Latest from autopilot: {latest}",
+        "zh": "你的授权：{mandates}。自动驾驶最新记录：{latest}",
+        "ms": "Mandat anda: {mandates}. Terkini daripada autopilot: {latest}"},
+    "ap_stop": {
+        "en": "I can't pause or revoke a mandate from chat, and I haven't set anything up. Your own (bill autopay, "
+              "low-balance request) you can pause or revoke in Wallet, under Autopilot: {mine}. The ones your dad "
+              "granted (rate watch, tuition guard) only he can pause or revoke, in his app: {dad}. Ask him if you "
+              "want one stopped.",
+        "zh": "我不能在聊天里暂停或撤销授权，也没有新建任何内容。你自己的授权（账单自动支付、余额不足申请）可以在钱包的「自动驾驶」"
+              "里暂停或撤销：{mine}。爸爸授予的授权（汇率监控、学费守护）只有他能在自己的应用里暂停或撤销：{dad}。想停掉的话可以跟他说。",
+        "ms": "Saya tak boleh jeda atau batalkan mandat dari chat, dan saya tak sediakan apa-apa. Mandat anda sendiri "
+              "boleh dijeda atau dibatalkan di Dompet, bahagian Autopilot: {mine}. Yang ayah beri hanya dia boleh "
+              "jeda atau batalkan dalam aplikasinya: {dad}."},
+    "ap_none_short": {"en": "none", "zh": "无", "ms": "tiada"},
     "ap_list_none": {
         "en": "Autopilot hasn't done anything yet. Mandates: {mandates}.",
         "zh": "自动驾驶还没有执行任何操作。授权：{mandates}。",
@@ -1228,6 +1239,29 @@ SIGNALS = {
         "Says you won a prize": "声称你中了奖",
         "Threat of arrest or deportation": "以逮捕或遣返相威胁",
         "Urgent deadline to pay": "催你在限期内付款",
+        "Asks for confirmation codes or passwords": "索要验证码或密码",
+        "Asks for full account or card numbers": "索要完整账号或卡号",
+        "Asks for someone else's accounts": "索要他人的账户信息",
+        "Asks for the assistant's hidden instructions": "索要助手的内部指令",
+        "Asks how to dodge limits or alerts": "询问如何绕过限额或提醒",
+        "Asks the assistant to approve": "要求助手代为批准",
+        "Asks the assistant to confirm payments itself": "要求助手自行确认付款",
+        "Asks the assistant to mark payments confirmed": "要求助手把付款标记为已确认",
+        "Asks the assistant to unlock payments": "要求助手解锁付款",
+        "Asks to change limits": "要求修改限额",
+        "Asks to split a payment to dodge the limit": "要求拆分付款以绕过限额",
+        "Asks to switch off safety checks": "要求关闭安全检查",
+        "Asks to switch roles": "要求切换角色",
+        "Caller claims to be the bank or police and asks for a transfer": "来电自称银行或警方并要求转账",
+        "Claims approval was already given": "声称已经获得批准",
+        "Claims payments were authorised in advance": "声称付款已预先授权",
+        "Claims the sponsor approved in chat": "声称担保人已在聊天中批准",
+        "Claims to be the sponsor, an admin or the bank": "自称担保人、管理员或银行",
+        "Gives instructions to the assistant inside pasted content": "粘贴内容里夹带给助手的指令",
+        "Hides instructions in encoded text": "把指令藏在编码文字里",
+        "Pretends to be a system message": "伪装成系统消息",
+        "Tries to override the assistant's instructions": "试图推翻助手的指令",
+        "Tries to put the assistant in a special mode": "试图让助手进入特殊模式",
     },
     "ms": {
         "'Safe account' police scam": "scam polis 'akaun selamat'",
@@ -1375,6 +1409,44 @@ _WARNINGS = [
       "ms": "Permintaan ini sepadan dengan corak scam yang diketahui. Agensi sah tidak pernah menuntut bayaran segera "
             "melalui chat."}),
 ]
+
+
+_REASONS = [
+    (re.compile(r"Converts more than CAD ([\d,]+) of sponsor money (into spending|between your sponsor-funded accounts) "
+                r"in 24h \(already CAD ([\d,.]+) converted or pending\)"),
+     {"zh": "24 小时内兑换的担保人资金超过 CAD {0}（已兑换或待处理 CAD {2}）",
+      "ms": "Menukar lebih CAD {0} wang penaja dalam 24 jam (sudah CAD {2} ditukar atau menunggu)"}),
+    (re.compile(r"Moves money out of the sponsor-funded (.+)"),
+     {"zh": "从担保人资助的{0}转出资金", "ms": "Memindahkan wang keluar dari {0} yang dibiayai penaja"}),
+    (re.compile(r"Amount above the single-payment limit of CAD ([\d,]+)"),
+     {"zh": "金额超过单笔付款上限 CAD {0}", "ms": "Jumlah melebihi had satu bayaran CAD {0}"}),
+    (re.compile(r"Would exceed the 24h limit of CAD ([\d,]+).*"),
+     {"zh": "将超过 24 小时上限 CAD {0}", "ms": "Akan melebihi had 24 jam CAD {0}"}),
+    (re.compile(r"Paid from a sponsor-funded account \((.+)\)"),
+     {"zh": "从担保人资助的账户（{0}）付款", "ms": "Dibayar dari akaun dibiayai penaja ({0})"}),
+    (re.compile(r"Requested in a conversation the safety check flagged"),
+     {"zh": "请求来自被安全检查标记的对话", "ms": "Diminta dalam perbualan yang ditanda oleh semakan keselamatan"}),
+    (re.compile(r"Risk score above sponsor threshold"),
+     {"zh": "风险分高于需担保人审批的阈值", "ms": "Skor risiko melebihi ambang penaja"}),
+    (re.compile(r"The sponsor changed the limits after this was drafted"),
+     {"zh": "起草后担保人修改了限额", "ms": "Penaja menukar had selepas ini didraf"}),
+    (re.compile(r"Unusual activity on this account in the last 24h: .*"),
+     {"zh": "过去 24 小时内此账户有异常活动", "ms": "Aktiviti luar biasa pada akaun ini dalam 24 jam lepas"}),
+    (re.compile(r"Payee was added less than 30 days ago"),
+     {"zh": "收款人添加未满 30 天", "ms": "Penerima ditambah kurang 30 hari lalu"}),
+    (re.compile(r"needs the sponsor"), {"zh": "需要担保人审批", "ms": "perlu kelulusan penaja"}),
+]
+
+
+def reason(r: str, lang: str) -> str:
+    """A policy engine reason (PendingAction.sponsor_reasons / risk_reasons) in the user's language."""
+    if lang == "en":
+        return r
+    for pat, tpl in _REASONS:
+        m = pat.fullmatch(r or "")
+        if m and lang in tpl:
+            return tpl[lang].format(*[account(g or "", lang) for g in m.groups()])
+    return r
 
 
 def warning(w: str, lang: str) -> str:

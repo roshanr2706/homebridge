@@ -13,7 +13,8 @@ database (bank.user_prefs):
   - sponsor: sponsor_terms (the approval PIN and what he can and cannot see).
 
 Every save is audited as `prefs_updated`, and every consent decision as `consent_recorded`, with booleans and the
-provider/region only. /demo/reset drops the table with the rest of the sandbox, so onboarding runs again.
+provider/region only. /demo/reset drops the table with the rest of the sandbox, so onboarding runs again, unless the
+operator asks it to keep onboarding ({"keep_onboarding": true}, the Demo menu's default "Reset (keep setup)").
 """
 from __future__ import annotations
 
@@ -66,15 +67,63 @@ def get(bank: Bank, user_id: str, role: str) -> Dict[str, Any]:
     return out
 
 
-def offline_only(bank: Bank, user_id: str) -> bool:
-    """True when this person asked to keep chat on the offline engine, or finished onboarding without agreeing
-    to cloud processing. Someone who has not onboarded yet keeps the server's configured model."""
+def consent_covers(ai: Optional[Dict[str, Any]], provider: str) -> bool:
+    """True when a recorded ai_processing consent was given for this provider (or another name for the same
+    service in the same region, e.g. deepseek and deepseek-pro). A consent to the offline engine, or to a
+    provider in another region, does not cover a cloud model."""
+    if not ai or not ai.get("agreed"):
+        return False
+    now, then = route(provider), route(str(ai.get("provider") or ""))
+    return then["provider"] == now["provider"] or (
+        then["label"] == now["label"] and then["region"] == now["region"] == ai.get("region"))
+
+
+def offline_only(bank: Bank, user_id: str, provider: str) -> bool:
+    """True when this person's chat must stay on the offline engine with the server's current provider: she chose
+    "offline engine only", she has not onboarded yet (no consent exists), or her recorded consent does not cover
+    the current provider and region (the server was restarted with a different model: she reviews it in Settings).
+    """
     p = bank.load_prefs(user_id) or {}
     c = p.get("consents") or {}
     if (c.get("offline_only") or {}).get("value"):
         return True
-    ai = c.get("ai_processing")
-    return bool(p.get("onboarded_at")) and ai is not None and not ai.get("agreed")
+    if not p.get("onboarded_at"):
+        return True
+    if not route(provider)["leaves_server"]:
+        return False   # the server runs the offline engine anyway
+    return not consent_covers(c.get("ai_processing"), provider)
+
+
+def consent_stale(bank: Bank, user_id: str, provider: str) -> bool:
+    """True when she onboarded and didn't choose offline-only, but her consent names a different provider or region
+    than the current one. Settings then shows "Your AI provider changed: review consent"."""
+    p = bank.load_prefs(user_id) or {}
+    c = p.get("consents") or {}
+    if not p.get("onboarded_at") or (c.get("offline_only") or {}).get("value"):
+        return False
+    return route(provider)["leaves_server"] and not consent_covers(c.get("ai_processing"), provider)
+
+
+def seed_consent(bank: Bank, user_id: str, provider: str) -> None:
+    """For the test and evidence harness only: the student has onboarded and agreed to the configured provider,
+    as she would have in the app. Not audited (no person did it)."""
+    u = bank.user(user_id) or {}
+    now = round(time.time(), 3)
+    bank.save_prefs(user_id, {**defaults("student", u.get("name") or user_id), "onboarded_at": now, "consents": {
+        "sponsor_sharing": {"agreed": True, "at": now, "version": CONSENT_VERSION, "scope": "sponsor_funded"},
+        "ai_processing": {"agreed": True, "at": now, "version": CONSENT_VERSION, **route(provider)},
+        "offline_only": {"value": False, "at": now}}})
+
+
+def _agree_ai(audit: AuditLog, user_id: str, provider: str, consents: Dict[str, Any]) -> bool:
+    """Records agreement to the current cloud provider unless her consent already covers it. True if recorded."""
+    r = route(provider)
+    if not r["leaves_server"] or consent_covers(consents.get("ai_processing"), provider):
+        return False
+    consents["ai_processing"] = {"agreed": True, "at": round(time.time(), 3), "version": CONSENT_VERSION, **r}
+    audit.record("consent_recorded", user_id, owner=user_id, consent="ai_processing", agreed=True,
+                 version=CONSENT_VERSION, provider=r["provider"], region=r["region"], leaves_server=r["leaves_server"])
+    return True
 
 
 def _check(language: Optional[str], skin: Optional[str]) -> None:
@@ -122,11 +171,12 @@ def onboard(bank: Bank, audit: AuditLog, user_id: str, role: str, provider: str,
 
 def update(bank: Bank, audit: AuditLog, user_id: str, role: str, provider: str, *,
            display_name: Optional[str] = None, language: Optional[str] = None, skin: Optional[str] = None,
-           offline: Optional[bool] = None) -> Dict[str, Any]:
+           offline: Optional[bool] = None, ai_consent: Optional[bool] = None) -> Dict[str, Any]:
     """Later changes from Settings. Only the fields sent change. Turning "offline engine only" off in Settings,
-    where the provider and its region are shown next to the switch, is recorded as agreeing to that processing."""
+    where the provider and its region are shown next to the switch, is recorded as agreeing to that processing;
+    so is ai_consent=True, her answer to "Your AI provider changed: review consent"."""
     _check(language, skin)
-    if offline is not None and role != "student":
+    if (offline is not None or ai_consent is not None) and role != "student":
         raise PrefsError("Only the student's chat has a model setting.")
     stored = bank.load_prefs(user_id) or {}
     current = get(bank, user_id, role)
@@ -148,12 +198,10 @@ def update(bank: Bank, audit: AuditLog, user_id: str, role: str, provider: str, 
         consents["offline_only"] = {"value": offline, "at": now}
         audit.record("consent_recorded", user_id, owner=user_id, consent="offline_only", agreed=offline,
                      version=CONSENT_VERSION)
-        r = route(provider)
-        if not offline and r["leaves_server"] and not (consents.get("ai_processing") or {}).get("agreed"):
-            consents["ai_processing"] = {"agreed": True, "at": now, "version": CONSENT_VERSION, **r}
-            audit.record("consent_recorded", user_id, owner=user_id, consent="ai_processing", agreed=True,
-                         version=CONSENT_VERSION, provider=r["provider"], region=r["region"],
-                         leaves_server=r["leaves_server"])
+        if not offline:
+            _agree_ai(audit, user_id, provider, consents)
+        data["consents"] = consents
+    if ai_consent and _agree_ai(audit, user_id, provider, consents):
         data["consents"] = consents
     bank.save_prefs(user_id, data)
     if changed:

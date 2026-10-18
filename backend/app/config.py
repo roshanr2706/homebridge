@@ -6,12 +6,17 @@ can quote one place.
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import List, Optional
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+# The default operator token in demo mode. The web app's default EXPO_PUBLIC_OPERATOR_TOKEN matches it, so anyone who
+# can load the demo page can use the Demo menu: set HB_OPERATOR_TOKEN and EXPO_PUBLIC_OPERATOR_TOKEN to a random value
+# at the venue.
+DEMO_OPERATOR_TOKEN = "demo-operator"
 
 
 def load_dotenv(path: Path = BASE_DIR / ".env") -> None:
@@ -101,8 +106,10 @@ class Settings:
     # Demo mode pins the sandbox's "today" so the screenshots, video and docs show the same dates.
     # Tests pass their own date; outside demo mode the real date is used.
     demo_today: str = field(default_factory=lambda: _env("HB_DEMO_TODAY", "2026-10-08"))
-    # /demo/reset needs this in an X-Operator header, and only works in demo mode (see R11).
-    operator_token: str = field(default_factory=lambda: _env("HB_OPERATOR_TOKEN", "demo-operator"))
+    # /demo/reset and the other stage controls need this in an X-Operator header, and only work in demo mode (see
+    # R11). Unset: demo mode uses the well-known DEMO_OPERATOR_TOKEN (a stage convenience, not a control: the web
+    # app ships it, security_self_assessment.md R22); outside demo mode a random token is generated at startup.
+    operator_token: str = field(default_factory=lambda: _env("HB_OPERATOR_TOKEN", ""))
     # Browsers may call the API only from these origins. The exported web app is served by the API itself
     # (same origin, no CORS needed); the defaults cover the Expo dev server and a local API.
     cors_origins: List[str] = field(default_factory=lambda: [
@@ -117,6 +124,8 @@ class Settings:
         return date.fromisoformat(self.demo_today)
 
     def __post_init__(self) -> None:
+        if not self.operator_token:
+            self.operator_token = DEMO_OPERATOR_TOKEN if self.demo_mode else secrets.token_urlsafe(32)
         if self.demo_mode:
             # Shortened so the cooling period can be shown live on stage.
             self.limits.payee_cooling_seconds = 60

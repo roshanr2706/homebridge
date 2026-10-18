@@ -11,6 +11,7 @@ import time
 from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from . import prefs as user_prefs
 from .authn import DEMO_SPONSOR_PIN
 from .bank import to_minor
 from .compliance import screen_name
@@ -40,9 +41,14 @@ def midday_clock():
     return lambda: time.time() - offset
 
 
-def fresh(provider=None, settings=None) -> AppState:
+def fresh(provider=None, settings=None, consented: bool = True) -> AppState:
+    """A fresh sandbox. With a cloud provider, the student has onboarded and agreed to it (consented=True), as she
+    would have in the app; otherwise her chat stays on the offline engine (prefs.offline_only)."""
     st = build_state(settings=settings, today=TODAY, provider=provider, audit_path=None)
     st.policy.safety.clock = midday_clock()
+    name = getattr(st.agent.provider, "name", "offline")
+    if consented and name != "offline":
+        user_prefs.seed_consent(st.bank, STUDENT, name)
     return st
 
 

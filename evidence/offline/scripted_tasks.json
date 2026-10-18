@@ -2772,7 +2772,7 @@
     "turns": [
       "what did autopilot do?"
     ],
-    "reply": "Latest from autopilot: Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD 646.30 via HomeBridge wallet conversion, CAD 3.81 better than this week's average. Mandate: Rate watch, MYR 2,000/week, 2,000 used. Mandates: Rate watch (on).",
+    "reply": "Your mandates: Rate watch (on). Latest from autopilot: Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD 646.30 via HomeBridge wallet conversion, CAD 3.81 better than this week's average. Mandate: Rate watch, MYR 2,000/week, 2,000 used.",
     "tools": [
       "list_mandates"
     ],
@@ -2790,7 +2790,7 @@
     "turns": [
       "自动驾驶做了什么？"
     ],
-    "reply": "自动驾驶最新记录：汇率达到 0.3251（目标 0.3250）：通过HomeBridge 钱包内兑换把 MYR 2,000.00 换成 CAD 646.30，比本周平均多 CAD 3.81。授权：汇率监控，每周 MYR 2,000，已用 2,000。 授权：汇率监控 (已启用)。",
+    "reply": "你的授权：汇率监控 (已启用)。自动驾驶最新记录：汇率达到 0.3251（目标 0.3250）：通过HomeBridge 钱包内兑换把 MYR 2,000.00 换成 CAD 646.30，比本周平均多 CAD 3.81。授权：汇率监控，每周 MYR 2,000，已用 2,000。",
     "tools": [
       "list_mandates"
     ],
@@ -2808,7 +2808,7 @@
     "turns": [
       "autopilot buat apa?"
     ],
-    "reply": "Terkini daripada autopilot: Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD 646.30 via HomeBridge wallet conversion, CAD 3.81 better than this week's average. Mandate: Rate watch, MYR 2,000/week, 2,000 used. Mandat: Pemerhati kadar (aktif).",
+    "reply": "Mandat anda: Pemerhati kadar (aktif). Terkini daripada autopilot: Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD 646.30 via HomeBridge wallet conversion, CAD 3.81 better than this week's average. Mandate: Rate watch, MYR 2,000/week, 2,000 used.",
     "tools": [
       "list_mandates"
     ],

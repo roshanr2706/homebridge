@@ -34,23 +34,22 @@ with a PIN checked on the server.
 
 ## Results
 
-<!-- counts: tests=964, tasks=134, attacks=89 (induced 32, extraction 11, escalation 24, injection 22), guard-flagged=62, tools=27, f1=0.854 on 902 rows, audit=1394 -->
+<!-- counts: tests=1003, tasks=134, attacks=89 (induced 32, extraction 11, escalation 24, injection 22), guard-flagged=62, tools=27, f1=0.854 on 902 rows, audit=1394 -->
 Offline engine, measured 2026-10-18:
 
 | | |
 |---|---|
 | Scripted tasks | 134 / 134 pass (104 English including casual Malaysian English, 18 Simplified Chinese, 12 Malay) |
 | Attack suite | 89 / 89 blocked (induced transfer 32, extraction 11, escalation 24, injection 22) |
-| Held-out set (80 requests in EN / Malaysian English / Malay / 中文, written by an assistant that never saw this code) | DeepSeek 78 / 80, offline engine 72 / 80 correct behaviour; neither drafted anything it shouldn't ([`evidence/heldout/`](evidence/heldout/deepseek.md)) |
+| Held-out set (80 requests in EN / Malaysian English / Malay / 中文, written by a separate LLM session with no access to this repo; not by a person) | DeepSeek 78 / 80, offline engine 72 / 80 correct behaviour; neither drafted anything it shouldn't ([`evidence/heldout/`](evidence/heldout/deepseek.md)) |
 | Live model (DeepSeek `deepseek-flash`, 2026-10-18) | 133 / 134 tasks, 89 / 89 attacks blocked, audit chain valid ([`evidence/deepseek/`](evidence/deepseek/SUMMARY.md)) |
-| Automated tests | 964 passing, no network needed |
+| Automated tests | 1003 passing, no network needed |
 | Our classifier | macro F1 0.854 (grouped 5-fold CV, 902 rows) |
 | Agent tools | 27 registered; none of them can execute, approve, unlock, change limits or turn on an autopilot mandate |
 
-The scripted tasks run on the deterministic offline engine. The 12 Autopilot tasks (T134 to T145) and 7 Autopilot
-attacks (A28 to A30, C22 to C24, D21) were added on 2026-10-18, and the 3 Smart inbox tasks (T146 to T148) and 3
-inbox attacks (A31, A32, D22) after them; the evidence files and the live DeepSeek run above predate them (119 tasks
-and 79 attacks).
+The scripted tasks run on the deterministic offline engine. The evidence files (`evidence/offline/`,
+`evidence/deepseek/`) cover all of them, including the 12 Autopilot tasks (T134 to T145), the 3 Smart inbox tasks
+(T146 to T148) and their 10 attacks (A28 to A32, C22 to C24, D21, D22).
 
 ## Features
 
@@ -161,7 +160,7 @@ Demo values (all overridable, see `backend/.env.example`):
 | `HB_DEMO_MODE` | `1` (default) | 60-second payee cooling, remittances settle in seconds, reset allowed |
 | `HB_DEMO_TODAY` | `2026-10-08` | Pins the sandbox date so screenshots, video and docs agree (empty = real date) |
 | `HB_SPONSOR_PIN` | `246810` | The sponsor's approval PIN, stored only as a salted hash |
-| `HB_OPERATOR_TOKEN` | `demo-operator` | Needed in an `X-Operator` header for `/demo/reset`, `/autopilot/run`, `/demo/fx_shift`, `/demo/inbox` and `/demo/time_skip` (the web app sends it in demo mode) |
+| `HB_OPERATOR_TOKEN` | `demo-operator` | Needed in an `X-Operator` header for `/demo/reset`, `/autopilot/run`, `/demo/fx_shift`, `/demo/inbox` and `/demo/time_skip` (the web app sends it in demo mode). Unset outside demo mode, a random token is generated at startup. **At the venue, set it and `EXPO_PUBLIC_OPERATOR_TOKEN` (when building the web app) to the same random value**: the default ships in the web bundle, so anyone with the demo page could use the Demo menu (security R30) |
 | `HB_AUTOPILOT_TICK` | `30` | Seconds between background autopilot runs in demo mode (`0` turns it off; the tests do) |
 | `HB_STUDENT_TOKEN`, `HB_SPONSOR_TOKEN` | `demo-student`, `demo-sponsor` | Bearer tokens |
 
@@ -223,7 +222,7 @@ shortfall from my MYR wallet", "eh rent how much ah, can pay landlord or not", "
 before tuition is due?", "How's my credit?", "Ask my dad for 800 for textbooks", "did dad send the money?",
 "我还有多少钱？", "帮我交房租", "我的钱够用到学期末吗？", "duit cukup tak sampai hujung sem?",
 or paste a suspicious message after "Is this a scam?". After the Demo menu delivers a message: "anything suspicious in
-my messages?", "收到的短信有没有诈骗？". The ↺ button in a phone's header (or Demo ▾ → Reset on the two-phone stage) resets the sandbox.
+my messages?", "收到的短信有没有诈骗？". The ↺ button in a phone's header (or Demo ▾ → Reset (keep setup) on the two-phone stage) resets the sandbox and keeps both people's onboarding; Demo ▾ → Full reset (replay onboarding) also replays onboarding.
 
 ## Choosing the model
 
@@ -269,9 +268,9 @@ All endpoints except `/health` take `Authorization: Bearer <token>`. Demo tokens
 | Method | Path | Role | Body / query | Purpose |
 |---|---|---|---|---|
 | GET | `/health` | none | | Provider, demo mode, pinned date |
-| GET | `/me` | any | | Who the token belongs to, its role, saved `prefs` (display name, language, skin, `onboarded_at`, consents) and where chat would be processed (`model_route`) |
+| GET | `/me` | any | | Who the token belongs to, its role, saved `prefs` (display name, language, skin, `onboarded_at`, consents) and where chat would be processed (`model_route`); for the student, the engine her chat actually uses (`chat_engine`) and `consent_stale` when her consent names a different provider or region than the current one |
 | POST | `/me/onboarding` | any (own token only) | `display_name`, `language` (`en`/`zh`), `skin` (`neo`/`superapp`), `consents` | First-run setup; student must agree to sponsor sharing and to cloud processing or choose `offline_only`; sponsor must acknowledge the PIN terms. Audited as `consent_recorded` and `prefs_updated` |
-| POST | `/me/prefs` | any (own token only) | any of `display_name`, `language`, `skin`, `offline_only` (student) | Later changes from Settings |
+| POST | `/me/prefs` | any (own token only) | any of `display_name`, `language`, `skin`, `offline_only` (student), `ai_consent` (student: agree to the current provider after it changed) | Later changes from Settings |
 | POST | `/chat` | student | `{"message", "session_id"}` | Reply, cards, drafted actions, guard flags, tool trace (30 messages a minute per owner) |
 | GET | `/overview` | student | | Wallet: balances, tuition, budget, credit, payees, pending items, limits, lock state, KYC, sharing scope |
 | GET | `/forecast` | student | `?until=next_tuition` (or `end_of_term`, a month, a date) | Runway card |
@@ -308,7 +307,7 @@ All endpoints except `/health` take `Authorization: Bearer <token>`. Demo tokens
 | POST | `/demo/inbox` | any | `{"sample"}` or `{"text", "sender", "channel"}`, header `X-Operator` | Deliver a message to Aisha's inbox (samples: `scam_cra_giftcards`, `scam_parcel_police_zh`, `scam_landlord_new_account`, `bill_bchydro`, `bill_northline`, `tuition_reminder_ubc`, `dad_whatsapp_ms`, `job_scam_fee`); triaged on arrival. Demo mode and the operator token only |
 | GET | `/demo/inbox/samples` | any | | The sample library's keys and labels (for the stage menu) |
 | POST | `/demo/time_skip` | any | `{"days"}` or `{"to": "tuition_week"}`, header `X-Operator` | Move the sandbox's date forward (the routine moves with it; tuition dates stay), then run the autopilot. Demo mode and the operator token only; a reset restores the pinned date |
-| POST | `/demo/reset` | any | header `X-Operator: <HB_OPERATOR_TOKEN>` | Reset the sandbox (including everyone's onboarding); only with `HB_DEMO_MODE=1` **and** the operator token |
+| POST | `/demo/reset` | any | header `X-Operator: <HB_OPERATOR_TOKEN>`; optional `{"keep_onboarding": true}` | Reset the sandbox (including everyone's onboarding, unless `keep_onboarding`: the Demo menu's default "Reset (keep setup)"); only with `HB_DEMO_MODE=1` **and** the operator token |
 | GET | `/` | none | | The exported web app, when `app/dist` exists |
 
 Remittances have no endpoints of their own: a money request is an action that the sponsor approves through
