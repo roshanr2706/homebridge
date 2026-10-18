@@ -131,6 +131,16 @@ def _action_text(a: Dict[str, Any], lang: str = "en") -> str:
     return s
 
 
+# Autopilot (mandates): "convert automatically when the rate is good", "自动交电费", "bayar bil secara automatik"
+AUTO_RE = (r"\bauto-?pilot\b|\bautomatic(ally)?\b|\bauto-?pay\b|\bmandates?\b|\bauto-?(convert|top ?up)\b|"
+           r"\bautomatik\b|自动|自動|rate watch|tuition guard")
+AUTO_LIST_RE = (r"what (did|has) (the |my )?auto-?pilot (do|done)|auto-?pilot (activity|history|log|did|done)|"
+                r"(show|list|see|check|view) (me )?(my |the )?(auto-?pilot|mandates)|my (auto-?pilot|mandates)\b|"
+                r"^(auto-?pilot|mandates)\??$|is my (rate watch|tuition guard|auto-?pay|auto-?pilot)|"
+                r"自动.{0,6}(做了什么|干了什么|记录|有哪些|做了啥)|我的自动|auto-?pilot (buat|dah buat|telah buat) apa|"
+                r"apa (yang )?auto-?pilot")
+
+
 # Cash-flow forecast intent, in English, Malay ("cukup" = enough) and Chinese ("够用" = enough to live on).
 FORECAST_WORDS = (r"run(ning)? out of (money|cash|funds)|cash ?flow|forecast|runway|\bsurvive\b|"
                   r"\blast (me )?(until|till|til|through)\b|how long .{0,25}\blast\b|"
@@ -414,6 +424,11 @@ class OfflineEngine:
             if "get_remittance_status" not in done:
                 return _call("get_remittance_status")
             return _say(self._remit_reply(_result(res, "get_remittance_status")))
+
+        # 2b''. Autopilot: propose a mandate, list what it did, refuse anything that would widen it from chat
+        auto = self._autopilot(text, raw, low, res, done)
+        if auto is not None:
+            return auto
 
         # 2c. Answer to the question the previous reply asked ("Who would you like to pay?" -> "the landlord")
         slot = self._slot_answer(text, raw, state, today)
@@ -1042,6 +1057,96 @@ class OfflineEngine:
                    f"{math.ceil(amt)} for {item or 'it'}'). Converting from your MYR Wallet uses sponsor money, so "
                    "check with him first.")
         return _say(msg + " This is an estimate from your schedule and recent spending; I haven't moved any money.")
+
+    # --------------------------------------------------------------- autopilot
+    def _autopilot(self, text: str, raw: str, low: str, res, done) -> Optional[Dict[str, Any]]:
+        """Mandates (autopilot.py). The engine can propose one (T1) or list them (T0). Activating, approving,
+        widening or pointing one at an account is never done from chat: those get a refusal and no tool call."""
+        if not re.search(AUTO_RE, raw):
+            return None
+        L = self._lang
+        if "list_mandates" in done:
+            return _say(self._mandates_reply(_result(res, "list_mandates")))
+        if "propose_mandate" in done:
+            r = _result(res, "propose_mandate")
+            m = r["mandate"]
+            label = m.get("label_i18n", {}).get(L, m["label"])
+            desc = m.get("text", {}).get(L, m["description"])
+            if not r.get("new"):
+                return _say(self._t("ap_already", label=label, desc=desc))
+            return _say(self._t("ap_proposed_sponsor" if m["granted_by"] == "sponsor" else "ap_proposed_student",
+                                label=label, desc=desc))
+        if re.search(AUTO_LIST_RE, raw):
+            return _call("list_mandates")
+        # Pointing autopilot at an account number, a person or "send money every day": not something it can do.
+        if re.search(r"\b\d{4}-\d{4}-\d{4}\b|\b\d{8,16}\b|\b(this|that|his|her|their|new|another|an?) (account|acct)\b|"
+                     r"\bto (him|her|them|my friend|someone)\b|\b(send|transfer|wire)\b.{0,40}\b(every|each|daily|weekly)\b|"
+                     r"转(给|到).{0,10}账户|每天.{0,6}(转|汇|打)|akaun (ini|baru|dia)|hantar.{0,20}setiap hari", raw):
+            return _say(self._t("ap_refuse_send"))
+        # Turning one on, approving it or raising its caps happens only in the app.
+        if re.search(r"\b(approve|activate|enable|widen|raise|increase|lift|remove|bypass|unlimited|no (limit|cap)|"
+                     r"higher (cap|limit))\b.{0,40}\b(auto-?pilot|mandates?|rate watch|tuition guard|autopay|cap|limit|it)\b|"
+                     r"\b(auto-?pilot|mandates?|rate watch|tuition guard)\b.{0,40}\b(yourself|for me|cap to|limit to)\b|"
+                     r"(批准|激活|开启|提高|取消限额).{0,10}(自动|授权|额度)|(luluskan|aktifkan|naikkan).{0,20}(autopilot|had)",
+                     raw):
+            return _say(self._t("ap_refuse_t4"))
+        kind, args = self._mandate_request(text, raw)
+        if not kind:
+            return _say(self._t("ap_help"))
+        return _call("propose_mandate", kind=kind, **args)
+
+    @staticmethod
+    def _mandate_request(text: str, raw: str) -> Tuple[Optional[str], Dict[str, Any]]:
+        args: Dict[str, Any] = {}
+        rate = re.search(r"\b0\.\d{3,5}\b", raw)
+        rest = raw.replace(rate.group(0), " ") if rate else raw
+        days = re.search(r"(\d{1,3})\s*(days?|天|hari)", rest)
+        if days:
+            rest = rest.replace(days.group(0), " ")
+        amt = first_amount(rest)
+        if re.search(r"\b(bills?|hydro|electric(ity)?|phone|mobile|northline|card|bil|telefon|elektrik)\b|电费|话费|"
+                     r"手机费|账单|信用卡", raw):
+            payee = ("hydro" if re.search(r"hydro|electric|elektrik|电费", raw) else
+                     "phone" if re.search(r"phone|mobile|northline|telefon|话费|手机", raw) else
+                     "card" if re.search(r"card|kad|信用卡", raw) else "")
+            if not payee:
+                return None, {}
+            args["payee"] = payee
+            if days:
+                args["days_before"] = min(int(days.group(1)), 10)
+            if amt:
+                args["amount"] = amt
+            return "bill_autopay", args
+        if re.search(r"tuition|yuran|学费", raw):
+            if days:
+                args["days_before"] = int(days.group(1))
+            if amt:
+                args["amount"] = amt
+            return "tuition_guard", args
+        if re.search(r"\brate\b|exchange|convert|kadar|tukar|汇率|兑换|换成", raw):
+            if rate:
+                args["target_rate"] = float(rate.group(0))
+            if amt:
+                args["amount"] = amt
+            return "rate_watch", args
+        if re.search(r"\blow\b|running out|run out|\bshort\b|top ?up|ask (my )?(dad|father|sponsor)|baki rendah|"
+                     r"duit (habis|tak cukup)|minta ayah|余额不足|没钱|钱不够|问爸爸", raw):
+            if amt:
+                args["amount"] = amt
+            return "low_balance_topup", args
+        return None, {}
+
+    def _mandates_reply(self, r: Dict[str, Any]) -> str:
+        L = self._lang
+        ms, acts = r.get("mandates", []), r.get("activity", [])
+        live = [m for m in ms if m["status"] in ("active", "paused", "proposed")]
+        names = i18n.comma(L).join(
+            f"{m.get('label_i18n', {}).get(L, m['label'])} ({self._t('ap_status_' + m['status'])})" for m in live)
+        if not acts:
+            return self._t("ap_list_none", mandates=names or self._t("ap_none"))
+        e = acts[0]
+        latest = e["text_zh"] if L == "zh" and e.get("text_zh") else e["text"]
+        return self._t("ap_list", n=len(acts), latest=latest, mandates=names or self._t("ap_none"))
 
     # --------------------------------------------------------------- info
     def _info(self, text: str, raw: str, low: str, res, done) -> Optional[Dict[str, Any]]:

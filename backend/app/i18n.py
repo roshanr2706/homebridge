@@ -30,7 +30,7 @@ jimat belanja bajet kadar tukaran hantar kirim pindah pindahkan masukkan dari da
 bagaimana bolehkah adakah berapakah sebelum selepas penggal dolar kanada tampung
 kekurangan cuti makan sekarang semalam esok pagi petang malam simpan menyimpan pinjam
 bil telefon elektrik bayaran pembayaran luluskan lulus kelulusan nampak tengok lihat perbelanjaan penaja kenapa
-siapa punya
+siapa punya buat secara automatik
 """.split())
 # Everyday English function words: a message with more of these than Malay words is English, so a stray "dan"
 # or "ke" in an English sentence doesn't switch the reply to Malay.
@@ -354,6 +354,65 @@ TEXT: Dict[str, Dict[str, str]] = {
     "okay_else": {"en": "Okay! Anything else I can help with?", "zh": "好的！还有什么可以帮你？",
                   "ms": "Baik! Ada apa-apa lagi yang saya boleh bantu?"},
     "welcome": {"en": "You're welcome.", "zh": "不客气。", "ms": "Sama-sama."},
+    # Autopilot (mandates, autopilot.py)
+    "ap_proposed_sponsor": {
+        "en": "I've proposed a {label} mandate: {desc} It does nothing until your dad approves it in his app with his "
+              "PIN, and he can pause or revoke it any time. Everything it does still goes through your limits and "
+              "checks.",
+        "zh": "我已提出「{label}」授权：{desc}在爸爸用 PIN 在他的应用中批准之前，它不会做任何事；他随时可以暂停或撤销。"
+              "它执行的每一步仍受你的限额和检查约束。",
+        "ms": "Saya dah cadangkan mandat {label}: {desc} Ia tak buat apa-apa sehingga ayah luluskan dalam aplikasinya "
+              "dengan PIN, dan dia boleh jeda atau batalkan bila-bila masa."},
+    "ap_proposed_student": {
+        "en": "I've proposed a {label} mandate: {desc} It does nothing until you tap Activate on the card below (or in "
+              "Wallet, under Autopilot). You can pause or revoke it any time, and anything outside its caps comes "
+              "back to you to confirm.",
+        "zh": "我已提出「{label}」授权：{desc}在你点击下方卡片（或钱包里的自动驾驶）上的「启用」之前，它不会做任何事。"
+              "你随时可以暂停或撤销，超出额度的操作仍会交给你确认。",
+        "ms": "Saya dah cadangkan mandat {label}: {desc} Ia tak buat apa-apa sehingga anda tekan Aktifkan pada kad di "
+              "bawah (atau di Dompet, bahagian Autopilot). Anda boleh jeda atau batalkan bila-bila masa."},
+    "ap_already": {"en": "That {label} proposal is already waiting: {desc} Nothing new was set up.",
+                   "zh": "这个「{label}」提议已经在等待中：{desc}没有新建任何内容。",
+                   "ms": "Cadangan {label} itu sudah menunggu: {desc} Tiada yang baharu disediakan."},
+    "ap_help": {
+        "en": "Autopilot can do four things inside limits your family sets: keep the Tuition Fund topped up before "
+              "tuition is due, convert MYR when the rate reaches a target, pay a saved bill (BC Hydro, Northline "
+              "Mobile, the card minimum) when it's due, or ask your dad when money is running low. Which one would "
+              "you like?",
+        "zh": "自动驾驶可以在家人设定的限额内做四件事：学费到期前补足学费基金、汇率达到目标时兑换马币、账单到期时支付已保存的收款人"
+              "（BC Hydro、Northline Mobile、信用卡最低还款），或在钱不够时向爸爸申请。你想用哪一个？",
+        "ms": "Autopilot boleh buat empat perkara dalam had keluarga anda: tambah Dana Yuran sebelum yuran sampai tempoh, "
+              "tukar MYR bila kadar capai sasaran, bayar bil tersimpan bila sampai tempoh, atau minta ayah bila duit "
+              "hampir habis. Yang mana satu?"},
+    "ap_refuse_send": {
+        "en": "Autopilot can't send money to an account number or a person, and it never adds or pays a new payee. It "
+              "only keeps tuition topped up, converts MYR at a target rate, pays your saved bills and asks your dad "
+              "for money, each within caps. I haven't set anything up.",
+        "zh": "自动驾驶不能向某个账号或个人转账，也绝不会添加或支付新收款人。它只会在限额内补足学费、按目标汇率兑换马币、支付已保存的账单"
+              "以及向爸爸申请。我没有设置任何内容。",
+        "ms": "Autopilot tak boleh hantar duit ke nombor akaun atau seseorang, dan ia tak pernah tambah atau bayar "
+              "penerima baharu. Saya tak sediakan apa-apa."},
+    "ap_refuse_t4": {
+        "en": "I can't turn a mandate on, approve it or raise its caps, and nothing typed in this chat can. Your dad "
+              "approves his mandates in his app with his PIN, and you activate yours with your own tap in the app. "
+              "I can propose one for you.",
+        "zh": "我不能启用、批准授权或提高额度，聊天里输入的任何内容也不能。爸爸在他的应用里用 PIN 批准，你的授权由你自己在应用中点击启用。"
+              "我可以帮你提出一个提议。",
+        "ms": "Saya tak boleh aktifkan, luluskan atau naikkan had mandat, dan tiada apa yang ditaip dalam chat ini "
+              "boleh. Ayah luluskan dalam aplikasinya dengan PIN, dan anda aktifkan sendiri dalam aplikasi."},
+    "ap_list": {
+        "en": "Latest from autopilot: {latest} Mandates: {mandates}.",
+        "zh": "自动驾驶最新记录：{latest} 授权：{mandates}。",
+        "ms": "Terkini daripada autopilot: {latest} Mandat: {mandates}."},
+    "ap_list_none": {
+        "en": "Autopilot hasn't done anything yet. Mandates: {mandates}.",
+        "zh": "自动驾驶还没有执行任何操作。授权：{mandates}。",
+        "ms": "Autopilot belum buat apa-apa lagi. Mandat: {mandates}."},
+    "ap_none": {"en": "none yet (ask me to set one up)", "zh": "暂无（可以让我帮你提出一个）",
+                "ms": "belum ada (minta saya sediakan satu)"},
+    "ap_status_active": {"en": "on", "zh": "已启用", "ms": "aktif"},
+    "ap_status_paused": {"en": "paused", "zh": "已暂停", "ms": "dijeda"},
+    "ap_status_proposed": {"en": "waiting for approval", "zh": "等待批准", "ms": "menunggu kelulusan"},
     # Questions back to the user
     "ask_who_amount": {"en": "Who would you like to pay the {amount} to?", "zh": "这笔 {amount} 你想付给谁？",
                        "ms": "Kepada siapa anda mahu bayar {amount} itu?"},

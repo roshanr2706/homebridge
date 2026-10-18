@@ -197,13 +197,14 @@ class Autopilot:
         self.bank, self.fx = policy.bank, policy.fx
         self._lock = threading.RLock()
         self.clock = time.time
+        self._run_day: Optional[date] = None   # the injected date while a run is in progress
 
     @property
     def audit(self):
         return self.policy.audit
 
     def today(self) -> date:
-        return self.bank.today or date.today()
+        return self._run_day or self.bank.today or date.today()
 
     # ------------------------------------------------------------------ helpers
     def sponsor_of(self, owner: str) -> str:
@@ -295,7 +296,9 @@ class Autopilot:
         return {"mandate_id": v["id"], "kind": v["kind"], "label": v["label"], "status": v["status"],
                 "granted_by": v["granted_by"], "caps": v["caps"], "used_this_period": v["used"],
                 "period": v["period"], "description": self._desc(m, lang), "expires_on": v.get("expires_on"),
-                "watch": (v.get("watch") or {}).get("en")}
+                "watch": (v.get("watch") or {}).get("en"),
+                "text": {lg: self._desc(m, lg) for lg in ("en", "zh", "ms")},
+                "label_i18n": {"en": v["label"], "zh": LABELS_ZH[m["kind"]], "ms": LABELS_MS[m["kind"]]}}
 
     # ------------------------------------------------------------------ proposals
     def _resolve_bill_payee(self, owner: str, ref: str) -> Dict[str, Any]:
@@ -553,19 +556,27 @@ class Autopilot:
         today = now.date() if isinstance(now, datetime) else (now if isinstance(now, date) else self.today())
         out: List[Dict[str, Any]] = []
         with self._lock:
-            owners = [owner] if owner else [r["id"] for r in self.bank._q("SELECT id FROM users WHERE role='student'")]
-            for o in owners:
-                for m in self.mandates(o):
-                    if m["status"] != "active" or self.effective_status(m, today) != "active":
-                        continue
-                    try:
-                        d = self._evaluate(m, today)
-                    except Exception as e:   # one broken mandate must not stop the others; it is audited
-                        self.audit.record("autopilot_error", "autopilot", owner=o, mandate_id=m["id"],
-                                          error=str(e)[:200])
-                        d = None
-                    if d:
-                        out.append(d)
+            self._run_day = today
+            try:
+                out = self._run(today, owner)
+            finally:
+                self._run_day = None
+        return out
+
+    def _run(self, today: date, owner: Optional[str]) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        owners = [owner] if owner else [r["id"] for r in self.bank._q("SELECT id FROM users WHERE role='student'")]
+        for o in owners:
+            for m in self.mandates(o):
+                if m["status"] != "active" or self.effective_status(m, today) != "active":
+                    continue
+                try:
+                    d = self._evaluate(m, today)
+                except Exception as e:   # one broken mandate must not stop the others; it is audited
+                    self.audit.record("autopilot_error", "autopilot", owner=o, mandate_id=m["id"], error=str(e)[:200])
+                    d = None
+                if d:
+                    out.append(d)
         return out
 
     def _plan(self, m: Dict[str, Any], today: date) -> Optional[Dict[str, Any]]:
@@ -776,9 +787,10 @@ class Autopilot:
         return entry
 
     def _escalate(self, m, base, key, a: "PendingAction", plan, why, caps_note) -> Dict[str, Any]:
+        a.provenance = {**(a.provenance or {}), "autopilot": "escalated"}   # never runnable under the mandate now
         if a.status == "awaiting_user":
             a.expires_at = self.clock() + ESCALATION_TTL
-            self.policy._save(a)
+        self.policy._save(a)
         reasons_en = "; ".join(w["en"] for w in why) or "it needs a person"
         reasons_zh = "；".join(w["zh"] for w in why) or "需要人工确认"
         text = {"en": tx("esc", "en", what=plan["what"], why=reasons_en),
@@ -829,6 +841,40 @@ class Autopilot:
         self._audit("autopilot_executed", "autopilot", m, action_id=a.id, amount=amount, currency=plan["currency"],
                     caps=caps_note, reason=text["en"])
         return entry
+
+    # ------------------------------------------------------------------ the policy engine's check
+    def authorises(self, a: "PendingAction", mandate_id: str) -> Optional[str]:
+        """Why this mandate does NOT cover this draft (None when it does). Called by PolicyEngine.execute_mandated, so
+        the caps are enforced in policy code, not only by the run that drafted it: the mandate must be active, the
+        draft must be exactly what the kind allows (the accounts and payee it names) and fit the caps left this period,
+        and it must not be a draft the autopilot already handed to a person."""
+        m = self.bank.load_mandate(mandate_id)
+        if not m or m["owner"] != a.owner:
+            return "Unknown mandate."
+        status = self.effective_status(m)
+        if status != "active":
+            return f"The mandate is {status}."
+        if (a.provenance or {}).get("autopilot") == "escalated":
+            return "This draft was handed to a person; it can't run under the mandate."
+        p, kind = a.params, m["kind"]
+        wallet = self.bank.find_account(a.owner, "MYR", "Wallet") or {}
+        if kind in ("rate_watch", "tuition_guard"):
+            dest = self.bank.find_account(a.owner, "CAD", "Tuition" if kind == "tuition_guard" else "Everyday") or {}
+            if a.kind != "conversion" or p.get("from_account_id") != wallet.get("id") or \
+                    p.get("to_account_id") != dest.get("id"):
+                return "The draft isn't what this mandate allows."
+        elif kind == "bill_autopay":
+            everyday = self.bank.find_account(a.owner, "CAD", "Everyday") or {}
+            if a.kind != "transfer" or p.get("payee_id") != m["conditions"]["payee_id"] or \
+                    p.get("from_account_id") != everyday.get("id"):
+                return "The draft isn't what this mandate allows."
+        else:
+            return "This mandate only sends requests; it never moves money."
+        amount = float(p.get("amount") or 0)
+        left = m["caps"]["per_period"] - self.used(m)
+        if amount > m["caps"]["per_action"] + 1e-9 or amount > left + 1e-9:
+            return "The amount is outside the mandate's caps."
+        return None
 
     # ------------------------------------------------------------------ feeds
     def activity(self, owner: str, mandate_ids: Optional[set] = None, limit: int = 30) -> List[Dict[str, Any]]:

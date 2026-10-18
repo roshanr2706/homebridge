@@ -884,3 +884,7 @@ def freeze_payments(ctx: ToolContext, a: Dict[str, Any]) -> Dict[str, Any]:
             "next_step": "Payments are locked. To unlock their own money the user opens the Wallet tab in the app; "
                          "money the sponsor funds stays locked until the sponsor unlocks it. The sponsor has "
                          "been alerted."}
+
+
+# Autopilot tools (list_mandates T0, propose_mandate T1) live with the mandate engine; importing registers them.
+from . import autopilot_tools  # noqa: E402,F401

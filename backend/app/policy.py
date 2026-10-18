@@ -723,6 +723,9 @@ class PolicyEngine:
                 raise PolicyError("Outside what a mandate covers: it needs a person.")
             if (a.compliance or {}).get("outcome", "clear") != "clear":
                 raise PolicyError("Compliance screening flagged it: it needs a person.")
+            outside = self.autopilot.authorises(a, mandate_id)   # the mandate's kind, accounts and caps
+            if outside:
+                raise PolicyError(f"{outside} It needs a person.")
             kyc = self.compliance.check_kyc_for(a.owner, a.owner, a.kind, "student", a.id)
             if kyc:
                 raise PolicyError(kyc)
