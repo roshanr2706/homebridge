@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import hmac
 import os
+import threading
 import time
 from collections import deque
 from dataclasses import dataclass
@@ -34,6 +35,7 @@ from .config import Limits, Settings, load_settings
 from .fx import FxMarket
 from .policy import PendingAction, PolicyEngine, PolicyError
 from .privacy import SHARING as PRIVACY_SHARING
+from .reviewer import Reviewer
 from .safety import SafetyError
 from .seed import SPONSOR, STUDENT, seed_security, seed_sponsor_account
 from .tools import ToolContext, budget_summary, get_credit_profile, get_tuition_schedule
@@ -102,8 +104,11 @@ class PrefsIn(BaseModel):
 
 # Audit events the sponsor never sees (the student's chat and tool use), and ones the student never sees
 # (the sponsor's own PIN attempts, and which watchlist entry a payee matched: no tipping off).
-CHAT_EVENTS = {"user_message", "assistant_reply", "tool_call", "tool_denied", "rate_limited", "llm_error"}
-SPONSOR_PRIVATE_EVENTS = {"sponsor_pin_failed", "sponsor_pin_locked", "sanctions_hit", "sanctions_review"}
+CHAT_EVENTS = {"user_message", "assistant_reply", "tool_call", "tool_denied", "rate_limited", "llm_error",
+               "tool_call_rejected", "llm_nudge", "llm_loop_guard", "output_redacted"}
+# review_generated: the sponsor's second opinion (verdict and source only) is his, like the PIN events.
+SPONSOR_PRIVATE_EVENTS = {"sponsor_pin_failed", "sponsor_pin_locked", "sanctions_hit", "sanctions_review",
+                          "review_generated"}
 SAFETY_EVENTS = {"payments_frozen", "payments_unfrozen", "unfreeze_denied", "alert_raised"}
 
 # What the student agreed to share at onboarding (shown on both phones). privacy.py is the one source; the agent
@@ -172,6 +177,9 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
     }
     app = FastAPI(title="HomeBridge API", version="0.1.0")
     app.state.hb = st
+    # The sponsor's AI second opinion (advisory only; it has no way to approve or change anything).
+    reviewer = Reviewer(st)
+    app.state.reviewer = reviewer
     # An allow-list, not "*": only these browser origins may call the API (HB_CORS_ORIGINS). The exported web
     # app is served from the API's own origin and native apps do not use CORS, so neither needs an entry.
     app.add_middleware(CORSMiddleware, allow_origins=st.settings.cors_origins, allow_methods=["GET", "POST"],
@@ -294,7 +302,14 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
     @app.post("/chat")
     def chat(body: ChatIn, user_id: str = Depends(student)):
         _chat_rate_limit(user_id)
-        return st.agent.run(user_id, "student", f"{user_id}:{body.session_id}", body.message).to_dict()
+        r = st.agent.run(user_id, "student", f"{user_id}:{body.session_id}", body.message)
+        # Prepare the sponsor's second opinion for anything that just went to him, so his card has it ready.
+        waiting = [st.policy.actions[a["action_id"]] for a in r.actions
+                   if a.get("status") == "awaiting_sponsor" and a["action_id"] in st.policy.actions]
+        sponsor_id = (st.bank.user(user_id) or {}).get("sponsor_id")
+        if waiting and sponsor_id and reviewer.uses_model(user_id):
+            threading.Thread(target=reviewer.warm, args=(waiting, sponsor_id), daemon=True).start()
+        return r.to_dict()
 
     @app.get("/accounts")
     def accounts(user_id: str = Depends(student)):
@@ -379,7 +394,9 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
 
     @app.get("/sponsor/queue")
     def queue(sponsor_id: str = Depends(sponsor)):
-        return {"actions": [st.policy.present(a, viewer="sponsor") for a in st.policy.sponsor_queue(sponsor_id)]}
+        # Each item carries the second opinion: {verdict, label, text, source: "model" | "rules"}. Advisory only.
+        return {"actions": [{**st.policy.present(a, viewer="sponsor"), "review": reviewer.review(a, sponsor_id)}
+                            for a in st.policy.sponsor_queue(sponsor_id)]}
 
     @app.get("/sponsor/overview")
     def overview(sponsor_id: str = Depends(sponsor)):
