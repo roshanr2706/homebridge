@@ -4,7 +4,7 @@ import { View } from 'react-native';
 
 import type { Card, CreditCardData, CreditProfile } from '../api';
 import { useT } from '../i18n';
-import { amount, fonts, money, useTheme } from '../theme';
+import { amount, useFontSet, money, useTheme } from '../theme';
 import { Bar, Body, Divider, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
 function Provenance() {
@@ -20,6 +20,7 @@ function Provenance() {
 
 function FxQuotes({ c }: { c: Extract<Card, { type: 'fx_quotes' }> }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const max = Math.max(...c.quotes.map((q) => q.you_receive));
   const ideal = c.quotes[0] ? c.amount * c.quotes[0].mid_rate : max;
@@ -70,6 +71,7 @@ function FxQuotes({ c }: { c: Extract<Card, { type: 'fx_quotes' }> }) {
 
 function Balances({ c }: { c: Extract<Card, { type: 'balances' }> }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   return (
     <Surface>
@@ -130,6 +132,7 @@ function FxHistory({ c }: { c: Extract<Card, { type: 'fx_history' }> }) {
 
 export function TuitionCard({ c, bare }: { c: Extract<Card, { type: 'tuition' }>; bare?: boolean }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const next = c.installments[0];
   if (!next) return null;
@@ -208,6 +211,7 @@ export function BudgetCard({ c, bare }: { c: Extract<Card, { type: 'budget' }>; 
 
 function Scam({ c }: { c: Extract<Card, { type: 'scam_check' }> }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const verdict = {
     likely_scam: { label: tr('scam.likely'), tone: 'danger' as const, color: t.danger, bg: t.dangerBg },
@@ -284,6 +288,7 @@ function Transactions({ c }: { c: Extract<Card, { type: 'transactions' }> }) {
 
 function Checklist({ c }: { c: Extract<Card, { type: 'checklist' }> }) {
   const t = useTheme();
+  const fonts = useFontSet();
   return (
     <Surface>
       <Eyebrow>{c.title}</Eyebrow>
@@ -307,6 +312,7 @@ function Checklist({ c }: { c: Extract<Card, { type: 'checklist' }> }) {
 // "shortfall zone"; gold lines mark tuition due dates; the first bar is today and the gold bar the low point.
 export function RunwayCard({ c, bare, compact }: { c: Extract<Card, { type: 'forecast' }>; bare?: boolean; compact?: boolean }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const H = compact ? 64 : 96;
   const n = c.series.length;
@@ -470,6 +476,7 @@ function StreakDots({ history }: { history: CreditCardData['payment_history'] })
 
 export function CreditCard({ c, compact }: { c: CreditCardData; compact?: boolean }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const st = c.statement;
   const steps = c.next_actions.slice(0, compact ? 1 : 4);

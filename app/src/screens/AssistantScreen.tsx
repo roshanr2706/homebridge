@@ -6,10 +6,12 @@ import { usePoll } from '../hooks';
 import { ActionCard } from '../components/ActionCard';
 import { ResultCard } from '../components/ResultCards';
 import { RichText } from '../components/RichText';
+import { InsightChips, NeoActions, NeoBalance } from '../components/NeoHome';
+import { SuperStudentHome, type Tab } from '../components/SuperHome';
 import { useT, type Key, type Lang } from '../i18n';
-import { amount, cityTime, fonts, useTheme } from '../theme';
+import { useFontSet, useSkin, useTheme } from '../theme';
 import { useToast } from '../toast';
-import { Body, Display, Eyebrow, Mono, Pill, Row } from '../ui';
+import { Body, Mono, Pill, Row } from '../ui';
 
 type Msg = {
   id: string;
@@ -142,57 +144,13 @@ function Thinking() {
   );
 }
 
-function Snapshot({ o }: { o: Overview }) {
-  const t = useTheme();
-  const tr = useT();
-  const next = o.tuition.installments[0];
-  const over = o.budget.categories.filter((c) => c.over_budget);
-  const short = o.tuition.next_shortfall_cad > 0;
-  const tiles: { k: string; v: string; sub: string; tone?: string }[] = [
-    { k: tr('snap.total'), v: `${amount(o.total_cad, 0)}`, sub: tr('snap.totalSub') },
-    next
-      ? {
-          k: tr('snap.tuition'),
-          v: tr('snap.days', { n: next.days_until_due }),
-          sub: short ? tr('snap.short', { n: amount(o.tuition.next_shortfall_cad, 0) }) : tr('snap.covered'),
-          tone: short ? t.gold : t.ok,
-        }
-      : { k: tr('snap.tuition'), v: '—', sub: tr('snap.nothingDue') },
-    {
-      k: tr('snap.budget'),
-      v: over.length ? tr('snap.over', { n: over.length }) : tr('snap.onTrack'),
-      sub: over.map((c) => tr.d(c.category)).join(tr.lang === 'zh' ? '、' : ', ') || tr('snap.thisMonth'),
-      tone: over.length ? t.danger : t.ok,
-    },
-  ];
-  return (
-    <View style={{ marginBottom: 14 }}>
-      <Eyebrow>
-        {tr('city.vancouver')} {cityTime('America/Vancouver')} · {tr('city.kl')} {cityTime('Asia/Kuala_Lumpur')}
-      </Eyebrow>
-      <Display style={{ fontSize: 26, marginTop: 2, marginBottom: 10 }}>{tr('snap.title')}</Display>
-      <Row style={{ gap: 8 }}>
-        {tiles.map((x) => (
-          <View key={x.k} style={[styles.tile, { backgroundColor: t.surface, borderColor: t.border }]}>
-            <Body style={{ fontSize: 11, color: t.muted }}>{x.k}</Body>
-            <Mono style={{ fontFamily: fonts.monoBold, fontSize: 17, color: x.tone ?? t.text, marginTop: 2 }} numberOfLines={1}>
-              {x.v}
-            </Mono>
-            <Body style={{ fontSize: 11, color: t.muted }} numberOfLines={1}>
-              {x.sub}
-            </Body>
-          </View>
-        ))}
-      </Row>
-    </View>
-  );
-}
-
 // The greeting is rendered in the current UI language (see renderItem), so it follows the EN / 中文 switch.
 const HELLO: Msg = { id: 'hello', from: 'bot', text: '' };
 
-export function AssistantScreen({ active }: { active: boolean }) {
+export function AssistantScreen({ active, onTab }: { active: boolean; onTab?: (tab: Tab) => void }) {
   const t = useTheme();
+  const { skin } = useSkin();
+  const fonts = useFontSet();
   const tr = useT();
   const toast = useToast();
   const [messages, setMessages] = useState<Msg[]>([HELLO]);
@@ -203,7 +161,10 @@ export function AssistantScreen({ active }: { active: boolean }) {
   const [actions, setActions] = useState<Record<string, Action>>({});
   const [snap, setSnap] = useState<Overview | null>(null);
   const loadSnap = useCallback(() => {
-    api.overview().then(setSnap).catch(() => {});
+    api
+      .overview()
+      .then(setSnap)
+      .catch(() => {});
   }, []);
   usePoll(loadSnap, 60000);
   const [input, setInput] = useState('');
@@ -216,6 +177,14 @@ export function AssistantScreen({ active }: { active: boolean }) {
   const rootRef = useRef<View>(null);
   const [kbOffset, setKbOffset] = useState(0);
   const known = useRef<Record<string, string>>({});
+  // Whether this chat has a message from the student yet; until then the list stays at the top (the home header).
+  const started = useRef(false);
+  useEffect(() => {
+    started.current = messages.length > 1;
+    if (!started.current || !active) return;
+    const id = setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
+    return () => clearTimeout(id);
+  }, [messages.length, sending, active]);
 
   const merge = useCallback(
     (list: Action[], announce: boolean) => {
@@ -228,12 +197,21 @@ export function AssistantScreen({ active }: { active: boolean }) {
         const before = known.current[a.action_id];
         // A money request: Dad sent it (in transit), then it arrived.
         if (announce && a.kind === 'topup' && before && a.status !== before) {
-          if (a.status === 'in_transit') toast(tr('toast.remitSent'), tr.summary(a.summary) + (a.sponsor_note ? ` · “${a.sponsor_note}”` : ''), 'ok');
+          if (a.status === 'in_transit')
+            toast(tr('toast.remitSent'), tr.summary(a.summary) + (a.sponsor_note ? ` · “${a.sponsor_note}”` : ''), 'ok');
           if (a.status === 'executed') toast(tr('toast.remitArrived'), tr.summary(a.summary), 'ok');
         }
-        if (announce && before === 'awaiting_sponsor' && a.status !== before && a.status !== 'in_transit' && !(a.kind === 'topup' && a.status === 'executed')) {
-          if (a.status === 'executed') toast(tr('toast.sponsorApproved'), tr.summary(a.summary) + (a.sponsor_note ? ` · “${a.sponsor_note}”` : ''), 'ok');
-          if (a.status === 'rejected') toast(tr('toast.sponsorDeclined'), tr.summary(a.summary) + (a.sponsor_note ? ` · “${a.sponsor_note}”` : ''), 'danger');
+        if (
+          announce &&
+          before === 'awaiting_sponsor' &&
+          a.status !== before &&
+          a.status !== 'in_transit' &&
+          !(a.kind === 'topup' && a.status === 'executed')
+        ) {
+          if (a.status === 'executed')
+            toast(tr('toast.sponsorApproved'), tr.summary(a.summary) + (a.sponsor_note ? ` · “${a.sponsor_note}”` : ''), 'ok');
+          if (a.status === 'rejected')
+            toast(tr('toast.sponsorDeclined'), tr.summary(a.summary) + (a.sponsor_note ? ` · “${a.sponsor_note}”` : ''), 'danger');
           if (a.status === 'failed') toast(tr('toast.approvedFailed'), String(a.result?.error ?? tr.summary(a.summary)), 'danger');
         }
         known.current[a.action_id] = a.status;
@@ -322,21 +300,27 @@ export function AssistantScreen({ active }: { active: boolean }) {
 
   const toolLabel = (x: string) => (tr.lang === 'zh' ? TOOL_LABEL_ZH[x] : TOOL_LABEL[x]) ?? x;
 
-  const pick = (s: Suggestion) => {
-    if (s.fill) {
-      setInput(s.text);
-      inputRef.current?.focus();
-    } else send(s.text);
+  const fill = (text: string) => {
+    setInput(text);
+    inputRef.current?.focus();
   };
+  const pick = (s: Suggestion) => (s.fill ? fill(s.text) : send(s.text));
+
+  // The student's home: the same overview, drawn the way the chosen skin draws a home screen.
+  const header = !snap ? null : skin === 'superapp' ? (
+    <SuperStudentHome o={snap} onAsk={send} onFill={fill} onTab={onTab} />
+  ) : (
+    <View style={{ marginBottom: 18, paddingTop: 4 }}>
+      <NeoBalance o={snap} size={50} />
+      <NeoActions onAsk={send} onFill={fill} />
+      <InsightChips o={snap} onAsk={send} />
+    </View>
+  );
 
   return (
     // Android is edge-to-edge since SDK 54, so the window no longer resizes for the keyboard and the
     // view has to pad itself, as on iOS. Keyboard events never fire on web, so this is inert there.
-    <View
-      ref={rootRef}
-      style={{ flex: 1 }}
-      onLayout={() => rootRef.current?.measureInWindow((_x, y) => setKbOffset(y))}
-    >
+    <View ref={rootRef} style={{ flex: 1 }} onLayout={() => rootRef.current?.measureInWindow((_x, y) => setKbOffset(y))}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" keyboardVerticalOffset={kbOffset}>
         {error ? (
           <View style={[styles.offline, { backgroundColor: t.dangerBg }]}>
@@ -351,8 +335,10 @@ export function AssistantScreen({ active }: { active: boolean }) {
           extraData={tr}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ padding: 16, paddingBottom: 8, maxWidth: 720, width: '100%', alignSelf: 'center' }}
-          onContentSizeChange={() => active && listRef.current?.scrollToEnd({ animated: true })}
-          ListHeaderComponent={snap ? <Snapshot o={snap} /> : null}
+          // Only once the chat has started, so the home header stays in view on first load.
+          onContentSizeChange={() => active && started.current && listRef.current?.scrollToEnd({ animated: true })}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={header}
           ListFooterComponent={sending ? <Thinking /> : null}
           renderItem={({ item }) =>
             item.from === 'user' ? (
@@ -374,9 +360,13 @@ export function AssistantScreen({ active }: { active: boolean }) {
                 <View style={[styles.botBubble, { borderColor: t.border }]}>
                   <RichText text={item.id === HELLO.id ? tr('hello') : item.text} />
                 </View>
-                {item.cards?.map((c, i) => <ResultCard key={i} card={c} />)}
+                {item.cards?.map((c, i) => (
+                  <ResultCard key={i} card={c} />
+                ))}
                 {item.actionIds?.map((id) =>
-                  actions[id] ? <ActionCard key={id} action={actions[id]} mode="student" onConfirm={onConfirm} onCancel={onCancel} /> : null,
+                  actions[id] ? (
+                    <ActionCard key={id} action={actions[id]} mode="student" onConfirm={onConfirm} onCancel={onCancel} />
+                  ) : null,
                 )}
                 {item.tools !== undefined && (
                   <Mono style={{ fontSize: 10.5, color: t.faint }}>
@@ -392,7 +382,9 @@ export function AssistantScreen({ active }: { active: boolean }) {
         {chatFlags.length > 0 && (
           <View style={[styles.flagBar, { backgroundColor: t.warnBg }]}>
             <Body style={{ flex: 1, fontSize: 12, color: t.warn }}>
-              {tr('chat.flagged', { flags: chatFlags.map((f) => (FLAG_KEY[f] ? tr(FLAG_KEY[f]) : f)).join(tr.lang === 'zh' ? '、' : ', ') })}
+              {tr('chat.flagged', {
+                flags: chatFlags.map((f) => (FLAG_KEY[f] ? tr(FLAG_KEY[f]) : f)).join(tr.lang === 'zh' ? '、' : ', '),
+              })}
             </Body>
             <Pressable accessibilityRole="button" onPress={newChat} disabled={sending} hitSlop={8}>
               <Body style={{ fontSize: 12, color: t.warn, fontFamily: fonts.bodyBold, textDecorationLine: 'underline' }}>
@@ -425,7 +417,10 @@ export function AssistantScreen({ active }: { active: boolean }) {
               key={s.label}
               onPress={() => pick(s)}
               disabled={sending}
-              style={({ pressed }) => [styles.chip, { borderColor: s.fill ? t.gold : t.border, backgroundColor: pressed ? t.sunken : t.surface }]}
+              style={({ pressed }) => [
+                styles.chip,
+                { borderColor: s.fill ? t.gold : t.border, backgroundColor: pressed ? t.sunken : t.surface },
+              ]}
             >
               <Body style={{ fontSize: 13, color: s.fill ? t.gold : t.text, fontFamily: fonts.bodyMedium }}>{s.label}</Body>
             </Pressable>
@@ -473,13 +468,21 @@ export function AssistantScreen({ active }: { active: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  tile: { flex: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 10 },
   offline: { paddingHorizontal: 16, paddingVertical: 6 },
   flagBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 7 },
   userBubble: { maxWidth: '86%', borderRadius: 18, borderBottomRightRadius: 4, paddingVertical: 9, paddingHorizontal: 14 },
   botBubble: { paddingLeft: 12, borderLeftWidth: 2 },
   chip: { borderWidth: 1, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 13 },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 10, borderTopWidth: 1 },
-  input: { flex: 1, borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, maxHeight: 140, minHeight: 42 },
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    maxHeight: 140,
+    minHeight: 42,
+  },
   send: { borderRadius: 21, width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
 });

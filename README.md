@@ -28,14 +28,14 @@ with a PIN checked on the server.
 
 ## Results
 
-<!-- counts: tests=746, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854 on 902 rows, audit=1215 -->
+<!-- counts: tests=759, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854 on 902 rows, audit=1215 -->
 Offline engine, measured 2026-10-16:
 
 | | |
 |---|---|
 | Scripted tasks | 119 / 119 pass (96 English including casual Malaysian English, 14 Simplified Chinese, 9 Malay) |
 | Attack suite | 79 / 79 blocked (induced transfer 27, extraction 11, escalation 21, prompt injection 20) |
-| Automated tests | 746 passing, no network needed |
+| Automated tests | 759 passing, no network needed |
 | Our classifier | macro F1 0.854 (grouped 5-fold CV, 902 rows) |
 | Agent tools | 24 registered; none of them can execute, approve, unlock or change limits |
 
@@ -71,7 +71,17 @@ yet: the client is tested against a mocked transport only (see "Choosing the mod
   tracking of pasted text, and tool output treated as untrusted data.
 - **Hash-chained audit log.** The Ledger tab verifies the chain and simulates a tampered entry.
 - **Languages.** The assistant replies in English, Bahasa Melayu or Simplified Chinese, and understands
-  casual Malaysian English. The **EN / 中文** switch in the header turns the whole app into Chinese.
+  casual Malaysian English. The **EN / 中文** switch in the header turns that person's app into Chinese (saved in their prefs; the stage bar switches both phones).
+- **Two looks, one feature set.** Each person picks **Neo** (a dark neo-bank: near-black, one lime accent, Geist,
+  big balance with small dim cents, account-card carousel, pill tab bar) or **Super-app** (Alipay / WeChat Pay
+  style: blue header with a search box that asks the assistant, four big actions, a 5×2 bilingual service grid
+  with badges, a rotating notice bar from live data; the sponsor's phone in orange). Switch any time from the
+  ⚙ Settings in the header. Every screen and card is shared; only tokens and the home layouts differ.
+- **Onboarding and consent on first use.** Each phone runs its own: welcome ("the AI drafts, you confirm, Dad
+  approves big payments"), display name, language, look (live previews), then privacy and consent. The student
+  agrees to what her sponsor will see and to which model provider processes her chat and where (or chooses
+  "offline engine only", which the server enforces for her chats); the sponsor gets the PIN and his view
+  explained. Stored per user, audited, cleared by the demo reset.
 - **UI direction prototypes.** Four alternative front ends built against the same API, kept for comparison
   and not part of the submitted app: see [`ui-variants/README.md`](ui-variants/README.md).
 
@@ -202,7 +212,9 @@ All endpoints except `/health` take `Authorization: Bearer <token>`. Demo tokens
 | Method | Path | Role | Body / query | Purpose |
 |---|---|---|---|---|
 | GET | `/health` | none | | Provider, demo mode, pinned date |
-| GET | `/me` | any | | Who the token belongs to and its role |
+| GET | `/me` | any | | Who the token belongs to, its role, saved `prefs` (display name, language, skin, `onboarded_at`, consents) and where chat would be processed (`model_route`) |
+| POST | `/me/onboarding` | any (own token only) | `display_name`, `language` (`en`/`zh`), `skin` (`neo`/`superapp`), `consents` | First-run setup; student must agree to sponsor sharing and to cloud processing or choose `offline_only`; sponsor must acknowledge the PIN terms. Audited as `consent_recorded` and `prefs_updated` |
+| POST | `/me/prefs` | any (own token only) | any of `display_name`, `language`, `skin`, `offline_only` (student) | Later changes from Settings |
 | POST | `/chat` | student | `{"message", "session_id"}` | Reply, cards, drafted actions, guard flags, tool trace (30 messages a minute per owner) |
 | GET | `/overview` | student | | Wallet: balances, tuition, budget, credit, payees, pending items, limits, lock state, KYC, sharing scope |
 | GET | `/forecast` | student | `?until=next_tuition` (or `end_of_term`, a month, a date) | Runway card |
@@ -222,7 +234,7 @@ All endpoints except `/health` take `Authorization: Bearer <token>`. Demo tokens
 | GET | `/audit` | any | `?since=N` | Role-scoped audit entries (the sponsor never sees her chat or tool calls) |
 | GET | `/audit/verify` | any | `?tamper_seq=N` | Verify the whole chain; with `tamper_seq`, verify a copy with that entry edited |
 | GET | `/compliance/report` | any | | Role-scoped evidence of the compliance checks run |
-| POST | `/demo/reset` | any | header `X-Operator: <HB_OPERATOR_TOKEN>` | Reset the sandbox; only with `HB_DEMO_MODE=1` **and** the operator token |
+| POST | `/demo/reset` | any | header `X-Operator: <HB_OPERATOR_TOKEN>` | Reset the sandbox (including everyone's onboarding); only with `HB_DEMO_MODE=1` **and** the operator token |
 | GET | `/` | none | | The exported web app, when `app/dist` exists |
 
 Remittances have no endpoints of their own: a money request is an action that the sponsor approves through

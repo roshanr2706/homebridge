@@ -16,6 +16,7 @@ from .fx import FxMarket
 from .guard import check as guard_check, COMPILED, expand, normalize, quoted_segments
 from .llm import LLMError, Provider, make_provider
 from .policy import PolicyEngine
+from .prefs import offline_only as prefers_offline
 from .tools import ToolContext, run_tool, specs_for
 
 SYSTEM_PROMPT = """You are HomeBridge, a finance assistant for international students whose family supports them from abroad.
@@ -140,13 +141,16 @@ class Agent:
         # Untrusted text from earlier turns taints amounts while those turns are still in the model's context.
         # Flags carry for CARRY_TURNS turns, and only strong ones (see guard.GuardResult.strong).
         earlier = [m["_taint"] for m in history if m.get("_taint")]
+        # The person chose "offline engine only" at onboarding or in Settings (or declined cloud processing):
+        # their chat stays on the built-in engine whatever the server is configured with.
+        provider = self.offline() if prefers_offline(self.bank, user_id) else self.provider
         ctx = ToolContext(user_id=user_id, role=role, session_id=session_id, bank=self.bank, fx=self.fx,
                           policy=self.policy, audit=self.audit, today=self.today,
                           guard_flags=[f for f in g.flags if f in SAFETY_FLAGS],
                           earlier_flags=self.session_flags(session_id),
                           strong_flags=[f for f in g.strong_flags() if f in CARRY_FLAGS],
                           untrusted_texts=[u for t in earlier for u in t["untrusted"]],
-                          model=getattr(self.provider, "name", "offline"))
+                          model=getattr(provider, "name", "offline"))
         carried = len(ctx.untrusted_texts)
         if g.looks_pasted:
             ctx.untrusted_texts.append(text)
@@ -158,7 +162,7 @@ class Agent:
         if note:
             turn.append({"role": "system", "content": note})
 
-        provider, fallback = self.provider, False
+        fallback = False
         trace: List[Dict[str, Any]] = []
         results: List[Any] = []
         reply = ""

@@ -2,48 +2,64 @@
 import type { ReactNode } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
 
-import { fonts, useTheme } from './theme';
+import { fontWeightOf, useFontSet, useTheme } from './theme';
 
 type TextProps = { children: ReactNode; style?: StyleProp<TextStyle>; numberOfLines?: number; selectable?: boolean };
 
-export function Display({ children, style, numberOfLines }: TextProps) {
-  const t = useTheme();
+// Text that honours the super-app skin's weight markers (theme.fontWeightOf): its system font stacks can't name a
+// weight, so the weight is set here from whichever family the caller ended up with.
+export function SkinText({ style, children, ...rest }: Omit<TextProps, 'style'> & { style?: StyleProp<TextStyle> }) {
+  const flat = StyleSheet.flatten(style) ?? {};
+  const w = flat.fontWeight ? undefined : fontWeightOf(flat.fontFamily);
   return (
-    <Text numberOfLines={numberOfLines} style={[{ fontFamily: fonts.display, color: t.text, fontSize: 22, letterSpacing: -0.3 }, style]}>
+    <Text {...rest} style={w ? [style, { fontWeight: w }] : style}>
       {children}
     </Text>
+  );
+}
+
+export function Display({ children, style, numberOfLines }: TextProps) {
+  const t = useTheme();
+  const fonts = useFontSet();
+  return (
+    <SkinText numberOfLines={numberOfLines} style={[{ fontFamily: fonts.display, color: t.text, fontSize: 22, letterSpacing: -0.3 }, style]}>
+      {children}
+    </SkinText>
   );
 }
 
 export function Body({ children, style, numberOfLines, selectable }: TextProps) {
   const t = useTheme();
+  const fonts = useFontSet();
   return (
-    <Text
+    <SkinText
       selectable={selectable}
       numberOfLines={numberOfLines}
       style={[{ fontFamily: fonts.body, color: t.text, fontSize: 15, lineHeight: 22 }, style]}
     >
       {children}
-    </Text>
+    </SkinText>
   );
 }
 
 export function Mono({ children, style, numberOfLines }: TextProps) {
   const t = useTheme();
+  const fonts = useFontSet();
   return (
-    <Text numberOfLines={numberOfLines} style={[{ fontFamily: fonts.mono, color: t.text, fontSize: 14 }, style]}>
+    <SkinText numberOfLines={numberOfLines} style={[{ fontFamily: fonts.mono, color: t.text, fontSize: 14, fontVariant: ['tabular-nums'] }, style]}>
       {children}
-    </Text>
+    </SkinText>
   );
 }
 
 // Small caps label used above sections and inside cards.
 export function Eyebrow({ children, style }: TextProps) {
   const t = useTheme();
+  const fonts = useFontSet();
   return (
-    <Text style={[{ fontFamily: fonts.bodyBold, color: t.muted, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' }, style]}>
+    <SkinText style={[{ fontFamily: fonts.bodyBold, color: t.muted, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' }, style]}>
       {children}
-    </Text>
+    </SkinText>
   );
 }
 
@@ -54,7 +70,7 @@ export function Surface({ children, style, tone = 'plain' }: { children: ReactNo
     <View
       style={[
         styles.surface,
-        { backgroundColor: t.surface, borderColor: border, shadowColor: t.shadow },
+        { backgroundColor: t.surface, borderColor: border, shadowColor: t.shadow, borderRadius: t.radius },
         tone !== 'plain' && { borderLeftWidth: 3 },
         style,
       ]}
@@ -66,6 +82,7 @@ export function Surface({ children, style, tone = 'plain' }: { children: ReactNo
 
 export function Pill({ label, tone = 'plain' }: { label: string; tone?: 'plain' | 'danger' | 'warn' | 'ok' | 'accent' | 'gold' }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const map = {
     plain: [t.sunken, t.muted],
     danger: [t.dangerBg, t.danger],
@@ -77,7 +94,7 @@ export function Pill({ label, tone = 'plain' }: { label: string; tone?: 'plain' 
   const [bg, fg] = map[tone];
   return (
     <View style={[styles.pill, { backgroundColor: bg }]}>
-      <Text style={{ color: fg, fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 0.3 }}>{label}</Text>
+      <SkinText style={{ color: fg, fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 0.3 }}>{label}</SkinText>
     </View>
   );
 }
@@ -98,6 +115,7 @@ export function Button({
   style?: StyleProp<ViewStyle>;
 }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const bg = kind === 'primary' ? t.accent : 'transparent';
   const border = kind === 'primary' ? t.accent : kind === 'danger' ? t.danger : t.border;
   const fg = kind === 'primary' ? t.accentText : kind === 'danger' ? t.danger : t.text;
@@ -116,7 +134,7 @@ export function Button({
       {busy ? (
         <ActivityIndicator color={fg} size="small" />
       ) : (
-        <Text style={{ color: fg, fontFamily: fonts.bodyBold, fontSize: 14 }}>{label}</Text>
+        <SkinText style={{ color: fg, fontFamily: fonts.bodyBold, fontSize: 14 }}>{label}</SkinText>
       )}
     </Pressable>
   );
@@ -167,5 +185,5 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   pill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start' },
-  btn: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', minHeight: 42 },
+  btn: { borderWidth: 1, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', minHeight: 42 },
 });

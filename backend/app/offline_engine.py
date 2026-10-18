@@ -618,7 +618,7 @@ class OfflineEngine:
             return _say(self._t("payees_list", list=i18n.comma(L).join(
                 f"{p['name']} ({p['number']})" for p in last["payees"])))
 
-        if re.search(r"transactions?|history|statement", low):
+        if re.search(r"transactions?|history|statement|transaksi|交易|流水|账单", low):
             if "list_transactions" not in done:
                 return _call("list_transactions", limit=10)
             rows = last["transactions"][:8]   # the transactions card lists them

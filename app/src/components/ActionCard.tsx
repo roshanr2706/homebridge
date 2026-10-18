@@ -5,7 +5,7 @@ import type { Action, Compliance, ComplianceCheck, RemitOption, RemitQuote } fro
 import { stepUp, useStepUpNote } from '../stepUp';
 import { PinEntry } from './PinEntry';
 import { useT, type Key, type T } from '../i18n';
-import { amount, cityTime, fonts, klHour, money, useTheme } from '../theme';
+import { amount, cityTime, useFontSet, klHour, money, useTheme } from '../theme';
 import { useToast } from '../toast';
 import { Bar, Body, Button, DashedRule, Eyebrow, Mono, Pill, Row } from '../ui';
 
@@ -162,6 +162,7 @@ function steps(a: Action, mode: Props['mode'], tr: T): Step[] {
 
 function Timeline({ items }: { items: Step[] }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const color = (s: Step['state']) => (s === 'done' ? t.accent : s === 'current' ? t.gold : s === 'bad' ? t.danger : t.border);
   return (
     <View style={{ marginTop: 14 }}>
@@ -206,6 +207,7 @@ function Timeline({ items }: { items: Step[] }) {
 // cheapest first and preselected. What Aisha gets, what he sends (fee included), the margin and the speed.
 function RemitPicker({ a, value, onChange }: { a: Action; value: string; onChange: (key: string) => void }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const opts: RemitOption[] = a.remit_options ?? [];
   const src = a.sponsor_source;
@@ -275,6 +277,7 @@ const OUTCOME: Record<Compliance['outcome'], { label: Key; tone: 'ok' | 'warn' |
 
 function ComplianceBlock({ c }: { c: Compliance }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const color = (s: ComplianceCheck['status']) =>
     s === 'pass' ? t.ok : s === 'flag' ? t.warn : s === 'block' ? t.danger : s === 'report' ? t.gold : t.faint;
@@ -308,6 +311,7 @@ function ComplianceBlock({ c }: { c: Compliance }) {
 
 export function ActionCard({ action: a, mode, onConfirm, onCancel, onApprove, onReject }: Props) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const toast = useToast();
   const stepUpNote = useStepUpNote();

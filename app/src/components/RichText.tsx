@@ -2,15 +2,16 @@
 // LLM replies often use these; the offline engine returns plain text. Nothing here renders HTML.
 import { Text, View } from 'react-native';
 
-import { fonts, useTheme } from '../theme';
+import { fontWeightOf, useFontSet, useTheme } from '../theme';
 
 function Inline({ text, color }: { text: string; color: string }) {
+  const fonts = useFontSet();
   const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
   return (
     <>
       {parts.map((p, i) =>
         p.startsWith('**') && p.endsWith('**') ? (
-          <Text key={i} style={{ fontFamily: fonts.bodyBold, color }}>
+          <Text key={i} style={{ fontFamily: fonts.bodyBold, fontWeight: fontWeightOf(fonts.bodyBold), color }}>
             {p.slice(2, -2)}
           </Text>
         ) : (
@@ -23,9 +24,10 @@ function Inline({ text, color }: { text: string; color: string }) {
 
 export function RichText({ text, color, size = 15 }: { text: string; color?: string; size?: number }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const c = color ?? t.text;
   const blocks = text.replace(/\r/g, '').split('\n');
-  const base = { fontFamily: fonts.body, color: c, fontSize: size, lineHeight: size * 1.45 };
+  const base = { fontFamily: fonts.body, fontWeight: fontWeightOf(fonts.body), color: c, fontSize: size, lineHeight: size * 1.45 };
   return (
     <View style={{ gap: 4 }}>
       {blocks.map((line, i) => {
@@ -34,7 +36,7 @@ export function RichText({ text, color, size = 15 }: { text: string; color?: str
         const heading = trimmed.match(/^#{1,4}\s+(.*)/);
         if (heading)
           return (
-            <Text key={i} style={[base, { fontFamily: fonts.bodyBold }]}>
+            <Text key={i} style={[base, { fontFamily: fonts.bodyBold, fontWeight: fontWeightOf(fonts.bodyBold) }]}>
               <Inline text={heading[1]} color={c} />
             </Text>
           );

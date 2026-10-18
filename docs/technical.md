@@ -84,8 +84,9 @@ International students live between two financial systems. Their pain points, wh
 | Classifier | `backend/app/classifier.py` | Our own scam / injection / benign model (TF-IDF + logistic regression) |
 | Result cards | `backend/app/cards.py` | Turns read-tool results into structured UI cards |
 | Audit log | `backend/app/audit.py` | Append-only, SHA-256 hash-chained JSONL |
+| Preferences and consents | `backend/app/prefs.py` | Per-person display name, language, skin and onboarding consents in SQLite (`user_prefs`), audited; the offline-only override the agent honours (§2.2) |
 | Scenarios and harness | `backend/app/scenarios.py`, `harness.py` | The scripted tasks and attacks, and the runner shared by pytest and `scripts/run_evidence.py` |
-| App | `app/` | Expo (React Native + web) client for both roles, in English or Chinese (`app/src/i18n.ts`) |
+| App | `app/` | Expo (React Native + web) client for both roles, in English or Chinese (`app/src/i18n.ts`), in two skins with per-person onboarding (§2.2) |
 | UI prototypes | `ui-variants/` | Four alternative front ends against the same API, kept for comparison; not the submitted app |
 
 ### 2.1 Request flow for a payment
@@ -101,6 +102,41 @@ International students live between two financial systems. Their pain points, wh
 9. Every step above is written to the audit log.
 
 ---
+
+### 2.2 Skins, onboarding and preferences
+
+**Two skins, one feature set.** `app/src/theme.ts` defines two token sets with the same names: `neo` (dark only:
+near-black surfaces, one lime accent `#C6F94A`, Geist and Geist Mono bundled through `@expo-google-fonts`, large
+radii) and `superapp` (light only: `#F4F5F7` page, white cards, Alipay blue `#1677FF`, orange for the sponsor and
+highlights, red badges, the system CJK font stack on web, PingFang SC / Roboto on native). A `SkinProvider` puts
+the active skin in context; `useTheme()` and `useFontSet()` read it, so every existing component restyles without
+being forked. Each demo phone has its own provider, so the two people can use two looks at once (the sponsor's
+super-app phone also takes an orange accent). A system font stack cannot name a weight, so super-app font entries
+carry a marker family (`"hb-600"`) that the text primitives turn into `fontWeight`. Structure differs only where it
+matters: the student's home (top of the Assistant tab) is a neo hero balance with dim cents, CAD/MYR toggle, quick
+actions and insight chips, or a super-app blue header with a search box that asks the assistant, four big actions,
+a total-assets card, a rotating notice bar from live overview and forecast data, and a 5×2 bilingual service grid
+with badges (each tile sends a prompt or opens a tab). The Wallet gets a neo account-card carousel or a blue band;
+the sponsor's Approvals get a neo hero or the super-app orange header; the tab bar is a floating pill or a plain
+bar (`components/NeoHome.tsx`, `components/SuperHome.tsx`, `App.tsx`).
+
+**Onboarding.** On start each phone calls `GET /me` with its own token (`app/src/account.ts`). If `onboarded_at` is
+empty the phone shows `screens/Onboarding.tsx`: Welcome → Your details (demo profile, editable display name) →
+Language → Look (live miniatures drawn with each skin's real tokens) → Privacy and consent (student: what the
+sponsor sees and never sees, from the same list as `privacy.SHARING`; which model processes chat and where, from
+`/me` `model_route`; an agree toggle and an "offline engine only" toggle) or PIN and your view (sponsor; demo PIN
+shown in demo mode) → Done. Language and look apply live while choosing and are saved only at Done, in one
+`POST /me/onboarding`. The ⚙ Settings screen switches look and language later (`POST /me/prefs`), shows who sees what,
+toggles offline-only for the student and can replay onboarding. Each phone scopes its language with `LangScope`,
+so the EN / 中文 toggle is per person.
+
+**Server side.** `prefs.py` validates the body (`extra="forbid"`, so no user id can be named: it always applies to
+the caller's token), strips and caps the display name (control and format characters removed, 40 characters), and
+stores one JSON row per person next to the sandbox data, so `/demo/reset` clears it. Each consent keeps its time,
+a version and, for AI processing, the provider and region shown. The audit log gets `consent_recorded` and
+`prefs_updated` with booleans, language and skin only, never the name. `Agent.run` checks the person's prefs on
+every turn: with offline-only chosen (or cloud processing declined) that student's chat runs on the offline engine
+whatever `LLM_PROVIDER` is, and `get_data_sharing` reports that engine. Tests: `backend/tests/test_onboarding.py`.
 
 ## 3. Agent loop and model adapter
 
@@ -321,8 +357,8 @@ The full threat model, tier table and known-risk list are in `docs/security_self
 
 Run with `pytest -q` and `python scripts/run_evidence.py` (from `backend/`). The evidence script writes `evidence/offline/` for the offline engine.
 
-<!-- counts: tests=746, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854 on 902 rows, audit=1215; tools also in §2 table and §4 intro, guard-flagged also in the §7 defence-in-depth paragraph -->
-**Headline numbers (offline engine, measured 2026-10-16):** 746 automated tests passing; 119 / 119 scripted tasks; 79 / 79 attacks blocked (induced transfer 27, extraction 11, escalation 21, injection 20); classifier macro F1 0.854 over 902 rows; evidence audit log 1,215 entries with a valid hash chain.
+<!-- counts: tests=759, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854 on 902 rows, audit=1215; tools also in §2 table and §4 intro, guard-flagged also in the §7 defence-in-depth paragraph -->
+**Headline numbers (offline engine, measured 2026-10-16):** 759 automated tests passing; 119 / 119 scripted tasks; 79 / 79 attacks blocked (induced transfer 27, extraction 11, escalation 21, injection 20); classifier macro F1 0.854 over 902 rows; evidence audit log 1,215 entries with a valid hash chain.
 
 | Suite | Result |
 |---|---|

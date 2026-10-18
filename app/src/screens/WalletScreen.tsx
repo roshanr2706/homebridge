@@ -4,9 +4,11 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 import { accountNote, api, type ForecastCard, type Overview } from '../api';
 import { usePoll } from '../hooks';
 import { BudgetCard, CreditCard, RunwayCard, TuitionCard, creditCardFromProfile } from '../components/ResultCards';
+import { NeoAccountCarousel, NeoBalance } from '../components/NeoHome';
+import { SuperWalletBand } from '../components/SuperHome';
 import { useT, type Key } from '../i18n';
 import { stepUp } from '../stepUp';
-import { amount, fonts, money, useTheme } from '../theme';
+import { useFontSet, money, useSkin, useTheme } from '../theme';
 import { useToast } from '../toast';
 import { Body, Button, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
@@ -14,6 +16,8 @@ const STATUS: Record<string, Key> = { awaiting_user: 'wal.needsYou', awaiting_sp
 
 export function WalletScreen({ active }: { active: boolean }) {
   const t = useTheme();
+  const { skin } = useSkin();
+  const fonts = useFontSet();
   const tr = useT();
   const toast = useToast();
   const [lockBusy, setLockBusy] = useState(false);
@@ -87,20 +91,26 @@ export function WalletScreen({ active }: { active: boolean }) {
 
   return (
     <ScrollView
+      showsVerticalScrollIndicator={false}
       contentContainerStyle={{ padding: 16, gap: 14, maxWidth: 720, width: '100%', alignSelf: 'center' }}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}
     >
-      {/* Hero: two homes, one total */}
-      <View style={{ paddingVertical: 8 }}>
-        <Eyebrow>{tr('wal.hero')}</Eyebrow>
-        <Row style={{ alignItems: 'flex-end', gap: 6, marginTop: 4 }}>
-          <Mono style={{ fontSize: 16, color: t.muted, marginBottom: 6 }}>CAD</Mono>
-          <Mono style={{ fontFamily: fonts.monoBold, fontSize: 40, letterSpacing: -1.5 }}>{amount(o.total_cad)}</Mono>
-        </Row>
-        <Body style={{ color: t.muted, fontSize: 13 }}>
-          {tr('wal.heroSub', { spend: money(spendable, 'CAD'), myr: money(myr, 'MYR', 0), rate: o.rates['MYR/CAD'] })}
-        </Body>
-      </View>
+      {/* Hero: two homes, one total, drawn per skin */}
+      {skin === 'neo' ? (
+        <View style={{ paddingTop: 4, gap: 4 }}>
+          <NeoBalance o={o} size={46} greet={false} />
+          <Body style={{ color: t.muted, fontSize: 12.5, lineHeight: 18 }}>
+            {tr('wal.heroSub', { spend: money(spendable, 'CAD'), myr: money(myr, 'MYR', 0), rate: o.rates['MYR/CAD'] })}
+          </Body>
+        </View>
+      ) : (
+        <View>
+          <SuperWalletBand o={o} />
+          <Body style={{ color: t.muted, fontSize: 12.5, lineHeight: 18, marginTop: 10 }}>
+            {tr('wal.heroSub', { spend: money(spendable, 'CAD'), myr: money(myr, 'MYR', 0), rate: o.rates['MYR/CAD'] })}
+          </Body>
+        </View>
+      )}
 
       {o.freeze.frozen && (
         <Surface tone="danger">
@@ -123,25 +133,29 @@ export function WalletScreen({ active }: { active: boolean }) {
         </Surface>
       )}
 
-      <View style={{ gap: 8 }}>
-        {o.accounts.map((a) => (
-          <Surface key={a.id} style={{ paddingVertical: 12 }}>
-            <Row style={{ justifyContent: 'space-between' }}>
-              <View style={{ flex: 1 }}>
-                <Row style={{ gap: 8 }}>
-                  <Body style={{ fontFamily: fonts.bodyBold }}>{tr.d(a.label)}</Body>
-                  {a.sponsor_funded && <Pill label={tr('wal.fromDad')} tone="gold" />}
-                </Row>
-                <Mono style={{ fontSize: 11, color: t.faint, marginTop: 2 }}>
-                  {accountNote(a) ? `${tr.d(accountNote(a))} · ` : ''}
-                  {a.number}
-                </Mono>
-              </View>
-              <Mono style={{ fontSize: 17, fontFamily: fonts.monoBold }}>{money(a.balance, a.currency)}</Mono>
-            </Row>
-          </Surface>
-        ))}
-      </View>
+      {skin === 'neo' ? (
+        <NeoAccountCarousel accounts={o.accounts} />
+      ) : (
+        <View style={{ gap: 8 }}>
+          {o.accounts.map((a) => (
+            <Surface key={a.id} style={{ paddingVertical: 12 }}>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <View style={{ flex: 1 }}>
+                  <Row style={{ gap: 8 }}>
+                    <Body style={{ fontFamily: fonts.bodyBold }}>{tr.d(a.label)}</Body>
+                    {a.sponsor_funded && <Pill label={tr('wal.fromDad')} tone="gold" />}
+                  </Row>
+                  <Mono style={{ fontSize: 11, color: t.faint, marginTop: 2 }}>
+                    {accountNote(a) ? `${tr.d(accountNote(a))} · ` : ''}
+                    {a.number}
+                  </Mono>
+                </View>
+                <Mono style={{ fontSize: 17, fontFamily: fonts.monoBold }}>{money(a.balance, a.currency)}</Mono>
+              </Row>
+            </Surface>
+          ))}
+        </View>
+      )}
 
       {o.pending.length > 0 && (
         <Surface tone="warn">
@@ -205,7 +219,9 @@ export function WalletScreen({ active }: { active: boolean }) {
                 <Pill label={tr.d(p.status).replace('_', ' ').toUpperCase()} tone={p.status === 'rejected' ? 'danger' : 'warn'} />
               ) : cooling ? (
                 <Pill
-                  label={tr('wal.cooling', { left: left >= 3600 ? `${Math.ceil(left / 3600)}H` : left >= 60 ? `${Math.ceil(left / 60)}M` : `${left}S` })}
+                  label={tr('wal.cooling', {
+                    left: left >= 3600 ? `${Math.ceil(left / 3600)}H` : left >= 60 ? `${Math.ceil(left / 60)}M` : `${left}S`,
+                  })}
                   tone="warn"
                 />
               ) : null}
@@ -219,15 +235,7 @@ export function WalletScreen({ active }: { active: boolean }) {
         <Body style={{ fontSize: 13, color: t.muted, marginTop: 4 }}>
           {tr('wal.rulesBody', { single: money(o.limits.single_cad, 'CAD', 0), daily: money(o.limits.daily_cad, 'CAD', 0) })}
         </Body>
-        {!o.freeze.frozen && (
-          <Button
-            label={tr('wal.lockButton')}
-            kind="danger"
-            busy={lockBusy}
-            onPress={lock}
-            style={{ marginTop: 12 }}
-          />
-        )}
+        {!o.freeze.frozen && <Button label={tr('wal.lockButton')} kind="danger" busy={lockBusy} onPress={lock} style={{ marginTop: 12 }} />}
       </Surface>
     </ScrollView>
   );

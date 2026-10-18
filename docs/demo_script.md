@@ -4,8 +4,8 @@ For the 5-minute demo video, the 10-minute presentation and the Q&A. Every scrip
 end to end on the offline engine on 2026-10-16 and works without an API key. The live model (DeepSeek) is
 supported but has not been run live yet, so the video uses the offline engine and the header says so.
 
-<!-- counts: tests=746, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854; also spoken at video 4:40, outline item 4, Q12, Q13 -->
-**Numbers to quote (offline engine):** 119 / 119 scripted tasks, 79 / 79 attacks blocked, 746 automated tests,
+<!-- counts: tests=759, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854; also spoken at video 4:40, outline item 4, Q12, Q13 -->
+**Numbers to quote (offline engine):** 119 / 119 scripted tasks, 79 / 79 attacks blocked, 759 automated tests,
 24 agent tools (none can execute, approve, unlock or change limits), classifier macro F1 0.854.
 
 ## Before recording
@@ -42,7 +42,7 @@ supported but has not been run live yet, so the video uses the offline engine an
 | 3:40 | Aisha · Assistant | Type: `冻结我的账户` | **Freeze**: payments locked, reply in Chinese. Dad's phone shows the alert and the lock; every card shows FROZEN. "She can unlock her own money in the Wallet. What Dad funds stays locked until he unlocks it with his PIN. There is no unlock tool for the AI." |
 | 4:00 | Header, then Ledger | Tap **EN**. Open **Ledger** | "Chain verified, N entries." Tap any entry → "EDITED #N · DETECTED AT #N", that row in red. "Every step you just saw is in this hash chain." |
 | 4:20 | Aisha · Assistant | **One unscripted question.** Ask someone who has not seen the engine to type one money question, and keep whatever happens | Usually an answer with a card; otherwise a clarifying question or a short menu. Say: "It never guesses with money: anything it drafts still waits for her tap, and Dad above the limits." |
-| 4:40 | | "79 of 79 attacks blocked, 119 of 119 tasks, 746 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
+| 4:40 | | "79 of 79 attacks blocked, 119 of 119 tasks, 759 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
 
 Timing notes: steps 2:05 to 2:55 rely on the 20-second demo settlement; if it is still in transit at 2:55,
 say "still on its way" and come back to it after the credit card. The lock at 3:40 stays on, so do it last
