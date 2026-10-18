@@ -57,6 +57,16 @@ yet: the client is tested against a mocked transport only (see "Choosing the mod
   and the exact payment that keeps the reported balance under 30%. Labelled "not a credit score".
 - **Permission tiers T0 to T4.** Reads run freely; payments are drafts; large, risky or sponsor-funded ones
   go to the sponsor; confirm, approve, unlock and limit changes are not agent tools at all.
+- **Second opinion for the sponsor.** Each request waiting for Dad carries a short independent review ("Looks
+  normal" / "Check with Aisha" / "Likely scam", 2 to 4 sentences, in his language), written by the model from
+  structured, masked facts only (never the chat) or by deterministic rules when the model is off, failing or
+  declined; the model can add caution but never go below the rules. Advisory only: it can't approve anything.
+- **Hardened live-model path.** Timeouts, retries with jittered backoff and `Retry-After`, a per-turn time
+  budget and a circuit breaker that falls back to the offline engine (and says so); tool calls checked against
+  their schemas with structured errors back to the model, a loop guard, a reply guard for account numbers,
+  tokens and system-prompt echoes, a correction when the model claims a draft it didn't make, and a one-time
+  "draft it or ask" nudge for plain payment commands. A versioned system prompt with per-turn context in a
+  separate message.
 - **Sponsor PIN.** The sponsor's Approve, Unlock and limit changes need a 6-digit PIN checked on the server
   (PBKDF2, lockout after 5 wrong tries). Demo PIN `246810`.
 - **Remittance flow.** "Ask my dad for 800 for textbooks" goes to the sponsor. He picks a transfer service
@@ -181,6 +191,8 @@ or paste a suspicious message after "Is this a scam?". The ↺ button resets the
 export LLM_PROVIDER=deepseek          # offline (default) | deepseek | deepseek-pro | qwen | qwen-cn | custom
 export LLM_API_KEY=sk-...
 # optional: LLM_MODEL, LLM_BASE_URL (required for custom), LLM_THINKING=1
+# robustness (defaults shown): LLM_TIMEOUT=30 LLM_MAX_RETRIES=2 LLM_TURN_BUDGET=75
+#   LLM_BREAKER_FAILURES=3 LLM_BREAKER_COOLDOWN=60 LLM_TEMPERATURE=0.2 LLM_SEED= HB_REVIEWER_TIMEOUT=6
 ```
 
 The default is `offline`. DeepSeek (`deepseek-flash`, checked as a valid model ID on api-docs.deepseek.com
@@ -197,6 +209,8 @@ cd backend
 pytest -q                                   # tasks, attacks, compromised model, API roles, LLM wire format
 python scripts/run_evidence.py              # writes ../evidence/offline/
 LLM_PROVIDER=deepseek LLM_API_KEY=sk-... python scripts/run_evidence.py   # writes ../evidence/deepseek/
+python scripts/run_heldout.py               # 80 held-out requests -> ../evidence/heldout/<provider>.md
+python scripts/run_robustness.py            # 30 odd inputs -> ../evidence/<provider>/robustness.md
 python scripts/build_classifier_data.py     # rebuilds data/classifier_train.jsonl (already committed)
 ```
 
