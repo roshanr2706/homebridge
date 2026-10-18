@@ -3,6 +3,7 @@
 import { View } from 'react-native';
 
 import type { Card, CreditCardData, CreditProfile } from '../api';
+import { AutopilotCard } from './AutopilotPanel';
 import { useT } from '../i18n';
 import { amount, useFontSet, money, useTheme } from '../theme';
 import { Bar, Body, Divider, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
@@ -571,6 +572,8 @@ export function ResultCard({ card }: { card: Card }) {
       return <RunwayCard c={card} />;
     case 'credit':
       return <CreditCard c={card} />;
+    case 'autopilot':
+      return <AutopilotCard c={card} />;
     default:
       return null;
   }

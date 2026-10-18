@@ -3,6 +3,7 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { accountNote, api, type ForecastCard, type Overview } from '../api';
 import { usePoll } from '../hooks';
+import { AutopilotPanel, useAutopilotFeed } from '../components/AutopilotPanel';
 import { BudgetCard, CreditCard, RunwayCard, TuitionCard, creditCardFromProfile } from '../components/ResultCards';
 import { NeoAccountCarousel, NeoBalance } from '../components/NeoHome';
 import { SuperWalletBand } from '../components/SuperHome';
@@ -26,6 +27,8 @@ export function WalletScreen({ active }: { active: boolean }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  // Polled even while another tab is open, so Aisha's phone announces what the autopilot did wherever she is.
+  const autopilot = useAutopilotFeed('student', active);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -172,6 +175,8 @@ export function WalletScreen({ active }: { active: boolean }) {
           </View>
         </Surface>
       )}
+
+      <AutopilotPanel role="student" active={active} feed={autopilot.feed} reload={autopilot.load} />
 
       <Surface>
         <TuitionCard c={{ type: 'tuition', ...o.tuition }} bare />
