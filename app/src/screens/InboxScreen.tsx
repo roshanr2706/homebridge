@@ -146,7 +146,8 @@ function InboxRow({ m, first, onPress }: { m: InboxMessage; first: boolean; onPr
       <View style={{ flex: 1, gap: 3 }}>
         <Row style={{ justifyContent: 'space-between', gap: 8 }}>
           <Body style={{ flex: 1, fontSize: 14, fontFamily: unread ? fonts.bodyBold : fonts.bodyMedium }} numberOfLines={1}>
-            {m.sender}
+            {/* The display name only ("BC Hydro"); the full address is on the message itself. */}
+            {m.sender.replace(/\s*<[^>]*>\s*$/, '') || m.sender}
           </Body>
           <Mono style={{ fontSize: 11, color: t.faint }}>
             {tr(CHANNEL[m.channel])} · {when(m.received_at)}
