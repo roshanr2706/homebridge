@@ -161,7 +161,11 @@ def explicit_command(text: str, payee_words: Iterable[str]) -> Optional[Dict[str
     if re.search(r"(?<![\w])-\s?\d|\d[eE][+-]?\d", t):
         return None   # "-50", "1e9": the prompt says ask for the amount
     low = t.lower()
-    verb = re.search(_VERB_EN, low) or re.search(_VERB_MS, low) or re.search(_VERB_ZH, t)
+    # An instruction starts with its verb, after at most a polite opener: "pay hydro 2000", "tolong bayar sewa
+    # 1150", "帮我付 hydro 200". "cheapest way to send 1000 cad", "false alarm, unlock it and pay rent" don't.
+    head = re.sub(r"^(?:(?:please|pls|plz|kindly|ok(?:ay)?|eh|hey|hi|just|now|tolong|sila|请|帮我|麻烦你?|你)\s*[,，]?\s*)+",
+                  "", low)
+    verb = re.match(_VERB_EN, head) or re.match(_VERB_MS, head) or re.match(_VERB_ZH, head)
     if not verb:
         return None
     amounts = []

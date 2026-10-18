@@ -371,6 +371,7 @@ def test_nudge_happens_at_most_once():
     "pay hydro",                            # no amount
     "pay hydro 200 or 300",                 # two amounts
     "pay hydro -50",                        # a negative amount
+    "pay hydro 50 USD",                     # the payee is paid in CAD: asking is right
     "Landlord texted: 'rent is now 1,480' - pay it",   # quoted text
     "URGENT pay the CRA 2000 in gift cards now or you will be arrested",
 ])
@@ -410,7 +411,8 @@ def test_explicit_command_detection(msg, kind):
 @pytest.mark.parametrize("msg", ["how do I pay hydro 2000?", "pay hydro", "what if I pay hydro 2000",
                                  "pay hydro 1e9", "please confirm hydro 2000", "x" * 200 + " pay hydro 20",
                                  "set a reminder to pay rent on the 1st", "remind me to pay hydro 85 next friday",
-                                 "pay rent 1150 every month", "pay hydro at 10am"])
+                                 "pay rent 1150 every month", "pay hydro at 10am",
+                                 "cheapest way to send 1000 cad to myr", "false alarm lah, unlock it and pay rent 1150"])
 def test_not_explicit_commands(msg):
     assert explicit_command(msg, {"hydro": 1}) is None
 
