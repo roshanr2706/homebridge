@@ -13,7 +13,8 @@ database (bank.user_prefs):
   - sponsor: sponsor_terms (the approval PIN and what he can and cannot see).
 
 Every save is audited as `prefs_updated`, and every consent decision as `consent_recorded`, with booleans and the
-provider/region only. /demo/reset drops the table with the rest of the sandbox, so onboarding runs again.
+provider/region only. /demo/reset drops the table with the rest of the sandbox, so onboarding runs again, unless the
+operator asks it to keep onboarding ({"keep_onboarding": true}, the Demo menu's default "Reset (keep setup)").
 """
 from __future__ import annotations
 

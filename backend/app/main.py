@@ -96,6 +96,12 @@ class OnboardingIn(BaseModel):
     consents: ConsentsIn = Field(default_factory=ConsentsIn)
 
 
+class ResetIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    # Keep each person's onboarding (name, language, look, consents) so the phones skip the setup screens.
+    keep_onboarding: bool = False
+
+
 class PrefsIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     display_name: Optional[str] = Field(None, max_length=80)
@@ -143,7 +149,14 @@ class AppState:
     def pins(self) -> PinChecker:
         return PinChecker(self.bank, self.audit)
 
-    def reset(self) -> None:
+    def reset(self, keep_onboarding: bool = False) -> None:
+        """A fresh sandbox. With keep_onboarding, each person's onboarding (prefs and consents) survives it."""
+        kept: Dict[str, Any] = {}
+        if keep_onboarding:
+            for row in self.bank._q("SELECT id FROM users"):
+                data = self.bank.load_prefs(row["id"])
+                if data:
+                    kept[row["id"]] = data
         defaults = Limits()
         self.settings.limits.single_cad, self.settings.limits.daily_cad = defaults.single_cad, defaults.daily_cad
         if self.base_today:
@@ -151,7 +164,10 @@ class AppState:
         self.bank.reset(self.agent.today)
         self.policy.reset()
         self.agent.reset()
-        self.audit.record("demo_reset", "system")
+        for user_id, data in kept.items():
+            if self.bank.user(user_id):
+                self.bank.save_prefs(user_id, data)
+        self.audit.record("demo_reset", "system", keep_onboarding=bool(keep_onboarding))
 
 
 def build_state(settings: Optional[Settings] = None, today: Optional[date] = None, provider=None,
@@ -505,17 +521,19 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         return st.policy.compliance.report(acts, people, who[1])
 
     @app.post("/demo/reset")
-    def demo_reset(who=Depends(auth), x_operator: str = Header(default="")):
+    def demo_reset(body: Optional[ResetIn] = None, who=Depends(auth), x_operator: str = Header(default="")):
         """Demo mode only, and only with the operator token (HB_OPERATOR_TOKEN) in X-Operator. The web app sends it
-        when /health says demo mode is on; the agent has no way to call this."""
+        when /health says demo mode is on; the agent has no way to call this. {"keep_onboarding": true} keeps
+        both people's onboarding, so the phones go straight to their home screens."""
         if not st.settings.demo_mode:
             raise HTTPException(403, "Reset is only available in demo mode")
         if not x_operator or not hmac.compare_digest(x_operator.encode(), st.settings.operator_token.encode()):
             st.audit.record("reset_denied", who[0], reason="missing or wrong operator token")
             raise HTTPException(403, "Reset needs the operator token")
-        st.reset()
+        keep = bool(body and body.keep_onboarding)
+        st.reset(keep_onboarding=keep)
         chat_times.clear()
-        return {"ok": True}
+        return {"ok": True, "kept_onboarding": keep}
 
     # Autopilot mandates and the operator's stage controls (autopilot_api.py).
     register_autopilot(app, st, auth, student, sponsor, _pin, _my_student)

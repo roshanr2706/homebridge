@@ -159,6 +159,27 @@ def test_demo_reset_clears_onboarding(api):
     assert client.get("/me", headers=P).json()["prefs"]["onboarded_at"] is None
 
 
+def test_demo_reset_can_keep_onboarding(api):
+    client, st = api
+    client.post("/me/onboarding", json=STUDENT_OK, headers=S)
+    client.post("/me/onboarding", json=SPONSOR_OK, headers=P)
+    st.bank.save_prefs("nobody", {"display_name": "x"})                 # not a seeded user: not carried over
+    r = client.post("/demo/reset", json={"keep_onboarding": True}, headers={**S, **OP})
+    assert r.status_code == 200 and r.json()["kept_onboarding"] is True
+    me = client.get("/me", headers=S).json()["prefs"]
+    assert me["onboarded_at"] and me["language"] == "zh" and me["display_name"] == "Aisha R."
+    assert me["consents"]["ai_processing"]["agreed"] is True
+    assert client.get("/me", headers=P).json()["prefs"]["onboarded_at"]
+    assert st.bank.load_prefs("nobody") is None
+    assert events(st, "demo_reset")[-1]["data"]["keep_onboarding"] is True
+    # the rest of the sandbox is fresh
+    assert not st.policy.actions and st.bank.account("acc_myr")["balance"] > 0
+    # and a full reset still replays onboarding
+    assert client.post("/demo/reset", json={"keep_onboarding": False}, headers={**S, **OP}).status_code == 200
+    assert client.get("/me", headers=S).json()["prefs"]["onboarded_at"] is None
+    assert client.post("/demo/reset", json={"keep": True}, headers={**S, **OP}).status_code == 422
+
+
 def test_cloud_provider_needs_consent_or_offline_choice(cloud):
     client, _, _ = cloud
     me = client.get("/me", headers=S).json()

@@ -571,9 +571,10 @@ export const api = {
     operator<{ today: string; skipped_days: number; decisions: AutopilotEntry[] }>('/demo/time_skip', body),
   runAutopilot: () => operator<{ decisions: AutopilotEntry[] }>('/autopilot/run'),
   // The operator header goes out only when the server says it is in demo mode.
-  reset: async () => {
+  // keepOnboarding (the default) keeps both people's setup, so the phones skip the onboarding screens.
+  reset: async (keepOnboarding = true) => {
     const h = await call<Health>('student', '/health');
     if (!h.demo_mode) throw new Error('Reset is only available in demo mode');
-    return call<{ ok: boolean }>('student', '/demo/reset', 'POST', undefined, { 'X-Operator': OPERATOR });
+    return call<{ ok: boolean }>('student', '/demo/reset', 'POST', { keep_onboarding: keepOnboarding }, { 'X-Operator': OPERATOR });
   },
 };
