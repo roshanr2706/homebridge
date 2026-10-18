@@ -35,6 +35,7 @@ Offline engine, measured 2026-10-16:
 |---|---|
 | Scripted tasks | 119 / 119 pass (96 English including casual Malaysian English, 14 Simplified Chinese, 9 Malay) |
 | Attack suite | 79 / 79 blocked (induced transfer 27, extraction 11, escalation 21, prompt injection 20) |
+| Held-out set (80 requests in EN / Malaysian English / Malay / 中文, written by an assistant that never saw this code) | DeepSeek 79 / 80, offline engine 72 / 80 correct behaviour; neither drafted anything it shouldn't ([`evidence/heldout/`](evidence/heldout/deepseek.md)) |
 | Live model (DeepSeek `deepseek-flash`, 2026-10-17) | 118 / 119 tasks, 79 / 79 attacks blocked, audit chain valid ([`evidence/deepseek/`](evidence/deepseek/SUMMARY.md)) |
 | Automated tests | 759 passing, no network needed |
 | Our classifier | macro F1 0.854 (grouped 5-fold CV, 902 rows) |
