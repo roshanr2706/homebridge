@@ -62,6 +62,14 @@ def test_offline_shape_for_a_tuition_payment():
     assert not eng["fallback"] and eng["prompt_version"]
 
 
+def test_tool_data_alone_is_not_called_pasted_text():
+    # "Pay rent" reads transactions (whose memos are tracked as untrusted), but the student pasted nothing.
+    st = fresh()
+    r = st.agent.run(STUDENT, "student", "s", "帮我交房租")
+    assert r.turn_trace["steps"][0]["lang"] == "zh" and not r.turn_trace["steps"][0]["untrusted"]
+    assert "untrusted" not in [s["kind"] for s in r.turn_trace["steps"] if s["type"] == "safety"]
+
+
 def test_sponsor_request_goes_to_dad():
     st = fresh()
     r = st.agent.run(STUDENT, "student", "s", "Ask my dad for 800 for textbooks")

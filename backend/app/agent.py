@@ -319,6 +319,7 @@ class Agent:
             ctx.untrusted_texts.append(text)
         else:  # short quotes: "Landlord texted: 'rent is now 1,480' - pay it"
             ctx.untrusted_texts.extend(quoted_segments(text))
+        user_untrusted = len(ctx.untrusted_texts) > carried   # this message pasted or quoted someone else's text
 
         turn: List[Dict[str, Any]] = [{"role": "user", "content": text}]
         note = g.as_note()
@@ -470,7 +471,7 @@ class Agent:
         # carry (the app shows a "this chat was flagged" chip from it).
         guard = {**g.to_dict(), "carried": ctx.earlier_flags, "session_flags": self.session_flags(session_id)}
         shown = turn_trace.build(
-            lang=lang, guard=guard, carried=ctx.earlier_flags, untrusted=len(ctx.untrusted_texts) > carried,
+            lang=lang, guard=guard, carried=ctx.earlier_flags, untrusted=user_untrusted,
             live_plan=live, calls=trace, actions=[self.policy.present(a) for a in ctx.created_actions],
             events=events, reply=reply,
             engine={"provider": getattr(provider, "name", "?"), "configured": getattr(self.provider, "name", "?"),
