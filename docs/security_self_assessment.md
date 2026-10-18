@@ -19,7 +19,7 @@ Contents: 1 Principle · 2 Threat model · 3 Permission tiers · 4 Controls by a
 
 Concretely:
 
-1. The model can only call the tools in the registry (26 tools, `tools.REGISTRY`). None of them executes a payment. Payment tools create **drafts**. The autopilot (§3.5) is not the model: it is deterministic code that acts only inside mandates a person turned on in the app, through the same policy engine.
+1. The model can only call the tools in the registry (27 tools, `tools.REGISTRY`). None of them executes a payment. Payment tools create **drafts**. The autopilot (§3.5) is not the model: it is deterministic code that acts only inside mandates a person turned on in the app, through the same policy engine.
 2. A draft executes only through HTTP endpoints the model cannot reach. These require the student's bearer token and a single-use confirmation token, and the sponsor's bearer token plus PIN for elevated actions.
 3. The confirmation token goes to the app, never to the model.
 4. Every security decision (tier, limits, risk, roles, compliance outcome) is made in plain Python in `policy.py`, `compliance.py`, `safety.py`, `authn.py` and `main.py`, not by the model.

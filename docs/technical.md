@@ -72,7 +72,7 @@ International students live between two financial systems. Their pain points, wh
 | Model adapter | `backend/app/llm.py` | One OpenAI-compatible client for DeepSeek, Qwen or a custom endpoint; the offline engine behind the same interface |
 | Offline engine | `backend/app/offline_engine.py`, `offline_nlu.py` | Deterministic planner (intents) and its pure text parsers (amounts, currencies, payees, dates, question forms) |
 | Reply language | `backend/app/i18n.py` | Language detection (English, Simplified Chinese, Malay) and the offline engine's reply templates |
-| Tools | `backend/app/tools.py` | The tool registry: 26 tools with JSON schemas, tier labels and masked outputs (§4) |
+| Tools | `backend/app/tools.py` | The tool registry: 27 tools with JSON schemas, tier labels and masked outputs (§4) |
 | Autopilot | `backend/app/autopilot.py`, `autopilot_api.py`, `autopilot_tools.py` | Mandates (standing, revocable permissions), the deterministic run that acts inside them through the policy engine, the activity feed, the app endpoints and the two chat tools (§5.11) |
 | Policy engine | `backend/app/policy.py` | The only path by which money moves: tiers, limits, risk score, tokens, execution |
 | Compliance | `backend/app/compliance.py` | Sanctions screening (sample list), KYC levels, cross-border records, EFTR flag, BNM-style purpose codes, structuring flag, the compliance report (§5.9) |
