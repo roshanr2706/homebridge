@@ -49,6 +49,13 @@ above predate them (119 tasks and 79 attacks).
 
 - **Chat agent with ledger-built cards.** Balances, spending, tuition, FX quotes, scam checks and more. The
   numbers on each card come from the sandbox ledger, not from the model's prose.
+- **Visible reasoning: "How I handled this".** Under every reply, one collapsed line ("How I handled this · 6
+  steps · 1.2 s · DeepSeek · live"); a tap opens the timeline: what the assistant understood (language, safety
+  verdict and named warning signs), its plan (the tools the model chose, or the intent the offline engine
+  matched), each tool call with a safe one-line summary and its time, the policy engine's decision per draft
+  (tier, reasons, risk, compliance, "waits for your tap" / "goes to Dad" / "blocked"), the safety checks and
+  the model used. Built on the server from an allow-list and scrubbed: never account numbers, tokens, pasted
+  text or the system prompt. The header shows which engine answers ("DeepSeek · live" / "Offline engine").
 - **True-cost FX.** Providers ranked by what actually arrives, with fee and exchange-rate margin against
   the mid-market rate.
 - **Cash-flow forecast.** "Will I run out of money before tuition?" A day-by-day runway to the next tuition
