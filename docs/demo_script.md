@@ -19,7 +19,10 @@ cards, tiers, PIN and approvals are the same. The header shows which engine is a
    Open `http://localhost:8000` in a laptop-width window (at least 980 px). The app shows **both phones side
    by side**: Aisha in Vancouver on the left, her dad in Kuala Lumpur on the right, on one sandbox.
 2. Leave the demo defaults: `HB_DEMO_MODE=1` (remittances settle in seconds, 60-second payee cooling),
-   `HB_DEMO_TODAY=2026-10-08`, sponsor PIN `246810`, operator token `demo-operator`.
+   `HB_DEMO_TODAY=2026-10-08`, sponsor PIN `246810`. **At the venue (or on any shared network)**, set the operator
+   token to a random value on both sides, so only your laptop can use the Demo menu: build with
+   `EXPO_PUBLIC_OPERATOR_TOKEN=<random>` and start the server with `HB_OPERATOR_TOKEN=<the same value>` and
+   `--host 127.0.0.1`. The default `demo-operator` ships in the web bundle (security R30).
 3. **Record in the daytime (Vancouver).** Alerts use the real clock, and any action between 01:00 and 05:00
    in Vancouver raises an `odd_hours` alert that changes risk scores and cards.
 4. Reset the sandbox: **Demo ▾ → ↺ Reset demo** on the stage bar (top right; the menu shows only in demo mode). Check the

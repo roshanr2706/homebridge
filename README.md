@@ -161,7 +161,7 @@ Demo values (all overridable, see `backend/.env.example`):
 | `HB_DEMO_MODE` | `1` (default) | 60-second payee cooling, remittances settle in seconds, reset allowed |
 | `HB_DEMO_TODAY` | `2026-10-08` | Pins the sandbox date so screenshots, video and docs agree (empty = real date) |
 | `HB_SPONSOR_PIN` | `246810` | The sponsor's approval PIN, stored only as a salted hash |
-| `HB_OPERATOR_TOKEN` | `demo-operator` | Needed in an `X-Operator` header for `/demo/reset`, `/autopilot/run`, `/demo/fx_shift`, `/demo/inbox` and `/demo/time_skip` (the web app sends it in demo mode) |
+| `HB_OPERATOR_TOKEN` | `demo-operator` | Needed in an `X-Operator` header for `/demo/reset`, `/autopilot/run`, `/demo/fx_shift`, `/demo/inbox` and `/demo/time_skip` (the web app sends it in demo mode). Unset outside demo mode, a random token is generated at startup. **At the venue, set it and `EXPO_PUBLIC_OPERATOR_TOKEN` (when building the web app) to the same random value**: the default ships in the web bundle, so anyone with the demo page could use the Demo menu (security R30) |
 | `HB_AUTOPILOT_TICK` | `30` | Seconds between background autopilot runs in demo mode (`0` turns it off; the tests do) |
 | `HB_STUDENT_TOKEN`, `HB_SPONSOR_TOKEN` | `demo-student`, `demo-sponsor` | Bearer tokens |
 
