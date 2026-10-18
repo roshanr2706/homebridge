@@ -2,12 +2,12 @@
 
 For the 5-minute demo video, the 10-minute presentation and the Q&A. Every scripted input below was run
 end to end on the offline engine on 2026-10-16 and works without an API key. The live model (DeepSeek)
-was run on the same suites on 2026-10-17 (118 / 119 tasks, 79 / 79 attacks); with it, reply wording differs but the
+was run on the same suites on 2026-10-18 (128 / 131 tasks, 86 / 86 attacks); with it, reply wording differs but the
 cards, tiers, PIN and approvals are the same. The header shows which engine is answering.
 
-<!-- counts: tests=759, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854; also spoken at video 4:40, outline item 4, Q12, Q13 -->
-**Numbers to quote (offline engine):** 119 / 119 scripted tasks, 79 / 79 attacks blocked, 759 automated tests,
-24 agent tools (none can execute, approve, unlock or change limits), classifier macro F1 0.854.
+<!-- counts: tests=899, tasks=131, attacks=86 (induced 30, extraction 11, escalation 24, injection 21), guard-flagged=62, tools=26, f1=0.854; also spoken at video 4:40, outline item 4, Q12, Q13 -->
+**Numbers to quote (offline engine):** 131 / 131 scripted tasks, 86 / 86 attacks blocked, 899 automated tests,
+26 agent tools (none can execute, approve, unlock or change limits), classifier macro F1 0.854.
 
 ## Before recording
 
@@ -43,7 +43,7 @@ cards, tiers, PIN and approvals are the same. The header shows which engine is a
 | 3:40 | Aisha · Assistant | Type: `冻结我的账户` | **Freeze**: payments locked, reply in Chinese. Dad's phone shows the alert and the lock; every card shows FROZEN. "She can unlock her own money in the Wallet. What Dad funds stays locked until he unlocks it with his PIN. There is no unlock tool for the AI." |
 | 4:00 | Header, then Ledger | Tap **EN**. Open **Ledger** | "Chain verified, N entries." Tap any entry → "EDITED #N · DETECTED AT #N", that row in red. "Every step you just saw is in this hash chain." |
 | 4:20 | Aisha · Assistant | **One unscripted question.** Ask someone who has not seen the engine to type one money question, and keep whatever happens | Usually an answer with a card; otherwise a clarifying question or a short menu. Say: "It never guesses with money: anything it drafts still waits for her tap, and Dad above the limits." |
-| 4:40 | | "86 of 86 attacks blocked, 131 of 131 tasks, 809 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
+| 4:40 | | "86 of 86 attacks blocked, 131 of 131 tasks, 899 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
 
 Timing notes: steps 2:05 to 2:55 rely on the 20-second demo settlement; if it is still in transit at 2:55,
 say "still on its way" and come back to it after the credit card. The lock at 3:40 stays on, so do it last
@@ -88,7 +88,7 @@ before running it again.
 3. **Live demo (3.5 min).** The video flow above, cut down: forecast → shortfall conversion with compliance checks → tuition at T3 → Dad approves with the PIN → money request, Dad picks the cheapest service, in transit → credited → 中文 toggle and the Chinese scam check → freeze → Ledger tamper check → one question from the panel.
 4. **How it is secure (2 min).** One diagram: the model drafts; the policy engine sets the tier; the compliance layer screens; the app confirms with a token the model never sees; the sponsor approves on his own device with a server-checked PIN; the bank re-checks at execution. Tiers T0 to T4. Results: 86 / 86 attacks (30 induced transfer, 11 extraction, 24 escalation, 21 injection), the compromised-model tests, the hash-chained audit log.
 5. **What we built ourselves (1 min).** The policy engine, the compliance layer, the remittance flow, our scam and injection classifier (macro F1 0.854, explainable, multilingual), the offline engine, the true-cost FX maths, taint tracking, tool-sourced cards.
-6. **Honest status and next steps (1.5 min).** Measured on both engines (offline 119 / 119; live DeepSeek 118 / 119, 79 / 79 attacks on each); compliance implemented in the sandbox, production through licensed partners; the student's Confirm has no server-side factor yet (passkeys next); a held-out evaluation set is still to do. Deployment: runs without Google services or CDNs, offline fallback, Hong Kong or Singapore hosting.
+6. **Honest status and next steps (1.5 min).** Measured on both engines (offline 131 / 131; live DeepSeek 128 / 131, 86 / 86 attacks on each); compliance implemented in the sandbox, production through licensed partners; the student's Confirm has no server-side factor yet (passkeys next); a held-out evaluation set is still to do. Deployment: runs without Google services or CDNs, offline fallback, Hong Kong or Singapore hosting.
 
 ## The 14 hardest questions, with answers
 
@@ -96,7 +96,7 @@ before running it again.
 We don't have a held-out number yet, and we say so. The suites show that every gap a reviewer found stays closed; they don't measure unseen wording. The offline engine is a fallback that asks or refuses when unsure, and nothing it misroutes can move money without her tap, plus Dad above the limits. Next step: a held-out set written by someone who has not seen the engine, run on both the offline engine and DeepSeek.
 
 **2. "Show me the AI. Your header says offline."**
-Both. DeepSeek (`deepseek-flash`) plans and calls the tools through an OpenAI-compatible client; on 2026-10-17 it passed 118 of 119 scripted tasks and all 79 attacks (`evidence/deepseek/`). The deterministic offline engine is the default in the repo and the fallback when the network drops, and it passes 119 of 119. The design point is that the model is untrusted either way: whichever model plans, the policy engine, the token and Dad's PIN decide. Live demo: ask one question on DeepSeek, then pull the network to show the offline fallback finishing the turn.
+Both. DeepSeek (`deepseek-flash`) plans and calls the tools through an OpenAI-compatible client; on 2026-10-18 it passed 128 of 131 scripted tasks and all 86 attacks (`evidence/deepseek/`). The deterministic offline engine is the default in the repo and the fallback when the network drops, and it passes 131 of 131. The design point is that the model is untrusted either way: whichever model plans, the policy engine, the token and Dad's PIN decide. Live demo: ask one question on DeepSeek, then pull the network to show the offline fallback finishing the turn.
 
 **3. "A student's chat goes to DeepSeek, a mainland provider. PIPL, PIPEDA, PDPA?"**
 With the default offline engine nothing leaves the server. With a cloud model, the provider gets the text she types and tool results with account numbers masked; never tokens, the PIN, full numbers, compliance records or any of Dad's data, and the audit log stores no message text. The provider is a setting: Qwen's international endpoint (Singapore) or a self-hosted open-weight model for users who don't consent to mainland processing. Production adds a consent screen naming the provider and country and a data-processing agreement with zero or short retention (security self-assessment §7).
