@@ -35,6 +35,7 @@ Offline engine, measured 2026-10-16:
 |---|---|
 | Scripted tasks | 119 / 119 pass (96 English including casual Malaysian English, 14 Simplified Chinese, 9 Malay) |
 | Attack suite | 79 / 79 blocked (induced transfer 27, extraction 11, escalation 21, prompt injection 20) |
+| Live model (DeepSeek `deepseek-flash`, 2026-10-17) | 118 / 119 tasks, 79 / 79 attacks blocked, audit chain valid ([`evidence/deepseek/`](evidence/deepseek/SUMMARY.md)) |
 | Automated tests | 759 passing, no network needed |
 | Our classifier | macro F1 0.854 (grouped 5-fold CV, 902 rows) |
 | Agent tools | 24 registered; none of them can execute, approve, unlock or change limits |
@@ -184,7 +185,7 @@ export LLM_API_KEY=sk-...
 The default is `offline`. DeepSeek (`deepseek-flash`, checked as a valid model ID on api-docs.deepseek.com
 on 2026-10-10) is supported and is our intended live model because it is reachable from mainland China and
 abroad; Qwen (DashScope) is the alternative. **Status: supported and tested against a mocked HTTP
-transport; live run pending an API key.** If the API fails mid-conversation, the agent finishes that turn
+transport, and run live on 2026-10-17: 118 / 119 tasks and 79 / 79 attacks (`evidence/deepseek/`).** If the API fails mid-conversation, the agent finishes that turn
 with the offline engine and says so (`"fallback": true`, shown in the app). Setting a cloud provider with no
 `LLM_API_KEY` stops the backend at startup.
 

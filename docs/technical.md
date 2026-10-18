@@ -151,7 +151,7 @@ whatever `LLM_PROVIDER` is, and `get_data_sharing` reports that engine. Tests: `
 | `LLM_PROVIDER` | Base URL | Model | Notes |
 |---|---|---|---|
 | `offline` (**default**) | none | none | Deterministic planner. Every number in §7 is measured on it. |
-| `deepseek` (intended live model) | `https://api.deepseek.com` | `deepseek-flash` | Model ID checked on api-docs.deepseek.com on 2026-10-10. Reachable from mainland China and abroad. Thinking mode off by default (`LLM_THINKING=1` enables it). **Supported; live run pending an API key.** |
+| `deepseek` (live model) | `https://api.deepseek.com` | `deepseek-flash` | Model ID checked on api-docs.deepseek.com on 2026-10-10. Reachable from mainland China and abroad. Thinking mode off by default (`LLM_THINKING=1` enables it). **Run live 2026-10-17: 118 / 119 tasks, 79 / 79 attacks (`evidence/deepseek/`).** |
 | `deepseek-pro` | same | `deepseek-v4-pro` | For harder multi-step planning. Model ID not yet checked |
 | `qwen` / `qwen-cn` | DashScope compatible mode (international, Singapore / mainland) | `qwen-plus` | Alternative provider; not yet run live |
 | `custom` | `LLM_BASE_URL` | `LLM_MODEL` | Any OpenAI-compatible endpoint, including a self-hosted open-weight model |
@@ -390,7 +390,7 @@ Several attacks show defence in depth: the limit-splitting attack (A04) passes t
 
 **Mainland China considerations.**
 
-- Default provider: the offline engine (no network). Intended live provider: DeepSeek, reachable from mainland China; Qwen (DashScope, Singapore or mainland endpoint) as the alternative. Live run pending an API key.
+- Default provider: the offline engine (no network). Live provider: DeepSeek (run on the full suites 2026-10-17); Qwen (DashScope, Singapore or mainland endpoint) as the alternative, not yet run live.
 - Fonts are bundled from npm packages into the build. The app uses no Google Fonts CDN, Google Maps, Firebase or analytics, and loads nothing from a CDN at runtime. The exported web build (`npm run build:web`, `app/dist`) is 1.4 MB in total, measured 2026-10-16.
 - FX rates come from a local snapshot, not an external rate API.
 - Suggested hosting for the live demo: a small Alibaba Cloud or Tencent Cloud instance in Hong Kong or Singapore, reachable from both mainland China and Canada.
@@ -406,7 +406,7 @@ Several attacks show defence in depth: the limit-splitting attack (A04) passes t
 - **Sandbox only.** A real deployment needs a licensed partner bank or money-services business (FINTRAC registration in Canada; Bank Negara Malaysia rules on outward remittance), KYC, and real payment rails.
 - **Authentication** is static bearer tokens for the demo. On Android and iOS the app already asks for Face ID, a fingerprint or the device passcode before Confirm and Approve (`app/src/stepUp.ts`, using `expo-local-authentication`); this is a client-side check. The sponsor's Approve, Unlock and limit changes also need a PIN checked on the server; the student's Confirm does not yet. Production would use passkeys verified on the server for both, and push notifications to the sponsor.
 - **Compliance** is implemented in the sandbox, not licensed: the watchlist is a fictional sample, KYC levels are seeded, and EFTR or structuring flags are shown and audited but not filed (see §6 of the security self-assessment).
-- **Live model.** DeepSeek is supported but has not been run live; all measured results are for the offline engine. The offline engine can still misroute phrasings it has not seen; when unsure it asks or falls back to the closest intent, and questions never draft payments.
+- **Live model.** DeepSeek passes 118 of 119 tasks; the miss is intermittent (it sometimes looks up a payee and balance and stops before drafting), and live wording varies run to run, so the harness checks tools, drafts, tiers and final state rather than wording. The offline engine can still misroute phrasings it has not seen; when unsure it asks or falls back to the closest intent, and questions never draft payments.
 - **State.** The bank, pending actions and the draft rate-limit window share one SQLite database (`HB_DB`, in memory by default). With a file path, a restart keeps balances and drafts together: drafts awaiting the student or the sponsor, their expiry, sponsor decisions and the hourly draft count all reload. Only the hash of each confirmation token is stored, so after a restart a draft can be confirmed only by the app that still holds its token. Execution writes an "executing" marker first; a draft interrupted mid-execution reloads as failed, never as executable again. Chat history and the per-minute chat limit are still in memory. Production would use a transactional database shared by all instances, with the same invariants.
 - **FX rates** are a snapshot with modelled spreads. Production would use live quotes and lock the quoted rate on the draft.
 - **Classifier** is small and trained on our own data. It is a second opinion by design, never a gate. A larger multilingual dataset and periodic retraining from reported scams would improve recall.
