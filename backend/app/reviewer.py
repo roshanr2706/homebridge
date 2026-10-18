@@ -264,7 +264,8 @@ class Reviewer:
         """True when this student's requests are reviewed by the configured model (else: rules)."""
         provider = self.st.agent.provider
         return (self.st.settings.reviewer_model and hasattr(provider, "complete_json")
-                and not user_prefs.offline_only(self.st.bank, owner) and self.st.agent.breaker.allow())
+                and not user_prefs.offline_only(self.st.bank, owner, getattr(provider, "name", "offline"))
+                and self.st.agent.breaker.allow())
 
     def model(self, f: Dict[str, Any], lang: str, name: str) -> Dict[str, Any]:
         payload = json.dumps(f, ensure_ascii=False, default=str)

@@ -438,6 +438,8 @@ export type Me = {
   model_route: ModelRoute;
   sharing?: Sharing;
   chat_engine?: string;
+  // Her consent names a different provider or region than the server's current one: chat stays offline until she reviews it.
+  consent_stale?: boolean;
 };
 export type OnboardingIn = {
   display_name: string;
@@ -445,7 +447,7 @@ export type OnboardingIn = {
   skin: SkinName;
   consents: { sponsor_sharing?: boolean; ai_processing?: boolean; offline_only?: boolean; sponsor_terms?: boolean };
 };
-export type PrefsIn = Partial<Pick<Prefs, 'display_name' | 'language' | 'skin'>> & { offline_only?: boolean };
+export type PrefsIn = Partial<Pick<Prefs, 'display_name' | 'language' | 'skin'>> & { offline_only?: boolean; ai_consent?: boolean };
 
 // Smart inbox (backend/app/inbox.py): incoming messages, triaged by HomeBridge the moment they arrive.
 export type InboxVerdict = 'scam' | 'bill' | 'info' | 'personal';

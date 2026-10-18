@@ -108,6 +108,7 @@ class PrefsIn(BaseModel):
     language: Optional[str] = Field(None, pattern="^(en|zh)$")
     skin: Optional[str] = Field(None, pattern="^(neo|superapp)$")
     offline_only: Optional[bool] = None
+    ai_consent: Optional[bool] = None   # student: agree to the current provider after it changed
 
 
 # Audit events the sponsor never sees (the student's chat and tool use), and ones the student never sees
@@ -296,7 +297,9 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
                "model_route": user_prefs.route(_provider())}
         if who[1] == "student":
             out["sharing"] = SHARING
-            out["chat_engine"] = "offline" if user_prefs.offline_only(st.bank, who[0]) else _provider()
+            out["chat_engine"] = "offline" if user_prefs.offline_only(st.bank, who[0], _provider()) else _provider()
+            # Her consent names another provider or region than the server's current one: Settings asks her to review.
+            out["consent_stale"] = user_prefs.consent_stale(st.bank, who[0], _provider())
         return out
 
     @app.get("/me")
@@ -318,7 +321,8 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         """Later changes from Settings: look, language, display name, and (student) offline engine only."""
         try:
             user_prefs.update(st.bank, st.audit, who[0], who[1], _provider(), display_name=body.display_name,
-                              language=body.language, skin=body.skin, offline=body.offline_only)
+                              language=body.language, skin=body.skin, offline=body.offline_only,
+                              ai_consent=body.ai_consent)
         except user_prefs.PrefsError as e:
             raise HTTPException(400, str(e))
         return _me(who)

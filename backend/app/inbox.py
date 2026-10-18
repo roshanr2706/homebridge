@@ -556,7 +556,7 @@ def receive(st: Any, owner: str, sender: str, channel: str, text: str, sample: s
 
     enhancer = None
     from .prefs import offline_only   # local: prefs imports bank only, but keep the import light
-    if not offline_only(bank, owner):
+    if not offline_only(bank, owner, getattr(getattr(st.agent, "provider", None), "name", "offline")):
         enhancer = model_enhancer(getattr(st.agent, "provider", None))
     tri = triage(bank, owner, today, sender, channel, text, enhancer)
     m = get(bank, owner, mid)

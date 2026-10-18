@@ -297,8 +297,10 @@ class Agent:
         # Flags carry for CARRY_TURNS turns, and only strong ones (see guard.GuardResult.strong).
         earlier = [m["_taint"] for m in history if m.get("_taint")]
         # The person chose "offline engine only" at onboarding or in Settings (or declined cloud processing):
-        # their chat stays on the built-in engine whatever the server is configured with.
-        provider = self.offline() if prefers_offline(self.bank, user_id) else self.provider
+        # their chat stays on the built-in engine whatever the server is configured with. So does chat before she
+        # has onboarded, or when her consent names another provider or region than the current one (prefs.py).
+        provider = self.offline() if prefers_offline(self.bank, user_id, getattr(self.provider, "name", "offline")) \
+            else self.provider
         live = provider is self.provider and getattr(provider, "name", "offline") != "offline"
         live_model = str(getattr(provider, "model", "") or "") if live else ""
         fallback, fallback_reason = False, None

@@ -269,9 +269,9 @@ All endpoints except `/health` take `Authorization: Bearer <token>`. Demo tokens
 | Method | Path | Role | Body / query | Purpose |
 |---|---|---|---|---|
 | GET | `/health` | none | | Provider, demo mode, pinned date |
-| GET | `/me` | any | | Who the token belongs to, its role, saved `prefs` (display name, language, skin, `onboarded_at`, consents) and where chat would be processed (`model_route`) |
+| GET | `/me` | any | | Who the token belongs to, its role, saved `prefs` (display name, language, skin, `onboarded_at`, consents) and where chat would be processed (`model_route`); for the student, the engine her chat actually uses (`chat_engine`) and `consent_stale` when her consent names a different provider or region than the current one |
 | POST | `/me/onboarding` | any (own token only) | `display_name`, `language` (`en`/`zh`), `skin` (`neo`/`superapp`), `consents` | First-run setup; student must agree to sponsor sharing and to cloud processing or choose `offline_only`; sponsor must acknowledge the PIN terms. Audited as `consent_recorded` and `prefs_updated` |
-| POST | `/me/prefs` | any (own token only) | any of `display_name`, `language`, `skin`, `offline_only` (student) | Later changes from Settings |
+| POST | `/me/prefs` | any (own token only) | any of `display_name`, `language`, `skin`, `offline_only` (student), `ai_consent` (student: agree to the current provider after it changed) | Later changes from Settings |
 | POST | `/chat` | student | `{"message", "session_id"}` | Reply, cards, drafted actions, guard flags, tool trace (30 messages a minute per owner) |
 | GET | `/overview` | student | | Wallet: balances, tuition, budget, credit, payees, pending items, limits, lock state, KYC, sharing scope |
 | GET | `/forecast` | student | `?until=next_tuition` (or `end_of_term`, a month, a date) | Runway card |
@@ -308,7 +308,7 @@ All endpoints except `/health` take `Authorization: Bearer <token>`. Demo tokens
 | POST | `/demo/inbox` | any | `{"sample"}` or `{"text", "sender", "channel"}`, header `X-Operator` | Deliver a message to Aisha's inbox (samples: `scam_cra_giftcards`, `scam_parcel_police_zh`, `scam_landlord_new_account`, `bill_bchydro`, `bill_northline`, `tuition_reminder_ubc`, `dad_whatsapp_ms`, `job_scam_fee`); triaged on arrival. Demo mode and the operator token only |
 | GET | `/demo/inbox/samples` | any | | The sample library's keys and labels (for the stage menu) |
 | POST | `/demo/time_skip` | any | `{"days"}` or `{"to": "tuition_week"}`, header `X-Operator` | Move the sandbox's date forward (the routine moves with it; tuition dates stay), then run the autopilot. Demo mode and the operator token only; a reset restores the pinned date |
-| POST | `/demo/reset` | any | header `X-Operator: <HB_OPERATOR_TOKEN>` | Reset the sandbox (including everyone's onboarding); only with `HB_DEMO_MODE=1` **and** the operator token |
+| POST | `/demo/reset` | any | header `X-Operator: <HB_OPERATOR_TOKEN>`; optional `{"keep_onboarding": true}` | Reset the sandbox (including everyone's onboarding, unless `keep_onboarding`: the Demo menu's default "Reset (keep setup)"); only with `HB_DEMO_MODE=1` **and** the operator token |
 | GET | `/` | none | | The exported web app, when `app/dist` exists |
 
 Remittances have no endpoints of their own: a money request is an action that the sponsor approves through
