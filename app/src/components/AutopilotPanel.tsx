@@ -339,7 +339,9 @@ export function AutopilotPanel({ role, active, feed: given, reload }: PanelProps
           </Mono>
         </Row>
         <Body style={{ fontSize: 12.5, color: t.muted, lineHeight: 18 }}>{tr(role === 'student' ? 'ap.introStudent' : 'ap.introSponsor')}</Body>
-        {live.length === 0 && <Body style={{ fontSize: 13 }}>{tr(role === 'student' ? 'ap.empty' : 'ap.emptySponsor')}</Body>}
+        {live.length === 0 && (
+          <Body style={{ fontSize: 13 }}>{tr(ended.length ? 'ap.noneActive' : role === 'student' ? 'ap.empty' : 'ap.emptySponsor')}</Body>
+        )}
         {live.map((m, i) => (
           <View key={m.id}>
             {i > 0 && <Divider />}
