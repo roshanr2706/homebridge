@@ -505,3 +505,35 @@ def test_time_skip_after_a_rate_move_resets_the_rate_and_the_tuition_guard_acts(
     client.post("/demo/fx_shift", json={"delta": 0.002}, headers={**S, **OP})
     assert client.post("/demo/reset", headers={**S, **OP}).status_code == 200
     assert st.fx.overrides == {}
+
+
+# ------------------------------------------------------------------ offline phrasings (review A5/A6)
+@pytest.mark.parametrize("text", ["what autopilots do I have?", "list my mandates", "is my rate watch on?",
+                                  "which mandates are active?", "我有哪些自动规则", "我的自动驾驶有哪些？"])
+def test_offline_engine_lists_mandates_for_status_questions(st, text):
+    active(st, "rate_watch", target_rate=0.3250)
+    r = st.agent.run(STUDENT, "student", "s", text)
+    assert [t["tool"] for t in r.trace] == ["list_mandates"] and not r.actions
+    assert ("Rate watch (on)" in r.reply) or ("汇率监控 (已启用)" in r.reply)
+
+
+@pytest.mark.parametrize("text", ["turn off rate watch", "stop the rate watch", "pause my rate watch",
+                                  "stop the autopilot", "revoke my autopilot", "关闭汇率监控", "暂停自动规则"])
+def test_turning_a_mandate_off_in_chat_explains_where_and_never_proposes(st, text):
+    m = active(st, "rate_watch", target_rate=0.3250)
+    r = st.agent.run(STUDENT, "student", "s", text)
+    tools_used = [t["tool"] for t in r.trace]
+    assert tools_used == ["list_mandates"] and "propose_mandate" not in tools_used and not r.actions
+    assert ("only he can pause or revoke" in r.reply and "Wallet" in r.reply) or \
+        ("只有他能在自己的应用里暂停或撤销" in r.reply and "钱包" in r.reply)
+    assert st.policy.autopilot.get(m["id"])["status"] == "active"   # nothing changed
+    assert len(st.policy.autopilot.mandates(STUDENT)) == 1
+
+
+def test_zh_feed_translates_the_policy_reason(st):
+    active(st, "tuition_guard", days_before=95, amount=3000)
+    st.policy.limits.single_cad = 1000
+    [d] = st.policy.autopilot.run(TODAY)
+    assert d["outcome"] == "escalated" and "Converts more than" in d["text"]["en"]
+    zh = d["text"]["zh"]
+    assert "Converts" not in zh and "sponsor money" not in zh and "24 小时内兑换的担保人资金超过 CAD 1,000" in zh

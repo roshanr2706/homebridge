@@ -749,7 +749,8 @@ class Autopilot:
         elif a.kind != "topup":
             if a.tier == "T3" or a.needs_sponsor:
                 reason = (a.sponsor_reasons or a.risk_reasons or ["needs the sponsor"])[0]
-                why.append(both("why.tier", reason=reason))
+                why.append({"en": tx("why.tier", "en", reason=reason),
+                            "zh": tx("why.tier", "zh", reason=i18n.reason(reason, "zh"))})
             if (a.compliance or {}).get("outcome", "clear") != "clear":
                 why.append(both("why.compliance"))
 

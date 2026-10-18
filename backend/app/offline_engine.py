@@ -132,16 +132,27 @@ def _action_text(a: Dict[str, Any], lang: str = "en") -> str:
 
 
 # Autopilot (mandates): "convert automatically when the rate is good", "自动交电费", "bayar bil secara automatik"
-AUTO_RE = (r"\bauto-?pilot\b|\bautomatic(ally)?\b|\bauto-?pay\b|\bmandates?\b|\bauto-?(convert|top ?up)\b|"
-           r"\bautomatik\b|自动|自動|rate watch|tuition guard|"
+AUTO_RE = (r"\bauto-?pilots?\b|\bautomatic(ally)?\b|\bauto-?pay\b|\bmandates?\b|\bauto-?(convert|top ?up)\b|"
+           r"\bautomatik\b|自动|自動|rate watch|tuition guard|汇率监控|学费保障|学费守护|"
            # "convert when the rate is good", "convert once the rate hits 0.33": a standing order, not a conversion now
            r"\b(convert|change|exchange|tukar)\b.{0,30}\b(when(ever)?|once|if|bila) (the )?(rate|kadar) "
            r"(is|gets|hits|reaches|goes|bagus|baik|naik)\b|汇率好的时候|汇率(到|达到).{0,12}(换|兑换)")
 AUTO_LIST_RE = (r"what (did|has) (the |my )?auto-?pilot (do|done)|auto-?pilot (activity|history|log|did|done)|"
-                r"(show|list|see|check|view) (me )?(my |the )?(auto-?pilot|mandates)|my (auto-?pilot|mandates)\b|"
-                r"^(auto-?pilot|mandates)\??$|is my (rate watch|tuition guard|auto-?pay|auto-?pilot)|"
-                r"自动.{0,6}(做了什么|干了什么|记录|有哪些|做了啥)|我的自动|auto-?pilot (buat|dah buat|telah buat) apa|"
-                r"apa (yang )?auto-?pilot")
+                r"(show|list|see|check|view) (me )?(all )?(my |the )?(auto-?pilots?|mandates)|my (auto-?pilots?|mandates)\b|"
+                r"^(auto-?pilots?|mandates)\??$|is my (rate watch|tuition guard|auto-?pay|auto-?pilot)|"
+                r"\b(what|which) (auto-?pilots?|mandates|automatic rules|rules) (do i have|have i got|are (on|active|set "
+                r"up|there|running))|\b(do|have) i (have|got|set up) (any )?(auto-?pilots?|mandates)|"
+                r"\bare (any of )?my (auto-?pilots?|mandates)\b|"
+                r"自动.{0,6}(做了什么|干了什么|记录|有哪些|做了啥)|我的自动|有哪些自动|自动规则|"
+                r"(汇率监控|学费保障|学费守护).{0,4}(开着|开了|在运行|是否|吗)|"
+                r"auto-?pilot (buat|dah buat|telah buat) apa|apa (yang )?auto-?pilot")
+# "Turn off / stop / pause / revoke the rate watch": only the app can, and the model never treats it as a proposal.
+AUTO_STOP_RE = (r"\b(turn(ing)? off|switch(ing)? off|shut off|stop|pause|cancel|revoke|disable|end|delete|remove|kill|"
+                r"deactivate|get rid of)\b.{0,30}\b(auto-?pilots?|mandates?|rate watch|tuition guard|auto-?pay|"
+                r"automatic (rules?|conversions?|payments?))\b|"
+                r"\b(auto-?pilots?|mandates?|rate watch|tuition guard|auto-?pay)\b.{0,15}\b(off|stop|pause)\b|"
+                r"(关闭|关掉|停止|停掉|暂停|取消|撤销|关了).{0,8}(自动|汇率监控|学费保障|学费守护|授权|规则)|"
+                r"(matikan|hentikan|batalkan|jeda).{0,20}(autopilot|mandat)")
 
 
 # Smart inbox (inbox.py): "anything suspicious in my messages?", "收到的短信有没有诈骗？", "ada mesej penipuan dalam
@@ -1094,8 +1105,10 @@ class OfflineEngine:
         if re.match(r"\s*(should i|is it|would it|do you think|is now|is this a good)\b", raw):
             return None   # advice about timing ("should I convert when the rate is good?"), not a standing order
         L = self._lang
+        stop = bool(re.search(AUTO_STOP_RE, raw))
         if "list_mandates" in done:
-            return _say(self._mandates_reply(_result(res, "list_mandates")))
+            r = _result(res, "list_mandates")
+            return _say(self._mandates_stop_reply(r) if stop else self._mandates_reply(r))
         if "propose_mandate" in done:
             r = _result(res, "propose_mandate")
             m = r["mandate"]
@@ -1105,7 +1118,7 @@ class OfflineEngine:
                 return _say(self._t("ap_already", label=label, desc=desc))
             return _say(self._t("ap_proposed_sponsor" if m["granted_by"] == "sponsor" else "ap_proposed_student",
                                 label=label, desc=desc))
-        if re.search(AUTO_LIST_RE, raw):
+        if stop or re.search(AUTO_LIST_RE, raw):
             return _call("list_mandates")
         # Pointing autopilot at an account number, a person or "send money every day": not something it can do.
         if re.search(r"\b\d{4}-\d{4}-\d{4}\b|\b\d{8,16}\b|\b(this|that|his|her|their|new|another|an?) (account|acct)\b|"
@@ -1164,6 +1177,18 @@ class OfflineEngine:
                 args["amount"] = amt
             return "low_balance_topup", args
         return None, {}
+
+    def _mandates_stop_reply(self, r: Dict[str, Any]) -> str:
+        """'Turn off the rate watch': where she can pause or revoke it (the app), never a new proposal."""
+        L = self._lang
+        live = [m for m in r.get("mandates", []) if m["status"] in ("active", "paused", "proposed")]
+        def names(ms):
+            return i18n.comma(L).join(f"{m.get('label_i18n', {}).get(L, m['label'])} "
+                                      f"({self._t('ap_status_' + m['status'])})" for m in ms)
+        dad = [m for m in live if m["granted_by"] == "sponsor"]
+        mine = [m for m in live if m["granted_by"] != "sponsor"]
+        return self._t("ap_stop", mandates=names(live) or self._t("ap_none_short"),
+                       dad=names(dad) or self._t("ap_none_short"), mine=names(mine) or self._t("ap_none_short"))
 
     def _mandates_reply(self, r: Dict[str, Any]) -> str:
         L = self._lang
