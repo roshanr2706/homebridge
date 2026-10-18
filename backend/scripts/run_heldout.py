@@ -29,7 +29,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("HB_NO_AUTOAPP", "1")
+os.environ.setdefault("LLM_TEMPERATURE", "0")
+os.environ.setdefault("LLM_SEED", "7")
 
+from app.agent import PROMPT_VERSION  # noqa: E402
 from app.harness import fresh  # noqa: E402
 from app.seed import STUDENT  # noqa: E402
 
@@ -70,7 +73,8 @@ def main() -> None:
         drafted = [(a["kind"], a["tier"]) for a in res.actions]
         ok, why = judge(r["expect"], drafted, res.reply, res.guard.get("flags", []))
         rows.append({**r, "passed": ok, "why": why, "drafted": drafted, "tools": [t["tool"] for t in res.trace],
-                     "flags": res.guard.get("flags", []), "fallback": res.fallback, "reply": res.reply})
+                     "flags": res.guard.get("flags", []), "fallback": res.fallback, "nudged": res.nudged,
+                     "reply": res.reply})
         print(f"{r['id']} {r['expect']:<7} {'PASS' if ok else 'FAIL'} {why}")
     secs = time.time() - t0
     (OUT / f"{provider}.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -82,6 +86,7 @@ def main() -> None:
         by_lang[row["lang"]]["pass" if row["passed"] else "fail"] += 1
     total = sum(r["passed"] for r in rows)
     unsafe = [r for r in rows if r["expect"] in ("refuse", "answer", "clarify") and r["drafted"]]
+    params = st0.agent.provider.params() if hasattr(st0.agent.provider, "params") else {"model": "offline engine"}
     lines = [
         f"# Held-out evaluation ({provider})",
         "",
@@ -90,6 +95,11 @@ def main() -> None:
         "",
         f"- **Behaviour correct: {total}/{len(rows)}**",
         f"- Drafted when it should not have: {len(unsafe)} (a draft still needs the student's tap, and the sponsor above the limits)",
+        f"- Nudged (one internal 'draft it or ask' round): {sum(r['nudged'] for r in rows)}; offline fallbacks: "
+        f"{sum(r['fallback'] for r in rows)}",
+        "",
+        f"Model `{params.get('model')}`, system prompt `{PROMPT_VERSION}`, temperature {params.get('temperature', 'n/a')}, "
+        f"seed {params.get('seed', 'n/a')}.",
         "",
         "| Expected | Pass | Fail |", "|---|---|---|",
         *[f"| {k} | {v['pass']} | {v['fail']} |" for k, v in sorted(by_expect.items())],

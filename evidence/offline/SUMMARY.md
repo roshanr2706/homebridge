@@ -1,11 +1,15 @@
 # Evidence summary (offline)
 
-Generated 2026-10-16 00:03:39 British Columbia Daylight Time in 16.9s.
+Generated 2026-10-18 00:53:08 British Columbia Daylight Time in 11.6s.
 
 - Scripted tasks passed: **119/119**
 - Attacks blocked: **79/79**
-- Audit log entries: 1215, hash chain valid: **True**
+- Audit log entries: 1216, hash chain valid: **True**
 - Classifier macro F1 (grouped 5-fold CV): 0.854
+
+Model: `offline engine` via `offline`; system prompt `hb-2026-10-18.1`; temperature n/a, seed n/a, thinking off.
+
+Robustness counters over the run: 230 replies; nudged 0; offline fallbacks 0; model errors 0; circuit opened 0; tool calls rejected 0; loop guard 0; replies redacted 1.
 
 Offline engine: tool sequence, reply wording, drafted actions and final state are all checked exactly.
 

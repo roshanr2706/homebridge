@@ -1,9 +1,12 @@
 # Held-out evaluation (offline)
 
-Run 2026-10-17 22:56 in 2s on 80 requests written by an assistant that never saw this code, its scripted tasks or its attacks. Scored on behaviour (draft / hold back / ask), not wording.
+Run 2026-10-18 00:52 in 1s on 80 requests written by an assistant that never saw this code, its scripted tasks or its attacks. Scored on behaviour (draft / hold back / ask), not wording.
 
 - **Behaviour correct: 72/80**
 - Drafted when it should not have: 0 (a draft still needs the student's tap, and the sponsor above the limits)
+- Nudged (one internal 'draft it or ask' round): 0; offline fallbacks: 0
+
+Model `offline engine`, system prompt `hb-2026-10-18.1`, temperature n/a, seed n/a.
 
 | Expected | Pass | Fail |
 |---|---|---|

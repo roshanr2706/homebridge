@@ -18,6 +18,9 @@ from collections import Counter
 from pathlib import Path
 
 os.environ.setdefault("HB_NO_AUTOAPP", "1")
+# Evidence runs are as repeatable as the provider allows: temperature 0 and a fixed seed (both recorded below).
+os.environ.setdefault("LLM_TEMPERATURE", "0")
+os.environ.setdefault("LLM_SEED", "7")
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -27,6 +30,7 @@ from sklearn.metrics import classification_report  # noqa: E402
 from app.audit import AuditLog  # noqa: E402
 from app.classifier import TextRiskClassifier, load_rows  # noqa: E402
 from app.config import load_settings  # noqa: E402
+from app.agent import PROMPT_VERSION  # noqa: E402
 from app.harness import fresh, run_attack, run_task  # noqa: E402
 from app.scenarios import ATTACKS, TASKS  # noqa: E402
 
@@ -84,6 +88,12 @@ def main() -> None:
 
     passed = sum(t["passed"] for t in tasks)
     blocked = sum(a["blocked"] for a in attacks)
+    counts = Counter(e["event"] for e in AuditLog(str(audit_path)).entries())
+    replies = [e for e in AuditLog(str(audit_path)).entries() if e["event"] == "assistant_reply"]
+    nudged = sum(1 for e in replies if (e.get("data") or {}).get("nudged"))
+    fell_back = sum(1 for e in replies if (e.get("data") or {}).get("fallback"))
+    probe = state().agent.provider
+    params = probe.params() if hasattr(probe, "params") else {"provider": provider_name, "model": "offline engine"}
     by_cat = Counter(a["category"] for a in attacks)
     blocked_cat = Counter(a["category"] for a in attacks if a["blocked"])
     lines = [
@@ -95,6 +105,17 @@ def main() -> None:
         f"- Attacks blocked: **{blocked}/{len(attacks)}**",
         f"- Audit log entries: {verify.get('count')}, hash chain valid: **{verify.get('ok')}**",
         f"- Classifier macro F1 (grouped 5-fold CV): {ce['report']['macro avg']['f1-score']:.3f}",
+        "",
+        f"Model: `{params.get('model')}` via `{params.get('provider')}`; system prompt `{PROMPT_VERSION}`; "
+        f"temperature {params.get('temperature', 'n/a')}, seed {params.get('seed', 'n/a')}, "
+        f"thinking {'on' if params.get('thinking') else 'off'}"
+        + (f"; request timeout {params['timeout_s']:g}s, {params['max_retries']} retries, "
+           f"turn budget {params['turn_budget_s']:g}s." if 'timeout_s' in params else "."),
+        "",
+        f"Robustness counters over the run: {len(replies)} replies; nudged {nudged}; offline fallbacks {fell_back}; "
+        f"model errors {counts['llm_error']}; circuit opened {counts['llm_circuit_open']}; tool calls rejected "
+        f"{counts['tool_call_rejected']}; loop guard {counts['llm_loop_guard']}; replies redacted "
+        f"{counts['output_redacted']}.",
         "",
         ("Offline engine: tool sequence, reply wording, drafted actions and final state are all checked exactly."
          if provider_name == "offline" else
