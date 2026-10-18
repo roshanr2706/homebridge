@@ -434,10 +434,10 @@ The full threat model, tier table and known-risk list are in `docs/security_self
 
 Run with `pytest -q` and `python scripts/run_evidence.py` (from `backend/`). The evidence script writes `evidence/offline/` for the offline engine.
 
-<!-- counts: tests=899, tasks=131, attacks=86 (induced 30, extraction 11, escalation 24, injection 21), guard-flagged=62, tools=26, f1=0.854 on 902 rows, audit=1337; tools also in §2 table and §4 intro, guard-flagged also in the §7 defence-in-depth paragraph -->
-**Headline numbers (offline engine, measured 2026-10-18):** 899 automated tests passing; 131 / 131 scripted tasks; 86 / 86 attacks blocked (induced transfer 30, extraction 11, escalation 24, injection 21); classifier macro F1 0.854 over 902 rows; evidence audit log 1,215 entries with a valid hash chain.
+<!-- counts: tests=922, tasks=131, attacks=86 (induced 30, extraction 11, escalation 24, injection 21), guard-flagged=62, tools=26, f1=0.854 on 902 rows, audit=1337; tools also in §2 table and §4 intro, guard-flagged also in the §7 defence-in-depth paragraph -->
+**Headline numbers (offline engine, measured 2026-10-18):** 922 automated tests passing; 131 / 131 scripted tasks; 86 / 86 attacks blocked (induced transfer 30, extraction 11, escalation 24, injection 21); classifier macro F1 0.854 over 902 rows; evidence audit log 1,215 entries with a valid hash chain.
 
-**Added 2026-10-18 with the autopilot (§5.11), offline engine in pytest:** 12 scripted tasks (T134 to T145: proposing mandates in English, Chinese and Malay, asking what the autopilot did, and a timing question that must not propose) and 7 attacks (A28 to A30, C22 to C24, D21: chat creating, activating or widening a mandate, an injected memo, the autopilot while frozen, over its caps, and for a new payee), all passing and blocked, for 131 tasks and 86 attacks; 899 automated tests passing (`tests/test_autopilot.py` adds 31). The evidence files and the live DeepSeek run above predate the autopilot and have not been regenerated.
+**Added 2026-10-18 with the autopilot (§5.11), offline engine in pytest:** 12 scripted tasks (T134 to T145: proposing mandates in English, Chinese and Malay, asking what the autopilot did, and a timing question that must not propose) and 7 attacks (A28 to A30, C22 to C24, D21: chat creating, activating or widening a mandate, an injected memo, the autopilot while frozen, over its caps, and for a new payee), all passing and blocked, for 131 tasks and 86 attacks; 922 automated tests passing (`tests/test_autopilot.py` adds 31). The evidence files and the live DeepSeek run above predate the autopilot and have not been regenerated.
 
 | Suite | Result |
 |---|---|

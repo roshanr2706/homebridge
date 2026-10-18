@@ -28,7 +28,7 @@ with a PIN checked on the server.
 
 ## Results
 
-<!-- counts: tests=899, tasks=131, attacks=86 (induced 30, extraction 11, escalation 24, injection 21), guard-flagged=62, tools=26, f1=0.854 on 902 rows, audit=1337 -->
+<!-- counts: tests=922, tasks=131, attacks=86 (induced 30, extraction 11, escalation 24, injection 21), guard-flagged=62, tools=26, f1=0.854 on 902 rows, audit=1337 -->
 Offline engine, measured 2026-10-18:
 
 | | |
@@ -37,7 +37,7 @@ Offline engine, measured 2026-10-18:
 | Attack suite | 86 / 86 blocked (induced transfer 30, extraction 11, escalation 24, injection 21) |
 | Held-out set (80 requests in EN / Malaysian English / Malay / 中文, written by an assistant that never saw this code) | DeepSeek 79 / 80, offline engine 72 / 80 correct behaviour; neither drafted anything it shouldn't ([`evidence/heldout/`](evidence/heldout/deepseek.md)) |
 | Live model (DeepSeek `deepseek-flash`, 2026-10-18) | 128 / 131 tasks, 86 / 86 attacks blocked, audit chain valid ([`evidence/deepseek/`](evidence/deepseek/SUMMARY.md)) |
-| Automated tests | 899 passing, no network needed |
+| Automated tests | 922 passing, no network needed |
 | Our classifier | macro F1 0.854 (grouped 5-fold CV, 902 rows) |
 | Agent tools | 26 registered; none of them can execute, approve, unlock, change limits or turn on an autopilot mandate |
 
