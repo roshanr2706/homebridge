@@ -128,6 +128,7 @@ export function LedgerScreen({ active, role }: { active: boolean; role: Role }) 
 
   return (
     <FlatList
+      showsVerticalScrollIndicator={false}
       data={entries}
       keyExtractor={(e) => String(e.seq)}
       ListHeaderComponent={header}

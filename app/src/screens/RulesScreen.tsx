@@ -5,7 +5,7 @@ import { api, type FreezeState } from '../api';
 import { PinEntry } from '../components/PinEntry';
 import { useT, type Key } from '../i18n';
 import { stepUp } from '../stepUp';
-import { fonts, money, useTheme } from '../theme';
+import { useFontSet, money, useTheme } from '../theme';
 import { useToast } from '../toast';
 import { Body, Button, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
@@ -18,6 +18,7 @@ const LOCKED_BY: Record<string, Key> = { sponsor: 'ru.lockedBy.sponsor', student
 // AI can lock (if Aisha asks) but has no way to unlock, and only the sponsor can unlock the money they fund.
 function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onChange: (f: FreezeState) => void }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
@@ -102,6 +103,7 @@ function EmergencyLock({ freeze, onChange }: { freeze: FreezeState | null; onCha
 
 function Stepper({ label, value, onChange, step, min, max }: { label: string; value: number; onChange: (v: number) => void; step: number; min: number; max: number }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const btn = (txt: string, d: number) => (
     <Pressable
@@ -136,6 +138,7 @@ function Stepper({ label, value, onChange, step, min, max }: { label: string; va
 
 export function RulesScreen({ active }: { active: boolean }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const toast = useToast();
   const [single, setSingle] = useState(1500);
@@ -188,7 +191,7 @@ export function RulesScreen({ active }: { active: boolean }) {
   };
 
   return (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 720, width: '100%', alignSelf: 'center' }}>
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, gap: 12, maxWidth: 720, width: '100%', alignSelf: 'center' }}>
       <View style={{ paddingVertical: 6 }}>
         <Display style={{ fontSize: 24 }}>{tr('ru.title')}</Display>
         <Body style={{ color: t.muted, fontSize: 13, marginTop: 2 }}>

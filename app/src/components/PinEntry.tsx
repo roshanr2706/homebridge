@@ -7,7 +7,7 @@ import { StyleSheet, TextInput, View } from 'react-native';
 import { DEMO_PIN_HINT } from '../api';
 import { useDemoMode } from '../hooks';
 import { useT } from '../i18n';
-import { fonts, useTheme } from '../theme';
+import { useFontSet, useTheme } from '../theme';
 import { Body, Button, Mono, Row } from '../ui';
 
 type Props = {
@@ -20,6 +20,7 @@ type Props = {
 
 export function PinEntry({ title, submitLabel, busy, onSubmit, onCancel }: Props) {
   const t = useTheme();
+  const fonts = useFontSet();
   const tr = useT();
   const demo = useDemoMode();
   const [pin, setPin] = useState('');

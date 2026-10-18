@@ -309,6 +309,34 @@ export type Verify = { ok: boolean; count: number; head?: string; broken_at?: nu
 export type AuditPage = { entries: AuditEntry[]; scope: Role; visible: number; total: number };
 export type Health = { ok: boolean; provider: string; demo_mode: boolean; today?: string };
 
+// Each person's app preferences and onboarding consents (backend/app/prefs.py).
+export type SkinName = 'neo' | 'superapp';
+export type Prefs = {
+  display_name: string;
+  language: 'en' | 'zh';
+  skin: SkinName;
+  onboarded_at: number | null;
+  consents: Record<string, { agreed?: boolean; value?: boolean; at?: number; provider?: string; region?: string }>;
+};
+// Where chat text is processed: the offline engine (nothing leaves the server) or a cloud model and its region.
+export type ModelRoute = { provider: string; label: string; region: string; leaves_server: boolean };
+export type Me = {
+  id: string;
+  role: Role;
+  name: string;
+  prefs: Prefs;
+  model_route: ModelRoute;
+  sharing?: Sharing;
+  chat_engine?: string;
+};
+export type OnboardingIn = {
+  display_name: string;
+  language: 'en' | 'zh';
+  skin: SkinName;
+  consents: { sponsor_sharing?: boolean; ai_processing?: boolean; offline_only?: boolean; sponsor_terms?: boolean };
+};
+export type PrefsIn = Partial<Pick<Prefs, 'display_name' | 'language' | 'skin'>> & { offline_only?: boolean };
+
 async function call<T>(role: Role, path: string, method = 'GET', body?: unknown, extra: Record<string, string> = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method,
@@ -327,6 +355,10 @@ export const api = {
   base: BASE,
   unreachable: UNREACHABLE,
   health: () => call<Health>('student', '/health'),
+  // Each call carries that person's own token: onboarding and prefs only ever change the caller's own record.
+  me: (role: Role) => call<Me>(role, '/me'),
+  onboard: (role: Role, body: OnboardingIn) => call<Me>(role, '/me/onboarding', 'POST', body),
+  savePrefs: (role: Role, body: PrefsIn) => call<Me>(role, '/me/prefs', 'POST', body),
   // Each chat in the app has its own session id ("New chat" makes a fresh one), so a flag in one chat
   // does not follow the student into the next. Rate limits are per account on the server, not per chat.
   chat: (message: string, session_id: string) => call<ChatResponse>('student', '/chat', 'POST', { message, session_id }),

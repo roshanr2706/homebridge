@@ -3,9 +3,10 @@ import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { accountNote, api, type Account, type Action, type Alert, type Digest, type FreezeState } from '../api';
 import { usePoll } from '../hooks';
+import { usePersonName } from '../account';
 import { ActionCard } from '../components/ActionCard';
 import { useT, type Key } from '../i18n';
-import { cityTime, fonts, money, useTheme } from '../theme';
+import { cityTime, splitAmount, useFontSet, money, useSkin, useTheme } from '../theme';
 import { useToast } from '../toast';
 import { Body, Display, Eyebrow, Mono, Pill, Row, Surface } from '../ui';
 
@@ -30,6 +31,7 @@ const ALERT_TITLE: Record<string, Key> = {
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: string }) {
   const t = useTheme();
+  const fonts = useFontSet();
   return (
     <View style={{ flex: 1, minWidth: 70 }}>
       <Mono style={{ fontFamily: fonts.monoBold, fontSize: 18, color: tone ?? t.text }}>{value}</Mono>
@@ -40,6 +42,9 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: str
 
 export function SponsorScreen({ active }: { active: boolean }) {
   const t = useTheme();
+  const { skin } = useSkin();
+  const name = usePersonName('Rahman bin Ismail');
+  const fonts = useFontSet();
   const tr = useT();
   const toast = useToast();
   const [queue, setQueue] = useState<Action[]>([]);
@@ -105,18 +110,57 @@ export function SponsorScreen({ active }: { active: boolean }) {
 
   return (
     <ScrollView
+      showsVerticalScrollIndicator={false}
       contentContainerStyle={{ padding: 16, gap: 10, maxWidth: 720, width: '100%', alignSelf: 'center' }}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} />}
     >
-      <View style={{ paddingVertical: 6 }}>
-        <Eyebrow>
-          {tr('city.kl')} · {cityTime('Asia/Kuala_Lumpur')}
-        </Eyebrow>
-        <Display style={{ fontSize: 26, marginTop: 2 }}>{tr('sp.welcome')}</Display>
-        <Body style={{ color: t.muted, fontSize: 13, marginTop: 2 }}>
-          {tr('sp.intro', { time: cityTime('America/Vancouver') })}
-        </Body>
-      </View>
+      {skin === 'superapp' ? (
+        // Super-app: the sponsor's orange header with the three numbers he checks first.
+        <View style={{ marginHorizontal: -16, marginTop: -16, backgroundColor: t.sponsorHeaderBg, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 }}>
+          <Row style={{ gap: 10 }}>
+            <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center', justifyContent: 'center' }}>
+              <Body style={{ color: t.headerText, fontFamily: fonts.bodyBold, fontSize: 16 }}>{name.slice(0, 1).toUpperCase()}</Body>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Body style={{ color: t.headerText, fontFamily: fonts.display, fontSize: 18, lineHeight: 23 }}>{tr('sa.dadGuard')}</Body>
+              <Body style={{ color: t.headerMuted, fontSize: 11.5, lineHeight: 15 }} numberOfLines={1}>
+                {name} · {tr('sa.sponsoring')} · {tr('city.kl')} {cityTime('Asia/Kuala_Lumpur')}
+              </Body>
+            </View>
+          </Row>
+          <Row style={{ marginTop: 14, alignItems: 'flex-start' }}>
+            {[
+              { k: tr('sa.herTotal'), v: money(total, '', 2).trim() },
+              { k: tr('sa.out24'), v: money(digest?.money_out_cad ?? 0, '', 0).trim() },
+              { k: tr('sa.queue'), v: String(queue.length) },
+            ].map((x) => (
+              <View key={x.k} style={{ flex: 1 }}>
+                <Body style={{ color: t.headerMuted, fontSize: 11, lineHeight: 15 }}>{x.k}</Body>
+                <Mono style={{ color: t.headerText, fontFamily: fonts.monoBold, fontSize: 20, marginTop: 2 }}>{x.v}</Mono>
+              </View>
+            ))}
+          </Row>
+        </View>
+      ) : (
+        // Neo: greeting, then the money he looks after as a big number with small dim cents.
+        <View style={{ paddingVertical: 6 }}>
+          <Eyebrow>
+            {tr('city.kl')} · {cityTime('Asia/Kuala_Lumpur')}
+          </Eyebrow>
+          <Display style={{ fontSize: 26, marginTop: 2 }}>{tr('sp.welcomeName', { name: name.split(' ')[0] })}</Display>
+          <Body style={{ fontSize: 11, letterSpacing: 1.1, color: t.faint, fontFamily: fonts.bodyBold, textTransform: 'uppercase', marginTop: 14 }}>
+            {tr('neo.funds')}
+          </Body>
+          <Row style={{ alignItems: 'flex-start', marginTop: 4 }}>
+            <Body style={{ fontFamily: fonts.bodyMedium, fontSize: 20, lineHeight: 28, color: t.muted, marginRight: 4, marginTop: 4 }}>$</Body>
+            <Body style={{ fontFamily: fonts.bodyBold, fontSize: 46, lineHeight: 50, letterSpacing: -2, fontVariant: ['tabular-nums'] }}>
+              {splitAmount(total)[0]}
+              <Body style={{ fontFamily: fonts.bodyMedium, fontSize: 23, color: t.faint }}>{splitAmount(total)[1]}</Body>
+            </Body>
+          </Row>
+        </View>
+      )}
+      <Body style={{ color: t.muted, fontSize: 13, marginTop: 2 }}>{tr('sp.intro', { time: cityTime('America/Vancouver') })}</Body>
       {error ? <Body style={{ color: t.danger }}>{error}</Body> : null}
 
       {freeze?.frozen && (

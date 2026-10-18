@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { Animated, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { fonts, useTheme } from './theme';
+import { useFontSet, useTheme } from './theme';
 import { Body } from './ui';
 
 type Tone = 'ok' | 'danger' | 'info';
@@ -15,6 +15,7 @@ export const useToast = () => useContext(Ctx);
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const t = useTheme();
+  const fonts = useFontSet();
   const insets = useSafeAreaInsets();
   const [msg, setMsg] = useState<ToastMsg | null>(null);
   const [anim] = useState(() => new Animated.Value(0));
