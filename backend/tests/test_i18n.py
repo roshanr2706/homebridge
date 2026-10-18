@@ -70,6 +70,14 @@ def test_zh_balances():
     assert r.reply.startswith("你的余额：") and "CAD 2,340.55" in r.reply and "合计约" in r.reply
 
 
+def test_zh_transactions():
+    # The super-app skin's 账单 (Bills) tile sends this.
+    for text in ("我最近的交易", "我的账单"):
+        r = run(fresh(), text)
+        assert tools(r) == ["list_transactions"] and not r.actions
+        assert not re.search(r"[a-zA-Z]{6,}", r.reply.replace("Late Night Pizza", ""))
+
+
 def test_zh_fx_quotes():
     r = run(fresh(), "最便宜的马币换加币")
     assert tools(r) == ["get_fx_quotes"]
