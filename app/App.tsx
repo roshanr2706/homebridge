@@ -284,7 +284,7 @@ function Shell({ epoch, provider, onReset, people, role, onRole, fixed }: ShellP
           <Row style={{ gap: 9, flexShrink: 1 }}>
             <Mark light={ink.colored} />
             <View style={{ flexShrink: 1 }}>
-              <Body style={{ fontFamily: fonts.display, fontSize: 19, lineHeight: 22, letterSpacing: -0.3, color: ink.fg }}>HomeBridge</Body>
+              <Body numberOfLines={1} style={{ fontFamily: fonts.display, fontSize: 17, lineHeight: 22, letterSpacing: -0.3, color: ink.fg }}>HomeBridge</Body>
               {provider ? (
                 <Mono style={{ fontSize: 9.5, color: ink.muted }} numberOfLines={1}>
                   {engineLabel(tr, provider)}

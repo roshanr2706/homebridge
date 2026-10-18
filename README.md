@@ -20,6 +20,12 @@ with a PIN checked on the server.
 |---|---|---|---|
 | ![](docs/img/runway.png) | ![](docs/img/credit.png) | ![](docs/img/remittance.png) | ![](docs/img/chinese.png) |
 
+![Autopilot: Dad granted a rate watch; when MYR/CAD reached the target, the agent converted on its own and explained it on both phones (Super-app and Neo skins)](docs/img/autopilot.png)
+
+| Smart inbox | How I handled this |
+|---|---|
+| ![](docs/img/inbox.png) | ![](docs/img/trace.png) |
+
 - **Technical documentation:** [`docs/technical.md`](docs/technical.md)
 - **Security self-assessment:** [`docs/security_self_assessment.md`](docs/security_self_assessment.md)
 - **Demo script and Q&A:** [`docs/demo_script.md`](docs/demo_script.md)

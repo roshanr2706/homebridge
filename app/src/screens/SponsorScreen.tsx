@@ -148,7 +148,7 @@ export function SponsorScreen({ active }: { active: boolean }) {
           <Eyebrow>
             {tr('city.kl')} · {cityTime('Asia/Kuala_Lumpur')}
           </Eyebrow>
-          <Display style={{ fontSize: 26, marginTop: 2 }}>{tr('sp.welcomeName', { name: name.split(' ')[0] })}</Display>
+          <Display style={{ fontSize: 26, marginTop: 2 }}>{tr('sp.welcomeName', { name })}</Display>
           <Body style={{ fontSize: 11, letterSpacing: 1.1, color: t.faint, fontFamily: fonts.bodyBold, textTransform: 'uppercase', marginTop: 14 }}>
             {tr('neo.funds')}
           </Body>
