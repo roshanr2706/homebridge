@@ -13,6 +13,8 @@ Design rules (quoted in the security self-assessment):
    allowed, but Confirm, Approve and execution are refused.
 7. Every draft is screened by the compliance layer (compliance.py) before its tier is set: a sanctions
    hit blocks it outright, and nobody whose identity is unverified can confirm or approve money movement.
+8. The autopilot (autopilot.py) drafts through these same methods. Only a T2 draft with a clear compliance result,
+   inside the caps of an active mandate, may run without a tap (`execute_mandated`); anything else waits for a person.
 """
 from __future__ import annotations
 
@@ -116,6 +118,9 @@ class PendingAction:
     compliance: Dict[str, Any] = field(default_factory=dict)  # compliance.py result, shown on the card
     # Remittance progress for a money request (remit.py): status, reference, timeline, settle_after.
     remittance: Dict[str, Any] = field(default_factory=dict)
+    # "autopilot" for a draft the autopilot made under a mandate (autopilot.py); "chat" otherwise.
+    origin: str = "chat"
+    mandate_id: str = ""
     _token: Optional[str] = None   # plaintext, handed to the app once, never to the model
 
     def remit_brief(self) -> Dict[str, Any]:
@@ -129,6 +134,8 @@ class PendingAction:
         out = self._for_model()
         if self.kind == "topup":
             out["remittance"] = self.remit_brief()
+        if self.origin == "autopilot":
+            out["origin"], out["mandate_id"] = "autopilot", self.mandate_id
         return out
 
     def _for_model(self) -> Dict[str, Any]:
@@ -186,7 +193,16 @@ class PolicyEngine:
         self.safety = SafetyMonitor(bank, fx, audit)
         self.compliance = Compliance(bank, fx, audit)
         self.remit = Remittances(bank, fx, audit, limits)
+        self._autopilot = None
         self._load()
+
+    @property
+    def autopilot(self):
+        """The mandate engine (autopilot.py), created on first use. It drafts through this engine."""
+        if self._autopilot is None:
+            from .autopilot import Autopilot
+            self._autopilot = Autopilot(self)
+        return self._autopilot
 
     @property
     def audit(self) -> AuditLog:
@@ -202,6 +218,8 @@ class PolicyEngine:
             self.compliance.audit = log
         if hasattr(self, "remit"):
             self.remit.audit = log
+        if getattr(self, "_autopilot", None) is not None:
+            self._autopilot.audit = log
 
     def limits_changed(self) -> None:
         """Called after the sponsor edits the limits. Student-only drafts made earlier then go to the sponsor."""
@@ -690,6 +708,40 @@ class PolicyEngine:
             self.audit.record("action_cancelled", user_id, action_id=a.id)
             return a
 
+    def execute_mandated(self, action_id: str, mandate_id: str) -> PendingAction:
+        """Runs an autopilot draft without a tap, because an active mandate pre-authorised it. Called only by
+        autopilot.py after it has checked the mandate's caps. Refused unless the draft is the autopilot's own, for
+        that mandate, a transfer or conversion at T2 (no sponsor reason, risk under the threshold), with a clear
+        compliance result, the owner's KYC allows it and nothing is locked. Everything else waits for a person."""
+        with self._lock:
+            a = self.get(action_id)
+            if a.origin != "autopilot" or not mandate_id or a.mandate_id != mandate_id:
+                raise PolicyError("Only the autopilot's own draft can run under a mandate.")
+            if a.kind not in ("transfer", "conversion"):
+                raise PolicyError("Only payments and conversions can run under a mandate.")
+            if a.status != "awaiting_user" or a.tier != "T2" or a.needs_sponsor:
+                raise PolicyError("Outside what a mandate covers: it needs a person.")
+            if (a.compliance or {}).get("outcome", "clear") != "clear":
+                raise PolicyError("Compliance screening flagged it: it needs a person.")
+            outside = self.autopilot.authorises(a, mandate_id)   # the mandate's kind, accounts and caps
+            if outside:
+                raise PolicyError(f"{outside} It needs a person.")
+            kyc = self.compliance.check_kyc_for(a.owner, a.owner, a.kind, "student", a.id)
+            if kyc:
+                raise PolicyError(kyc)
+            lock = self._frozen_check(a)
+            if lock:
+                raise PolicyError(f"{FROZEN_PREFIX} {lock}. Nothing was sent.")
+            if _hash_params(a.params) != a.params_hash:
+                a.status = "failed"
+                self._save(a)
+                raise PolicyError("Action parameters changed after drafting.")
+            a.user_confirmed = True
+            a._token = None
+            self.audit.record("action_preauthorised", "autopilot", action_id=a.id, mandate_id=mandate_id,
+                              owner=a.owner)
+            return self._execute(a)
+
     def _execute(self, a: PendingAction) -> PendingAction:
         # Re-check at execution too: since drafts are reloaded from the database, an edited row must not
         # change what is paid after the student confirmed or the sponsor approved.
@@ -788,3 +840,4 @@ class PolicyEngine:
             self._drafts.clear()
             self.safety.reset()
             self.bank.clear_policy_state()
+            self.fx.overrides.clear()   # a demo reset puts the sandbox rate back to the snapshot

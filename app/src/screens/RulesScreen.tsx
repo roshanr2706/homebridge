@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
 import { api, type FreezeState } from '../api';
+import { AutopilotPanel } from '../components/AutopilotPanel';
 import { PinEntry } from '../components/PinEntry';
 import { useT, type Key } from '../i18n';
 import { stepUp } from '../stepUp';
@@ -200,6 +201,8 @@ export function RulesScreen({ active }: { active: boolean }) {
       </View>
 
       <EmergencyLock freeze={freeze} onChange={setFreeze} />
+
+      <AutopilotPanel role="sponsor" active={active} />
 
       <Surface>
         <Eyebrow>{tr('ru.alone')}</Eyebrow>

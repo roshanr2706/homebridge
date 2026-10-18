@@ -33,16 +33,17 @@ Offline engine, measured 2026-10-16:
 
 | | |
 |---|---|
-| Scripted tasks | 119 / 119 pass (96 English including casual Malaysian English, 14 Simplified Chinese, 9 Malay) |
-| Attack suite | 79 / 79 blocked (induced transfer 27, extraction 11, escalation 21, prompt injection 20) |
+| Scripted tasks | 131 / 131 pass (103 English including casual Malaysian English, 17 Simplified Chinese, 11 Malay) |
+| Attack suite | 86 / 86 blocked (induced transfer 30, extraction 11, escalation 24, prompt injection 21) |
 | Held-out set (80 requests in EN / Malaysian English / Malay / 中文, written by an assistant that never saw this code) | DeepSeek 79 / 80, offline engine 72 / 80 correct behaviour; neither drafted anything it shouldn't ([`evidence/heldout/`](evidence/heldout/deepseek.md)) |
 | Live model (DeepSeek `deepseek-flash`, 2026-10-17) | 118 / 119 tasks, 79 / 79 attacks blocked, audit chain valid ([`evidence/deepseek/`](evidence/deepseek/SUMMARY.md)) |
-| Automated tests | 759 passing, no network needed |
+| Automated tests | 809 passing, no network needed |
 | Our classifier | macro F1 0.854 (grouped 5-fold CV, 902 rows) |
-| Agent tools | 24 registered; none of them can execute, approve, unlock or change limits |
+| Agent tools | 26 registered; none of them can execute, approve, unlock, change limits or turn on an autopilot mandate |
 
-The scripted tasks run on the deterministic offline engine. A live LLM run (DeepSeek) has not been done
-yet: the client is tested against a mocked transport only (see "Choosing the model").
+The scripted tasks run on the deterministic offline engine. The 12 Autopilot tasks (T134 to T145) and 7 Autopilot
+attacks (A28 to A30, C22 to C24, D21) were added on 2026-10-18; the evidence files and the live DeepSeek run
+above predate them (119 tasks and 79 attacks).
 
 ## Features
 
@@ -55,6 +56,14 @@ yet: the client is tested against a mocked transport only (see "Choosing the mod
   Wallet tab (`GET /forecast`). Advice only; it never drafts.
 - **Credit Builder.** A sandbox secured card: utilization now, last reported and projected, on-time streak,
   and the exact payment that keeps the reported balance under 30%. Labelled "not a credit score".
+- **Autopilot: bounded autonomy.** The AI acts on its own, inside mandates the family sets. Aisha says
+  "convert when the rate is good, MYR 2,000 a week", "keep my tuition topped up automatically" or "pay my hydro bill
+  automatically"; the assistant can only *propose*. Dad turns his kinds on in Rules with his PIN (tuition guard,
+  rate watch: his money), Aisha turns on hers (bill autopay, low-balance request to Dad). When a condition holds, the
+  autopilot drafts through the same policy engine; a T2, compliance-clear draft inside the caps runs without a tap,
+  anything else comes back to a person. Revoke is instant, the freeze halts it, it never pays a new payee, and every
+  decision shows on both phones in plain words ("Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD
+  646.30 …") with a toast.
 - **Permission tiers T0 to T4.** Reads run freely; payments are drafts; large, risky or sponsor-funded ones
   go to the sponsor; confirm, approve, unlock and limit changes are not agent tools at all.
 - **Sponsor PIN.** The sponsor's Approve, Unlock and limit changes need a 6-digit PIN checked on the server
@@ -114,7 +123,8 @@ Demo values (all overridable, see `backend/.env.example`):
 | `HB_DEMO_MODE` | `1` (default) | 60-second payee cooling, remittances settle in seconds, reset allowed |
 | `HB_DEMO_TODAY` | `2026-10-08` | Pins the sandbox date so screenshots, video and docs agree (empty = real date) |
 | `HB_SPONSOR_PIN` | `246810` | The sponsor's approval PIN, stored only as a salted hash |
-| `HB_OPERATOR_TOKEN` | `demo-operator` | Needed in an `X-Operator` header for `/demo/reset` (the web app sends it in demo mode) |
+| `HB_OPERATOR_TOKEN` | `demo-operator` | Needed in an `X-Operator` header for `/demo/reset`, `/autopilot/run` and `/demo/fx_shift` (the web app sends it in demo mode) |
+| `HB_AUTOPILOT_TICK` | `30` | Seconds between background autopilot runs in demo mode (`0` turns it off; the tests do) |
 | `HB_STUDENT_TOKEN`, `HB_SPONSOR_TOKEN` | `demo-student`, `demo-sponsor` | Bearer tokens |
 
 The backend reads these from the environment, and at startup also from `backend/.env` if it exists (copy `backend/.env.example`; the file is gitignored and never overrides a variable that is already set).
@@ -166,7 +176,7 @@ production each person signs in on their own phone and the server decides the ro
 | Student (Aisha) | Sponsor (Dad) |
 |---|---|
 | **Assistant**: chat. Answers come with cards built from the ledger (FX comparison, balances, forecast, tuition, budget, credit, scam check), labelled as not written by the AI. Drafted payments appear as confirmation cards with a "Compliance checks" block. | **Approvals**: requests waiting for him, why they came to him, risk signals, compliance checks, the transfer-service picker for money requests, the PIN pad, a note back to Aisha; alerts and the 24-hour digest at the top |
-| **Wallet**: balances, runway chart, tuition countdown and shortfall, credit gauge, spending against budget, payees, items in progress, lock/unlock | **Rules**: the limits Aisha can confirm alone (PIN to change), and the one-tap lock (PIN to unlock) |
+| **Wallet**: balances, runway chart, tuition countdown and shortfall, credit gauge, spending against budget, payees, items in progress, **Autopilot** (her mandates, caps used, drafts it handed back to her, the timeline), lock/unlock | **Rules**: the limits Aisha can confirm alone (PIN to change), the one-tap lock (PIN to unlock), and **Autopilot** (mandates he grants: approve or resume with the PIN, widen caps with the PIN, pause or revoke instantly, the timeline) |
 | **Ledger**: the hash-chained audit log, with live verification and a tamper simulation | **Ledger**: his role-scoped view of the same log |
 
 Try: "Cheapest way to change 5,000 MYR to CAD?", "Pay my spring tuition", "cover the tuition
@@ -202,7 +212,8 @@ python scripts/build_classifier_data.py     # rebuilds data/classifier_train.jso
 
 Test cases, by file: scripted tasks (`test_scripted_tasks.py`), the attack suite and a compromised-model
 provider (`test_attacks.py`), input guard (`test_guard.py`), offline routing (`test_engine_routing.py`),
-languages (`test_i18n.py`), compliance (`test_compliance.py`), remittances (`test_remittance.py`), freeze
+languages (`test_i18n.py`), compliance (`test_compliance.py`), remittances (`test_remittance.py`), autopilot
+mandates and their API (`test_autopilot.py`), freeze
 and alerts (`test_safety.py`), sponsor PIN, reset and scoping (`test_security_controls.py`), forecast,
 credit, persistence, API features and the LLM wire format.
 
@@ -236,6 +247,17 @@ All endpoints except `/health` take `Authorization: Bearer <token>`. Demo tokens
 | GET | `/audit` | any | `?since=N` | Role-scoped audit entries (the sponsor never sees her chat or tool calls) |
 | GET | `/audit/verify` | any | `?tamper_seq=N` | Verify the whole chain; with `tamper_seq`, verify a copy with that entry edited |
 | GET | `/compliance/report` | any | | Role-scoped evidence of the compliance checks run |
+| GET | `/autopilot` | student | | Her mandates (whoever grants them), caps used, live condition, the autopilot's decisions, its drafts waiting for her |
+| POST | `/autopilot/mandates/{id}/activate` | student | | Turn on a mandate she grants (bill autopay, low-balance request) |
+| POST | `/autopilot/mandates/{id}/pause`, `/resume`, `/revoke`, `/decline` | student | | Her own mandates; `decline` also withdraws any proposal she made |
+| POST | `/autopilot/mandates/{id}/caps` | student | `{"per_action", "per_period"}` | Change the caps of her own mandate (within the kind's ceiling) |
+| GET | `/sponsor/autopilot` | sponsor | | Only the mandates he grants and their decisions |
+| POST | `/sponsor/autopilot/mandates/{id}/approve` | sponsor | `{"pin"}` | Turn on a proposed tuition guard or rate watch; **PIN required** |
+| POST | `/sponsor/autopilot/mandates/{id}/resume` | sponsor | `{"pin"}` | Resume a paused mandate; **PIN required** |
+| POST | `/sponsor/autopilot/mandates/{id}/caps` | sponsor | `{"per_action", "per_period", "pin"}` | Change caps; **PIN required to widen**, not to narrow |
+| POST | `/sponsor/autopilot/mandates/{id}/pause`, `/revoke`, `/decline` | sponsor | | Instant, no PIN: they only take autonomy away |
+| POST | `/autopilot/run` | any | header `X-Operator` | Run the autopilot now; demo mode and the operator token only |
+| POST | `/demo/fx_shift` | any | `{"rate"}`, `{"delta"}` or `{"reset": true}`, header `X-Operator` | Move the sandbox MYR/CAD mid rate, then run the autopilot; demo mode and the operator token only |
 | POST | `/demo/reset` | any | header `X-Operator: <HB_OPERATOR_TOKEN>` | Reset the sandbox (including everyone's onboarding); only with `HB_DEMO_MODE=1` **and** the operator token |
 | GET | `/` | none | | The exported web app, when `app/dist` exists |
 

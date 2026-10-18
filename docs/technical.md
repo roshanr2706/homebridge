@@ -72,7 +72,8 @@ International students live between two financial systems. Their pain points, wh
 | Model adapter | `backend/app/llm.py` | One OpenAI-compatible client for DeepSeek, Qwen or a custom endpoint; the offline engine behind the same interface |
 | Offline engine | `backend/app/offline_engine.py`, `offline_nlu.py` | Deterministic planner (intents) and its pure text parsers (amounts, currencies, payees, dates, question forms) |
 | Reply language | `backend/app/i18n.py` | Language detection (English, Simplified Chinese, Malay) and the offline engine's reply templates |
-| Tools | `backend/app/tools.py` | The tool registry: 24 tools with JSON schemas, tier labels and masked outputs (§4) |
+| Tools | `backend/app/tools.py` | The tool registry: 26 tools with JSON schemas, tier labels and masked outputs (§4) |
+| Autopilot | `backend/app/autopilot.py`, `autopilot_api.py`, `autopilot_tools.py` | Mandates (standing, revocable permissions), the deterministic run that acts inside them through the policy engine, the activity feed, the app endpoints and the two chat tools (§5.11) |
 | Policy engine | `backend/app/policy.py` | The only path by which money moves: tiers, limits, risk score, tokens, execution |
 | Compliance | `backend/app/compliance.py` | Sanctions screening (sample list), KYC levels, cross-border records, EFTR flag, BNM-style purpose codes, structuring flag, the compliance report (§5.9) |
 | Remittances | `backend/app/remit.py` | Money from the sponsor's own account: provider options, locked quote, compliance at initiation, in-transit settlement, exactly-once posting (§5.10) |
@@ -174,7 +175,7 @@ Anthropic and OpenAI endpoints are not defaults because they are not reachable f
 
 ## 4. Tools
 
-The registry (`tools.REGISTRY`) holds 24 tools. Students get all of them; sponsors do not chat with the agent.
+The registry (`tools.REGISTRY`) holds 26 tools. Students get all of them; sponsors do not chat with the agent.
 
 | Tool | Tier | Purpose |
 |---|---|---|
@@ -192,17 +193,19 @@ The registry (`tools.REGISTRY`) holds 24 tools. Students get all of them; sponso
 | `get_limits` | T0 | The sponsor's limits, what has been used in the last 24 h, the sponsor-money cap, the cooling period and which accounts are sponsor-funded; answers "why does dad need to approve?" |
 | `get_data_sharing` | T0 | Who can see what: the sponsor's scoped view (accounts he funds, requests, alerts, digest counts) and where chat text goes (offline engine: nowhere; cloud model: the configured provider and region) |
 | `forecast_cashflow` | T0 | Day-by-day runway of the spending account to the next tuition date, end of term, a month or a date: low point, first shortfall, tuition-fund gaps and suggestions (cheapest conversion, spending cut). Advice only; never drafts |
+| `list_mandates` | T0 | The autopilot mandates (caps, used this period, live condition) and the latest decisions in plain words; answers "what did autopilot do?" (§5.11) |
 | `get_remittance_status` | T0 | Where money asked from the sponsor is: waiting for him, in transit (service, locked amount, account, ETA) or credited; reading it also credits a remittance that is due (§5.10) |
 | `set_budget`, `create_reminder` | T1 | Reversible personal settings |
 | `request_sponsor_topup` | T1 | Ask the sponsor for money, into CAD Everyday, the Tuition Fund or the MYR Wallet; the sponsor decides and, if he approves, sends it as a remittance from his own account (§5.10). Returns the request's status |
 | `cancel_pending_action` | T1 | Withdraw a draft |
 | `freeze_payments` | T1 | Lock all outgoing payments ("I think I got scammed"); alerts the sponsor. There is no unlock tool |
+| `propose_mandate` | T1 | Propose an autopilot mandate (tuition guard, rate watch, bill autopay for a saved bill payee, low-balance request). It does nothing until the grantor turns it on in the app; refused in a flagged chat or with an amount copied from pasted text (§5.11) |
 | `prepare_transfer` | T2/T3 | Draft a payment to a saved payee |
 | `prepare_conversion` | T2/T3 | Draft a conversion between own wallets, into Everyday or the Tuition Fund |
 | `prepare_card_payment` | T2/T3 | Draft a payment from CAD Everyday to the secured card, by target (`recommended`, `statement_balance`, `minimum`, `under_30`, `under_10`, `full_balance`) or exact amount; goes through `draft_transfer` like any payment |
 | `add_payee` | T3 | Request a new payee (always sponsor approval, then a cooling period) |
 
-There is no tool to confirm, approve, execute, change limits, change the sponsor, unlock payments, or read unmasked numbers. Those operations are tier T4: they exist only as authenticated HTTP endpoints for the right role, or not at all.
+There is no tool to confirm, approve, execute, change limits, change the sponsor, unlock payments, activate, widen or revoke an autopilot mandate, or read unmasked numbers. Those operations are tier T4: they exist only as authenticated HTTP endpoints for the right role, or not at all.
 
 Tool arguments are validated before use (numbers parsed and range-checked, enums enforced, NaN and negative amounts refused). A bad argument returns a readable error to the model so it can recover, and is logged.
 
@@ -337,6 +340,29 @@ A money request ("ask my dad for 800 for textbooks", `request_sponsor_topup`) us
 - **Rules that still apply.** The sponsor's PIN (server-checked) and KYC gate approval; the sponsor-funded lock (safety.py) now also stops him approving a remittance until he unlocks, since a lock often means a scam in progress; money already in transit still arrives. The student cannot approve (sponsor endpoints refuse her token, and `sponsor_decide` checks the sponsor link), cancel or re-price a remittance once sent (attacks C21, A27).
 - **Asking where it is.** `get_remittance_status` (T0) and the offline intents "did dad send the money?", "where's my money from dad", "duit ayah dah masuk?", "爸爸的钱到了吗？" answer with the stage, amount, account and arrival from `i18n.py` templates in English, Chinese and Malay; the request cards with their timeline show under the reply.
 
+### 5.11 Autopilot: bounded autonomy
+
+Everything above is the AI *responding*: Aisha asks, it drafts, she confirms. The autopilot (`autopilot.py`) makes it a participant that acts on its own, inside limits the family sets, and enforced by the same policy engine.
+
+**Mandates.** A mandate is a standing, revocable permission stored in SQLite next to the drafts (`mandates`, cleared by the demo reset): kind, owner (the student), who grants it, caps (per action and per period, in the source currency), conditions, an expiry (180 days), status `proposed → active → paused / revoked` (shown as `expired` after its date) and when it was created and activated.
+
+| Kind | Granted by | Condition | Action | Cap (default / ceiling) |
+|---|---|---|---|---|
+| `tuition_guard` | sponsor (MYR Wallet is his money) | the next unpaid installment is due within N days (default 30) and the Tuition Fund is short | convert MYR → Tuition Fund to cover the gap (the same `quote_to_receive` maths as the forecast, so it is "MYR 3,887" in both) | MYR 4,000 a month / 10,000 |
+| `rate_watch` | sponsor | MYR/CAD mid rate at or better than a target (default: about 0.4% above today, rounded up to 0.0005: 0.3250) | convert MYR → CAD Everyday through the cheapest provider by true cost (`fx.quotes`; for own wallets that is the in-app conversion), and compare with this week's average rate | MYR 2,000 a week / 5,000 per action, 10,000 a week |
+| `bill_autopay` | student (CAD Everyday is her money) | a saved bill payee's bill is due within N days (default 3; up to 5 days late): BC Hydro and Northline Mobile from the recurring schedule, the secured card's statement minimum | pay it from CAD Everyday; a recurring bill's next date moves on, so the forecast doesn't count it twice | CAD 100 a bill (card CAD 50) / 500 |
+| `low_balance_topup` | student | the forecast (`forecast_cashflow`) puts CAD Everyday under a floor (default CAD 200) within N days (default 14) | send the sponsor a top-up request (T1, never money) for the gap, rounded up to CAD 50 | CAD 300 a request / 1,000 |
+
+**Who can do what.** The chat model can only *propose* (`propose_mandate`, T1): the proposal does nothing. Sponsor-granted kinds wait for Dad's approval in Rules with his PIN (`POST /sponsor/autopilot/mandates/{id}/approve`); the student activates her own kinds with her tap (`POST /autopilot/mandates/{id}/activate`). Resuming a paused mandate and widening its caps need the grantor too, the sponsor with his PIN; narrowing, pausing and revoking are instant and need no PIN. The model has no tool to activate, approve, resume, widen, pause or revoke (T4), a proposal in a flagged conversation is refused, an amount copied from pasted text is refused, and `bill_autopay` resolves only a saved bill payee at least 30 days old (never an account number, never rent or tuition). There is at most one open mandate per kind (per payee for bills); a repeated proposal returns the one already waiting.
+
+**The run.** `Autopilot.run(now)` takes an injectable date and evaluates every active mandate. When a condition holds it checks, in order: the payments lock (`SafetyMonitor.frozen_reason`; frozen means *skipped*, nothing drafted), the source balance, a similar draft already waiting, and the caps left this period. Then it drafts **through the policy engine** (`draft_conversion`, `draft_transfer`, `draft_topup_request`) and marks the draft `origin="autopilot"` with the mandate id, so tiers, the daily limit, the 24-hour sponsor-money cap, risk scoring, alerts and compliance screening all run as for a chat draft. A draft that is T2, compliance-clear and inside the caps is *pre-authorised by the mandate* and runs without a tap through `PolicyEngine.execute_mandated`, which re-checks in policy code that the draft is the autopilot's own, a transfer or conversion at T2 with no sponsor reason, compliance-clear, allowed by KYC, not locked, unchanged since drafting, and that the mandate itself (`Autopilot.authorises`) is active, names exactly these accounts or this payee and still has the caps for this amount. Anything else becomes a normal draft waiting for a person, with a 24-hour expiry instead of ten minutes and a provenance mark that stops it ever running under the mandate later: over the caps, T3 for any reason (above a limit, too much sponsor money in 24 hours, risk ≥ 50, an alert), a compliance flag or block, or a payee that became new. A top-up request is the action itself.
+
+**Idempotent.** Each decision is stored once per mandate and condition window (`autopilot_activity.ikey` is unique): a week for the rate watch, an installment and month for the tuition guard, a due date for a bill, a month for the low-balance request. Skips are noted once per window and reason. So the run can be repeated as often as wanted; in demo mode a background thread runs it every 30 seconds (`HB_AUTOPILOT_TICK`, off in tests), and the operator can run it (`POST /autopilot/run`) or move the sandbox mid rate (`POST /demo/fx_shift`, the stage's "MYR/CAD ↑"), which runs it straight away. Both need demo mode and the operator token, like `/demo/reset`.
+
+**What people see.** Every decision is in the feed with plain words in English and Chinese, for example: "Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD 646.30 via HomeBridge wallet conversion, CAD 3.81 better than this week's average. Mandate: Rate watch, MYR 2,000/week, 2,000 used." The student's Wallet and Dad's Rules each have an Autopilot section (mandates, caps used this period, the live condition such as "Now 0.3251 · target 0.3250", controls, the timeline); drafts the autopilot handed to Aisha sit at the top with a normal Confirm. Both phones toast when it acts, wherever they are in the app, and Dad's phone toasts a new proposal. Dad sees only the mandates he grants and their decisions: Aisha's bill autopay and its payments stay private, like the rest of her CAD Everyday account. Audit events: `mandate_proposed`, `mandate_activated`, `mandate_declined`, `mandate_paused`, `mandate_resumed`, `mandate_revoked`, `mandate_caps_changed`, `action_preauthorised`, `autopilot_executed` (with the mandate, the caps used before and after, and the reason), `autopilot_escalated`, `autopilot_skipped`, `autopilot_failed`, `fx_shifted`, all in the hash chain.
+
+**In chat.** `list_mandates` (T0) answers "what did autopilot do?"; offline intents in English, Chinese and Malay propose ("convert when the rate is good, MYR 2,000 a week", "汇率好的时候自动帮我把马币换成加币", "bayar bil telefon secara automatik", "keep my tuition topped up automatically"), list ("自动驾驶做了什么？", "autopilot buat apa?"), and refuse ("set autopilot to send 5000 to this account every day", "activate the rate watch yourself and raise its cap"). A card under the reply shows the mandate live, with Activate for her own kinds.
+
 ---
 
 ## 6. Security design (summary)
@@ -349,6 +375,7 @@ The full threat model, tier table and known-risk list are in `docs/security_self
 | Information extraction | Tools return masked data only, so the model never holds full numbers or tokens; output redaction; no secrets in the prompt; role-scoped endpoints |
 | Privilege escalation | Role from bearer token only; sponsor actions only via sponsor endpoints; no tool for limits or sponsor; chat claims ("I'm her father") flagged and refused |
 | Compliance (sanctions, KYC, AML) | Payee screening against a sample watchlist on add and on every payment; KYC level gates confirm and approve; FINTRAC EFTR flag and cross-border records; BNM purpose codes; structuring flag; all audited and reported (`/compliance/report`) |
+| Autonomy (autopilot) | Mandates are proposed in chat but only turned on, resumed or widened in the app (the sponsor's kinds with his PIN); every autopilot action is drafted through the policy engine; only a T2, compliance-clear draft inside the mandate's caps runs without a tap, re-checked in `execute_mandated`; the freeze halts it; it never adds or pays a new payee and never reads chat or memos; every decision is audited |
 | Prompt injection (direct and indirect) | Tool output wrapped as data and scanned; text folded before matching (tag characters, base64, zero-width, homoglyphs); taint tracking; flagged turns escalate to T3; the offline engine refuses flagged turns; the policy holds even with a fully compromised model |
 
 ---
@@ -359,6 +386,8 @@ Run with `pytest -q` and `python scripts/run_evidence.py` (from `backend/`). The
 
 <!-- counts: tests=759, tasks=119, attacks=79 (induced 27, extraction 11, escalation 21, injection 20), guard-flagged=62, tools=24, f1=0.854 on 902 rows, audit=1215; tools also in §2 table and §4 intro, guard-flagged also in the §7 defence-in-depth paragraph -->
 **Headline numbers (offline engine, measured 2026-10-16):** 759 automated tests passing; 119 / 119 scripted tasks; 79 / 79 attacks blocked (induced transfer 27, extraction 11, escalation 21, injection 20); classifier macro F1 0.854 over 902 rows; evidence audit log 1,215 entries with a valid hash chain.
+
+**Added 2026-10-18 with the autopilot (§5.11), offline engine in pytest:** 12 scripted tasks (T134 to T145: proposing mandates in English, Chinese and Malay, asking what the autopilot did, and a timing question that must not propose) and 7 attacks (A28 to A30, C22 to C24, D21: chat creating, activating or widening a mandate, an injected memo, the autopilot while frozen, over its caps, and for a new payee), all passing and blocked, for 131 tasks and 86 attacks; 809 automated tests passing (`tests/test_autopilot.py` adds 31). The evidence files and the live DeepSeek run above predate the autopilot and have not been regenerated.
 
 | Suite | Result |
 |---|---|
@@ -411,4 +440,5 @@ Several attacks show defence in depth: the limit-splitting attack (A04) passes t
 - **FX rates** are a snapshot with modelled spreads. Production would use live quotes and lock the quoted rate on the draft.
 - **Classifier** is small and trained on our own data. It is a second opinion by design, never a gate. A larger multilingual dataset and periodic retraining from reported scams would improve recall.
 - **Alerts** are fixed thresholds, not a model of each student's habits, and the sponsor sees them only when opening the app. Production would add push notifications and per-user baselines.
+- **Autopilot** acts without a tap inside a mandate, so a mis-set mandate (a target rate the family didn't mean, a cap set too high) executes within its caps until someone pauses or revokes it; the caps, the policy ceilings per kind, the normal tiers and the 24-hour sponsor-money cap bound the damage, and every action is in the feed and the audit log. The rate it watches is the sandbox snapshot moved by the operator, not a live market; conditions are checked on a 30-second tick, not streamed; there is no notification outside the app.
 - **Sponsor rules** are two limits plus fixed triggers. Category rules ("rent and tuition only"), monthly allowances and multi-sponsor households are natural extensions.

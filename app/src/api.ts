@@ -247,7 +247,50 @@ export type Card =
   | ForecastCard
   | CreditCardData
   // get_remittance_status: the money requests to show as action cards (with their live timeline).
-  | { type: 'remittance'; action_ids: string[] };
+  | { type: 'remittance'; action_ids: string[] }
+  // list_mandates / propose_mandate: the autopilot mandates to show (fetched live from /autopilot).
+  | { type: 'autopilot'; mandate_ids: string[]; proposal: boolean };
+
+// Autopilot (backend/app/autopilot.py): standing, revocable mandates and what the autopilot did under them.
+export type MandateKind = 'tuition_guard' | 'rate_watch' | 'bill_autopay' | 'low_balance_topup';
+export type MandateStatus = 'proposed' | 'active' | 'paused' | 'revoked' | 'expired';
+export type Bilingual = { en: string; zh: string };
+export type Mandate = {
+  id: string;
+  kind: MandateKind;
+  owner: string;
+  granted_by: 'sponsor' | 'student';
+  status: MandateStatus;
+  label: string;
+  label_zh: string;
+  caps: { per_action: number; per_period: number; currency: string; period: 'week' | 'month' };
+  conditions: Record<string, any>;
+  used: number;
+  remaining: number;
+  period: 'week' | 'month';
+  text: Bilingual;
+  watch: Bilingual | null;
+  ceiling: { per_action: number; per_period: number };
+  created_at: number;
+  activated_at?: number | null;
+  revoked_at?: number | null;
+  expires_on?: string;
+};
+export type AutopilotEntry = {
+  id: string;
+  mandate_id: string;
+  kind: MandateKind;
+  outcome: 'acted' | 'escalated' | 'skipped' | 'failed';
+  code?: string;
+  ts: number;
+  date: string;
+  amount: number;
+  currency?: string;
+  action_id?: string;
+  text: Bilingual;
+};
+export type AutopilotRate = { pair: string; mid: number; snapshot: number; moved: boolean };
+export type AutopilotFeed = { mandates: Mandate[]; activity: AutopilotEntry[]; pending?: Action[]; rate: AutopilotRate };
 
 // Cash-flow forecast ("runway"). `series` is one bar per `step_days` days from start_date; the indexes
 // below point into it.
@@ -383,9 +426,31 @@ export const api = {
   reject: (id: string, note = '') => call<Action>('sponsor', `/sponsor/actions/${id}/reject`, 'POST', { note }),
   setLimits: (single_cad: number, daily_cad: number, pin: string) =>
     call<{ limits: Record<string, number> }>('sponsor', '/sponsor/limits', 'POST', { single_cad, daily_cad, pin }),
+  // Autopilot. Proposals come from the chat; turning one on, resuming and widening it happen only here (the sponsor's
+  // kinds with his PIN), and pausing or revoking is instant.
+  autopilot: (role: Role) => call<AutopilotFeed>(role, role === 'student' ? '/autopilot' : '/sponsor/autopilot'),
+  mandate: (role: Role, id: string, verb: 'activate' | 'approve' | 'decline' | 'pause' | 'resume' | 'revoke', pin = '') =>
+    call<{ mandate: Mandate }>(
+      role,
+      `${role === 'student' ? '' : '/sponsor'}/autopilot/mandates/${id}/${verb}`,
+      'POST',
+      role === 'sponsor' && (verb === 'approve' || verb === 'resume') ? { pin } : undefined,
+    ),
+  mandateCaps: (role: Role, id: string, per_action: number, per_period: number, pin = '') =>
+    call<{ mandate: Mandate }>(role, `${role === 'student' ? '' : '/sponsor'}/autopilot/mandates/${id}/caps`, 'POST', {
+      per_action,
+      per_period,
+      pin,
+    }),
   audit: (role: Role, since = 0) => call<AuditPage>(role, `/audit?since=${since}`),
   auditVerify: (role: Role = 'sponsor', tamperSeq?: number) =>
     call<Verify>(role, `/audit/verify${tamperSeq === undefined ? '' : `?tamper_seq=${tamperSeq}`}`),
+  // Stage control: move the sandbox MYR/CAD mid rate so a rate-watch mandate can fire live (operator, demo mode only).
+  fxShift: async (delta: number) => {
+    const h = await call<Health>('student', '/health');
+    if (!h.demo_mode) throw new Error('Only available in demo mode');
+    return call<{ rate: AutopilotRate; decisions: AutopilotEntry[] }>('student', '/demo/fx_shift', 'POST', { delta }, { 'X-Operator': OPERATOR });
+  },
   // The operator header goes out only when the server says it is in demo mode.
   reset: async () => {
     const h = await call<Health>('student', '/health');

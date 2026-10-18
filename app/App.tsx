@@ -340,6 +340,17 @@ function Stage() {
       .catch(() => setProvider(''));
   }, [epoch]);
 
+  // Stage control for the Autopilot moment: nudge the sandbox MYR/CAD rate up; a rate watch at its target converts on
+  // its own and both phones announce it.
+  const nudgeRate = async () => {
+    try {
+      const r = await api.fxShift(0.0015);
+      toast(tr('stage.rateMoved', { mid: r.rate.mid.toFixed(4) }), tr('stage.rateMovedBody'), 'info');
+    } catch (e) {
+      toast(tr('reset.failed'), (e as Error).message, 'danger');
+    }
+  };
+
   const reset = async () => {
     try {
       await api.reset();
@@ -385,7 +396,7 @@ function Stage() {
   return (
     // The stage chrome follows the student's look.
     <SkinProvider skin={student.skin}>
-      <StageChrome provider={provider} onReset={reset} onOnePhone={() => setSplit(false)} onLang={switchBoth} lang={student.lang}>
+      <StageChrome provider={provider} onReset={reset} onNudge={nudgeRate} onOnePhone={() => setSplit(false)} onLang={switchBoth} lang={student.lang}>
         {(['student', 'sponsor'] as Role[]).map((r) => {
           const pt = themeFor(people[r].skin, r === 'sponsor');
           return (
@@ -413,6 +424,7 @@ function Stage() {
 function StageChrome({
   provider,
   onReset,
+  onNudge,
   onOnePhone,
   onLang,
   lang,
@@ -420,6 +432,7 @@ function StageChrome({
 }: {
   provider: string;
   onReset: () => void;
+  onNudge: () => void;
   onOnePhone: () => void;
   onLang: (l: Lang) => void;
   lang: Lang;
@@ -445,6 +458,9 @@ function StageChrome({
         </Row>
         <Row style={{ gap: 14 }}>
           <LangToggle lang={lang} onSwitch={onLang} />
+          <Pressable onPress={onNudge} accessibilityRole="button" accessibilityLabel={tr('stage.nudgeLabel')}>
+            <Body style={{ fontSize: 13, color: t.muted }}>{tr('stage.nudge')}</Body>
+          </Pressable>
           <Pressable onPress={onOnePhone} accessibilityRole="button">
             <Body style={{ fontSize: 13, color: t.muted }}>{tr('stage.onePhone')}</Body>
           </Pressable>
