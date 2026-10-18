@@ -20,7 +20,7 @@ const TOKENS: Record<Role, string> = {
   student: process.env.EXPO_PUBLIC_STUDENT_TOKEN ?? 'demo-student',
   sponsor: process.env.EXPO_PUBLIC_SPONSOR_TOKEN ?? 'demo-sponsor',
 };
-// Sent only to /demo/reset, and only when the server says demo mode is on. The server refuses a reset outside
+// Sent only to the operator's stage endpoints (/demo/*, /autopilot/run), and only when the server says demo mode is on. The server refuses a reset outside
 // demo mode whatever is sent. Not a secret in a demo build (see R11 in docs/security_self_assessment.md).
 const OPERATOR = process.env.EXPO_PUBLIC_OPERATOR_TOKEN ?? 'demo-operator';
 // Shown as a hint under the sponsor's PIN field in demo mode only; never prefilled.
@@ -124,7 +124,8 @@ export type FreezeState = {
   since: number | null;
 };
 
-export type Alert = { id: string; ts: number; kind: string; message: string; weight: number };
+// message_zh: the Chinese text, when the server wrote one (the smart inbox's scam alert does).
+export type Alert = { id: string; ts: number; kind: string; message: string; message_zh?: string; weight: number };
 
 export type Digest = {
   window_hours: number;
@@ -390,6 +391,45 @@ export type OnboardingIn = {
 };
 export type PrefsIn = Partial<Pick<Prefs, 'display_name' | 'language' | 'skin'>> & { offline_only?: boolean };
 
+// Smart inbox (backend/app/inbox.py): incoming messages, triaged by HomeBridge the moment they arrive.
+export type InboxVerdict = 'scam' | 'bill' | 'info' | 'personal';
+export type InboxAction = 'lock' | 'draft' | 'autopay' | 'tuition' | 'dismiss';
+export type InboxMessage = {
+  id: string;
+  received_at: number;
+  channel: 'sms' | 'email' | 'whatsapp';
+  sender: string;
+  text: string;
+  status: 'new' | 'read' | 'dismissed';
+  verdict: InboxVerdict;
+  confidence?: 'high' | 'medium' | null;
+  topic?: string | null;
+  signals: { category: string; name: string }[];
+  quote?: string;
+  headline: Bilingual;
+  advice: Bilingual[];
+  actions: InboxAction[];
+  bill?: {
+    payee_id: string;
+    payee_name: string;
+    amount: number;
+    currency: string;
+    due: string | null;
+    saved_last4: string;
+    usual?: number | null;
+    source: string;
+  } | null;
+  tuition?: { term: string; amount: number; due: string; days_until_due: number } | null;
+  autopay?: { mandate_id: string; cap: number } | null;
+  claims_payee?: { name: string; saved_last4: string; message_last4: string | null } | null;
+  account_match?: boolean | null;
+  alerted?: boolean;
+  draft_action_id?: string | null;
+};
+export type InboxCounts = { total: number; unread: number; scam: number; unread_scam: number; bills: number };
+export type InboxFeed = { messages: InboxMessage[]; counts: InboxCounts; today: string };
+export type InboxSample = { key: string; label: string; channel: string };
+
 async function call<T>(role: Role, path: string, method = 'GET', body?: unknown, extra: Record<string, string> = {}): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method,
@@ -402,6 +442,13 @@ async function call<T>(role: Role, path: string, method = 'GET', body?: unknown,
     throw new Error(typeof detail === 'string' ? detail : `HTTP ${res.status}`);
   }
   return data as T;
+}
+
+// The operator header goes out only when the server says it is in demo mode; outside it the server refuses anyway.
+async function operator<T>(path: string, body?: unknown): Promise<T> {
+  const h = await call<Health>('student', '/health');
+  if (!h.demo_mode) throw new Error('Only available in demo mode');
+  return call<T>('student', path, 'POST', body, { 'X-Operator': OPERATOR });
 }
 
 export const api = {
@@ -455,12 +502,18 @@ export const api = {
   audit: (role: Role, since = 0) => call<AuditPage>(role, `/audit?since=${since}`),
   auditVerify: (role: Role = 'sponsor', tamperSeq?: number) =>
     call<Verify>(role, `/audit/verify${tamperSeq === undefined ? '' : `?tamper_seq=${tamperSeq}`}`),
-  // Stage control: move the sandbox MYR/CAD mid rate so a rate-watch mandate can fire live (operator, demo mode only).
-  fxShift: async (delta: number) => {
-    const h = await call<Health>('student', '/health');
-    if (!h.demo_mode) throw new Error('Only available in demo mode');
-    return call<{ rate: AutopilotRate; decisions: AutopilotEntry[] }>('student', '/demo/fx_shift', 'POST', { delta }, { 'X-Operator': OPERATOR });
-  },
+  // Smart inbox. Drafting a bill is her own tap, and the draft still needs her Confirm.
+  inbox: () => call<InboxFeed>('student', '/inbox'),
+  inboxMark: (id: string, status: 'read' | 'dismiss') => call<{ message: InboxMessage }>('student', `/inbox/${id}/${status}`, 'POST'),
+  inboxDraft: (id: string) => call<{ action: Action; message: InboxMessage }>('student', `/inbox/${id}/draft`, 'POST'),
+  inboxSamples: () => call<{ samples: InboxSample[] }>('student', '/demo/inbox/samples'),
+  // Stage controls (operator, demo mode only). Move the sandbox MYR/CAD mid rate so a rate watch can fire live, deliver
+  // a message to Aisha's inbox, skip the sandbox calendar ahead, or run the autopilot now.
+  fxShift: (delta: number) => operator<{ rate: AutopilotRate; decisions: AutopilotEntry[] }>('/demo/fx_shift', { delta }),
+  injectInbox: (sample: string) => operator<{ message: InboxMessage }>('/demo/inbox', { sample }),
+  timeSkip: (body: { days?: number; to?: 'tuition_week' }) =>
+    operator<{ today: string; skipped_days: number; decisions: AutopilotEntry[] }>('/demo/time_skip', body),
+  runAutopilot: () => operator<{ decisions: AutopilotEntry[] }>('/autopilot/run'),
   // The operator header goes out only when the server says it is in demo mode.
   reset: async () => {
     const h = await call<Health>('student', '/health');
