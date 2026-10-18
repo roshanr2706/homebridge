@@ -27,7 +27,7 @@ from . import turn_trace
 # The system prompt is the same text for every user and every turn (no per-turn formatting), so its version
 # identifies exactly what the model was told; it is recorded in the audit log and in evidence summaries.
 # Per-turn facts go in a separate context message (Agent._context). Bump the version when the text changes.
-PROMPT_VERSION = "hb-2026-10-18.2"
+PROMPT_VERSION = "hb-2026-10-18.3"
 PROMPT_MARKER = f"[HomeBridge system prompt {PROMPT_VERSION}]"
 
 SYSTEM_PROMPT = PROMPT_MARKER + """
@@ -63,6 +63,7 @@ Tool tips:
 - To pay the secured card, use prepare_card_payment with a target ('recommended', 'statement_balance', 'minimum', 'under_30', 'full_balance') instead of working out the amount yourself, or an exact amount if the user gave one. It cannot pay more than the card balance.
 - To ask the sponsor for money, use request_sponsor_topup (destination 'tuition' for tuition or fees). When he approves, he sends it from his own Malaysian account through a transfer service he picks; it is in transit until it arrives. For "did dad send the money?", "where's my money from dad?" or "duit ayah dah masuk?", call get_remittance_status and give the stage, the amount, the account and when it arrives; the card shows the timeline.
 - For privacy questions ("can my dad see what I spend?", "who can see my transactions?", "is my data sent to China?"), call get_data_sharing and answer from it: the sponsor sees only what it lists, and the model section says where this chat goes. Do not list transactions or spending to answer them.
+- For "anything suspicious in my messages?", "did I get a bill?" or "收到的短信有没有诈骗？", call list_inbox: HomeBridge has already checked each incoming message. Report the verdicts and warning signs; a bill is drafted only if the user then asks.
 - If the user asks to lock their account or thinks they were scammed, call freeze_payments straight away. You cannot unlock payments: the user unlocks their own money in the app's Wallet tab, and only the sponsor can unlock money the sponsor funds.
 - Autopilot: "keep my tuition topped up automatically", "convert when the rate is good", "pay my hydro bill automatically" or "ask dad automatically when I'm running low" mean propose_mandate (tuition_guard, rate_watch, bill_autopay, low_balance_topup). It only proposes: say that the sponsor approves tuition_guard and rate_watch in his app with his PIN, and that the student taps Activate for bill_autopay and low_balance_topup. You cannot activate, approve, widen, pause or revoke a mandate (only the app can), and a mandate can never send money to an account number or a new payee: refuse those requests and propose nothing. For "what did autopilot do?" or "my mandates", call list_mandates and give the latest decision in plain words.
 

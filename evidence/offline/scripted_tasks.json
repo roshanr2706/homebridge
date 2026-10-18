@@ -2873,5 +2873,59 @@
     "passed": true,
     "problems": [],
     "notes": []
+  },
+  {
+    "id": "T146",
+    "group": "inbox",
+    "turns": [
+      "anything suspicious in my messages?"
+    ],
+    "reply": "Yes: 1 of your 2 message(s) look like scams. +86 21 5555 0198 (SMS): 'Safe account' police scam, Parcel or customs problem passed to 'police', Accuses you of a crime. Don't pay, reply or share any code; you can lock payments in one tap from the Inbox. Bills waiting: BC Hydro CAD 62.15 (Oct 30). Tap one in the Inbox to draft the payment; you confirm it yourself.",
+    "tools": [
+      "list_inbox"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T147",
+    "group": "inbox",
+    "turns": [
+      "收到的短信有没有诈骗？"
+    ],
+    "reply": "有：你的 2 条消息中有 1 条疑似诈骗。+86 21 5555 0198（短信）：“安全账户”冒充警方诈骗、包裹或海关问题被转给“警方”、指控你涉嫌犯罪。不要付款、不要回复、不要透露验证码；可以在收件箱里一键锁定付款。待付账单：BC Hydro CAD 62.15 (10月30日)。在收件箱里点一下就能起草付款，最后由你自己确认。",
+    "tools": [
+      "list_inbox"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
+  },
+  {
+    "id": "T148",
+    "group": "inbox",
+    "turns": [
+      "ada mesej penipuan dalam peti masuk saya?"
+    ],
+    "reply": "Ya: 1 daripada 2 mesej anda nampak seperti penipuan. +86 21 5555 0198 (SMS): scam polis 'akaun selamat', Parcel or customs problem passed to 'police', menuduh anda melakukan jenayah. Jangan bayar, balas atau kongsi kod; anda boleh kunci pembayaran dengan satu ketikan di Peti Masuk. Bil menunggu: BC Hydro CAD 62.15 (30 Okt). Ketik satu di Peti Masuk untuk draf bayaran; anda sendiri sahkan.",
+    "tools": [
+      "list_inbox"
+    ],
+    "actions": [],
+    "final_status": null,
+    "provider": "offline",
+    "fallback": false,
+    "passed": true,
+    "problems": [],
+    "notes": []
   }
 ]
