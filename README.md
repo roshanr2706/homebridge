@@ -210,7 +210,7 @@ shortfall from my MYR wallet", "eh rent how much ah, can pay landlord or not", "
 before tuition is due?", "How's my credit?", "Ask my dad for 800 for textbooks", "did dad send the money?",
 "我还有多少钱？", "帮我交房租", "我的钱够用到学期末吗？", "duit cukup tak sampai hujung sem?",
 or paste a suspicious message after "Is this a scam?". After the Demo menu delivers a message: "anything suspicious in
-my messages?", "收到的短信有没有诈骗？". The ↺ button (or Demo ▾ → Reset) resets the sandbox.
+my messages?", "收到的短信有没有诈骗？". The ↺ button in a phone's header (or Demo ▾ → Reset on the two-phone stage) resets the sandbox.
 
 ## Choosing the model
 
