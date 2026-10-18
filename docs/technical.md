@@ -192,6 +192,23 @@ The tests in `tests/test_llm_wire.py` and `tests/test_llm_robustness.py` exercis
 
 **Result cards.** For read-only tools, the server attaches structured cards to the chat response, built directly from the tool output: FX comparison, balances, rate history, tuition, budget, transactions, scam verdict, credit checklist and credit profile (utilization gauge with the 30% marker, on-time dots, next steps). The app renders the numbers from the card, labelled "From your HomeBridge ledger, not written by the AI". A model that misreads a number in its prose cannot put a wrong figure in a card. The system prompt tells the model the card exists, so its reply stays short.
 
+### 3.1 Visible reasoning: the trace panel
+
+Every `/chat` response carries `turn_trace` (`backend/app/turn_trace.py`), and the app shows it under the reply as one collapsed line, "How I handled this · 6 steps · 1.2 s" with a model chip; a tap opens a vertical timeline (`app/src/components/TracePanel.tsx`, both skins, English and Chinese). It is assembled after the turn from what the agent already holds (the guard result, its own tool-call log, the drafts the policy engine made, the turn's safety events and the provider's call stats), so it describes the turn without influencing it. Steps, in order:
+
+| Step | What it shows |
+|---|---|
+| `understood` | Detected language; the guard's verdict and the named warning signs ("Tries to override the assistant's instructions"); flags carried from earlier turns; the classifier's label when it alone flagged the turn; whether the message pasted or quoted someone else's text |
+| `plan` | Live model: the tools it chose, in order, and the number of model rounds. Offline engine: the intent it matched ("pay a saved payee", "manipulation attempt: refuse, no tools") |
+| `tool` (one per call) | Tool name and tier (T0, T1, T2/T3), a safe one-line summary of the arguments (`MYR 3,600.00 · MYR → CAD · everyday`, `1,150.00 · → Maple Court Rentals`), time in ms, ok or an error code (`schema`, `unknown_tool`, `repeated_call`, `refused_by_policy`) |
+| `policy` (one per draft) | Tier and what it means, risk score, the sponsor or risk reasons (student wording), compliance outcome and number of checks, and what happens next: waits for your tap / your tap, then Dad / goes to Dad / blocked |
+| `safety` | Instruction-like text found in tool data, a reply redaction, the "draft it or ask" nudge, a false draft claim corrected, a fallback to the offline engine (with the reason) or an open circuit breaker, the loop guard, pasted text treated as data; or one "all clear" step |
+| `model` | Provider and model id, live or offline, fallback and its reason, prompt version, model calls, model time, retries |
+
+**What is never shown.** Tool arguments pass an allow-list: amounts with their currency, currency pairs, payee names, categories, dates, targets and destinations. A pasted message appears only as its length ("message, 412 chars"); free-text reasons, account numbers, action ids and any key not on the list are dropped. Every string is then scrubbed again: `1234-5678-9012` becomes `••••9012`, any run of 9 or more digits keeps only its last four, and strings shaped like confirmation tokens are removed. A money request's summary is cut before the student's reason. The trace never contains the system prompt, the per-turn context message, raw tool results or the model's own reasoning text, and compliance detail is the student's version (no sanctions specifics). Rejected tool calls show an error code, not the error text. `tests/test_turn_trace.py` checks the shape for the offline engine, a scripted live provider and a failing one, and runs injection, extraction, pasted-message and compromised-model inputs asserting that no full account number (seeded or typed), confirmation token, token hash, pasted marker text, system-prompt text or model reasoning appears in any trace. The older `trace` field keeps its shape for compatibility but now carries the audit log's safe arguments.
+
+**Toggle.** Settings has "Show reasoning steps" (on by default, remembered in the browser); off, the reply keeps the old one-line tool list.
+
 ---
 
 ## 4. Tools

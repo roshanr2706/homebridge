@@ -4,6 +4,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import type { Person } from '../account';
 import { SkinChoice } from '../components/SkinPreview';
+import { setShowSteps, useShowSteps } from '../components/TracePanel';
 import { useT } from '../i18n';
 import { SKINS, useFontSet, useTheme } from '../theme';
 import { Body, Button, Display, Eyebrow, Row, Surface } from '../ui';
@@ -16,6 +17,7 @@ export function Settings({ person, onClose }: { person: Person; onClose: () => v
   const student = person.role === 'student';
   const offline = !!person.me?.prefs.consents.offline_only?.value;
   const route = person.me?.model_route;
+  const showSteps = useShowSteps();
 
   return (
     <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: t.bg }}>
@@ -68,6 +70,12 @@ export function Settings({ person, onClose }: { person: Person; onClose: () => v
             <Body style={{ fontSize: 11.5, color: t.faint }}>
               {tr('set.engineNow', { engine: person.me?.chat_engine === 'offline' || !route?.leaves_server ? tr('ob.offlineEngine') : route.label })}
             </Body>
+          </Surface>
+        ) : null}
+
+        {student ? (
+          <Surface>
+            <CheckRow checked={showSteps} onToggle={() => setShowSteps(!showSteps)} title={tr('set.reasoning')} body={tr('set.reasoningBody')} />
           </Surface>
         ) : null}
 

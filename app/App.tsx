@@ -12,6 +12,7 @@ import { Geist_600SemiBold } from '@expo-google-fonts/geist/600SemiBold';
 import { Geist_700Bold } from '@expo-google-fonts/geist/700Bold';
 
 import { PersonScope, usePerson, type Person } from './src/account';
+import { engineLabel, ModelChip } from './src/components/TracePanel';
 import { api, type Role } from './src/api';
 import { LangScope, setLang, useT, type Key, type Lang } from './src/i18n';
 import { AssistantScreen } from './src/screens/AssistantScreen';
@@ -251,7 +252,7 @@ function Shell({ epoch, provider, onReset, people, role, onRole, fixed }: ShellP
               <Body style={{ fontFamily: fonts.display, fontSize: 19, lineHeight: 22, letterSpacing: -0.3, color: ink.fg }}>HomeBridge</Body>
               {provider ? (
                 <Mono style={{ fontSize: 9.5, color: ink.muted }} numberOfLines={1}>
-                  {tr('sandbox', { provider })}
+                  {engineLabel(tr, provider)}
                 </Mono>
               ) : null}
             </View>
@@ -450,10 +451,10 @@ function StageChrome({
           <Mark />
           <View>
             <Body style={{ fontFamily: fonts.display, fontSize: 20, lineHeight: 23 }}>HomeBridge</Body>
-            <Mono style={{ fontSize: 10, color: t.faint }}>
-              {tr('stage.sub')}
-              {provider ? tr('stage.model', { provider }) : ''}
-            </Mono>
+            <Row style={{ gap: 8 }}>
+              <Mono style={{ fontSize: 10, color: t.faint }}>{tr('stage.sub')}</Mono>
+              {provider ? <ModelChip provider={provider} onDark /> : null}
+            </Row>
           </View>
         </Row>
         <Row style={{ gap: 14 }}>

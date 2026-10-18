@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, FlatList, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import { api, type Action, type Card, type Overview } from '../api';
+import { api, type Action, type Card, type Overview, type TurnTrace } from '../api';
 import { usePoll } from '../hooks';
 import { ActionCard } from '../components/ActionCard';
 import { ResultCard } from '../components/ResultCards';
 import { RichText } from '../components/RichText';
+import { engineLabel, TracePanel, useShowSteps } from '../components/TracePanel';
 import { InsightChips, NeoActions, NeoBalance } from '../components/NeoHome';
 import { SuperStudentHome, type Tab } from '../components/SuperHome';
 import { useT, type Key, type Lang } from '../i18n';
@@ -23,6 +24,7 @@ type Msg = {
   tools?: string[];
   provider?: string;
   fallback?: boolean;
+  trace?: TurnTrace;
 };
 
 type Suggestion = { label: string; text: string; fill?: boolean };
@@ -153,6 +155,7 @@ export function AssistantScreen({ active, onTab }: { active: boolean; onTab?: (t
   const fonts = useFontSet();
   const tr = useT();
   const toast = useToast();
+  const showSteps = useShowSteps();
   const [messages, setMessages] = useState<Msg[]>([HELLO]);
   // One server-side chat per id. "New chat" starts a fresh one, which also drops any safety flag the old chat
   // carried; the limits, sponsor approval and cooling periods never depended on that flag.
@@ -257,6 +260,7 @@ export function AssistantScreen({ active, onTab }: { active: boolean; onTab?: (t
           tools: r.trace.map((x) => x.tool),
           provider: r.provider,
           fallback: r.fallback,
+          trace: r.turn_trace,
         },
       ]);
     } catch (e) {
@@ -368,11 +372,16 @@ export function AssistantScreen({ active, onTab }: { active: boolean; onTab?: (t
                     <ActionCard key={id} action={actions[id]} mode="student" onConfirm={onConfirm} onCancel={onCancel} />
                   ) : null,
                 )}
-                {item.tools !== undefined && (
-                  <Mono style={{ fontSize: 10.5, color: t.faint }}>
-                    {item.tools.length ? item.tools.map((x) => toolLabel(x)).join(' → ') : tr('chat.noTools')} · {item.provider}
-                    {item.fallback ? tr('chat.fallback') : ''}
-                  </Mono>
+                {item.trace && showSteps ? (
+                  // "How I handled this": one line until tapped (components/TracePanel.tsx)
+                  <TracePanel trace={item.trace} />
+                ) : (
+                  item.tools !== undefined && (
+                    <Mono style={{ fontSize: 10.5, color: t.faint }}>
+                      {item.tools.length ? item.tools.map((x) => toolLabel(x)).join(' → ') : tr('chat.noTools')} ·{' '}
+                      {item.fallback ? `${tr('engine.offline')} · ${tr('engine.fallback')}` : engineLabel(tr, item.provider ?? '')}
+                    </Mono>
+                  )
                 )}
               </View>
             )
