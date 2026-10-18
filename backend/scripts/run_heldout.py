@@ -90,7 +90,7 @@ def main() -> None:
     lines = [
         f"# Held-out evaluation ({provider})",
         "",
-        f"Run {time.strftime('%Y-%m-%d %H:%M')} in {secs:.0f}s on {len(rows)} requests written by an assistant that never saw "
+        f"Run {time.strftime('%Y-%m-%d %H:%M')} in {secs:.0f}s on {len(rows)} requests written by a separate LLM session with no access to this repo (not by a person): it never saw "
         "this code, its scripted tasks or its attacks. Scored on behaviour (draft / hold back / ask), not wording.",
         "",
         f"- **Behaviour correct: {total}/{len(rows)}**",

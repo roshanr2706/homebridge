@@ -5,8 +5,8 @@ end to end on the offline engine on 2026-10-16 and works without an API key. The
 was run on the same suites on 2026-10-18 (133 / 134 tasks, 89 / 89 attacks); with it, reply wording differs but the
 cards, tiers, PIN and approvals are the same. The header shows which engine is answering.
 
-<!-- counts: tests=964, tasks=134, attacks=89 (induced 32, extraction 11, escalation 24, injection 22), guard-flagged=62, tools=27, f1=0.854; also spoken at video 4:40, outline item 4, Q12, Q13 -->
-**Numbers to quote (offline engine):** 134 / 134 scripted tasks, 89 / 89 attacks blocked, 964 automated tests,
+<!-- counts: tests=1003, tasks=134, attacks=89 (induced 32, extraction 11, escalation 24, injection 22), guard-flagged=62, tools=27, f1=0.854; also spoken at video 4:40, outline item 4, Q12, Q13 -->
+**Numbers to quote (offline engine):** 134 / 134 scripted tasks, 89 / 89 attacks blocked, 1003 automated tests,
 27 agent tools (none can execute, approve, unlock or change limits), classifier macro F1 0.854.
 
 ## Before recording
@@ -25,7 +25,10 @@ cards, tiers, PIN and approvals are the same. The header shows which engine is a
    `--host 127.0.0.1`. The default `demo-operator` ships in the web bundle (security R30).
 3. **Record in the daytime (Vancouver).** Alerts use the real clock, and any action between 01:00 and 05:00
    in Vancouver raises an `odd_hours` alert that changes risk scores and cards.
-4. Reset the sandbox: **Demo ▾ → ↺ Reset demo** on the stage bar (top right; the menu shows only in demo mode). Check the
+4. On a fresh server, complete onboarding on both phones once (about 40 s: name, language, look, privacy and PIN).
+   Then reset the sandbox with **Demo ▾ → ↺ Reset (keep setup)** on the stage bar (top right; the menu shows only in
+   demo mode): balances, drafts, mandates and the inbox go back to the start, and both phones go straight to their
+   home screens. **Full reset (replay onboarding)** is the second item, for showing onboarding itself. Check the
    header reads `sandbox · offline`.
 5. Keep this file open to paste the longer messages.
 
@@ -47,7 +50,7 @@ cards, tiers, PIN and approvals are the same. The header shows which engine is a
 | 3:40 | Aisha · Assistant | Type: `冻结我的账户` | **Freeze**: payments locked, reply in Chinese. Dad's phone shows the alert and the lock; every card shows FROZEN. "She can unlock her own money in the Wallet. What Dad funds stays locked until he unlocks it with his PIN. There is no unlock tool for the AI." |
 | 4:00 | Header, then Ledger | Tap **EN**. Open **Ledger** | "Chain verified, N entries." Tap any entry → "EDITED #N · DETECTED AT #N", that row in red. "Every step you just saw is in this hash chain." |
 | 4:20 | Aisha · Assistant | **One unscripted question.** Ask someone who has not seen the engine to type one money question, and keep whatever happens | Usually an answer with a card; otherwise a clarifying question or a short menu. Say: "It never guesses with money: anything it drafts still waits for her tap, and Dad above the limits." |
-| 4:40 | | "89 of 89 attacks blocked, 134 of 134 tasks, 964 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
+| 4:40 | | "89 of 89 attacks blocked, 134 of 134 tasks, 1003 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
 
 Timing notes: steps 2:05 to 2:55 rely on the 20-second demo settlement; if it is still in transit at 2:55,
 say "still on its way" and come back to it after the credit card. The lock at 3:40 stays on, so do it last
@@ -55,8 +58,9 @@ of the money steps and reset (↺) before the presentation.
 
 ## The Autopilot moment (30 seconds)
 
-The AI stops only responding and acts on its own, inside a limit Dad set, and both phones see it happen. Do it after a
-reset (↺), before the freeze: a lock halts the autopilot.
+The AI stops only responding and acts on its own, inside a limit Dad set, and both phones see it happen. Do it before
+the freeze (a lock halts the autopilot). It also works after the 0:45 tuition conversion: a mandate Dad approved with
+his PIN is bounded by its own caps, not by Aisha's CAD 1,500-a-day cap on converting his money.
 
 | Time | Screen | Do / say | What the viewer sees |
 |---|---|---|---|
@@ -86,7 +90,9 @@ Then in chat: `anything suspicious in my messages?` or `收到的短信有没有
 waiting. Without the stage bar: `curl -X POST localhost:8000/demo/inbox -H "Authorization: Bearer demo-student" -H
 "X-Operator: demo-operator" -H "Content-Type: application/json" -d '{"sample": "scam_parcel_police_zh"}'` (then
 `"bill_bchydro"`). **Demo ▾ → Skip to tuition week** moves the sandbox date to a week before tuition (Dec 30): the runway,
-the tuition card and an active tuition guard react; reset to go back.
+the tuition card and an active tuition guard react (it tops up the Tuition Fund only if the fund is still short, so
+show it before the 0:45 conversion covers the gap); a sandbox rate move is cleared, so the rate watch doesn't fire
+again; reset to go back.
 
 ## Extra flows (for Q&A or a longer cut)
 
@@ -109,14 +115,14 @@ the tuition card and an active tuition guard react; reset to go back.
 1. **Problem (1 min).** Students between two financial systems: hidden FX costs (3 to 7% through banks and money changers), tuition paid from home in large installments, parents with no say and no protection, and students as the prime target of tax, immigration, parcel-to-"police" and "embassy safe account" scams.
 2. **Product (1 min).** One agent for the student, approval rules and a PIN for the parent, two phones. Features in one line each: forecast, true-cost FX, remittance with provider choice, credit builder, scam shield, freeze and alerts, **Autopilot (the AI acts on its own inside mandates the family sets)**, EN / 中文 / Melayu.
 3. **Live demo (3.5 min).** The video flow above, cut down: forecast → shortfall conversion with compliance checks → tuition at T3 → Dad approves with the PIN → money request, Dad picks the cheapest service, in transit → credited → 中文 toggle and the Chinese scam check → freeze → Ledger tamper check → one question from the panel.
-4. **How it is secure (2 min).** One diagram: the model drafts; the policy engine sets the tier; the compliance layer screens; the app confirms with a token the model never sees; the sponsor approves on his own device with a server-checked PIN; the bank re-checks at execution. Tiers T0 to T4. Results: 89 / 89 attacks (30 induced transfer, 11 extraction, 24 escalation, 21 injection), the compromised-model tests, the hash-chained audit log.
+4. **How it is secure (2 min).** One diagram: the model drafts; the policy engine sets the tier; the compliance layer screens; the app confirms with a token the model never sees; the sponsor approves on his own device with a server-checked PIN; the bank re-checks at execution. Tiers T0 to T4. Results: 89 / 89 attacks (32 induced transfer, 11 extraction, 24 escalation, 22 injection), the compromised-model tests, the hash-chained audit log.
 5. **What we built ourselves (1 min).** The policy engine, the compliance layer, the remittance flow, our scam and injection classifier (macro F1 0.854, explainable, multilingual), the offline engine, the true-cost FX maths, taint tracking, tool-sourced cards.
-6. **Honest status and next steps (1.5 min).** Measured on both engines (offline 134 / 134; live DeepSeek 133 / 134, 89 / 89 attacks on each); compliance implemented in the sandbox, production through licensed partners; the student's Confirm has no server-side factor yet (passkeys next); a held-out evaluation set is still to do. Deployment: runs without Google services or CDNs, offline fallback, Hong Kong or Singapore hosting.
+6. **Honest status and next steps (1.5 min).** Measured on both engines (offline 134 / 134; live DeepSeek 133 / 134, 89 / 89 attacks on each); compliance implemented in the sandbox, production through licensed partners; the student's Confirm has no server-side factor yet (passkeys next); held-out set (80 requests by a separate LLM session with no repo access): DeepSeek 78 / 80, offline 72 / 80, no unwanted drafts. Deployment: runs without Google services or CDNs, offline fallback, Hong Kong or Singapore hosting.
 
 ## The 14 hardest questions, with answers
 
 **1. "Your suites pass, but some cases came from outside reviewers' probes. On inputs you've never seen, how often is the agent right?"**
-We don't have a held-out number yet, and we say so. The suites show that every gap a reviewer found stays closed; they don't measure unseen wording. The offline engine is a fallback that asks or refuses when unsure, and nothing it misroutes can move money without her tap, plus Dad above the limits. Next step: a held-out set written by someone who has not seen the engine, run on both the offline engine and DeepSeek.
+The suites show that every gap a reviewer found stays closed; they don't measure unseen wording. For that we ran a held-out set: 80 requests in English, Malaysian English, Malay and Chinese, written by a separate LLM session with no access to the repo, and scored on behaviour (draft, hold back or ask), not wording. DeepSeek got 78 / 80 right and the offline engine 72 / 80, and neither drafted anything it shouldn't. It was written by an LLM, not a person, so the next step is a human-written set from classmates. The offline engine is a fallback that asks or refuses when unsure, and nothing it misroutes can move money without her tap, plus Dad above the limits. Type any sentence you like and we'll run it live.
 
 **2. "Show me the AI. Your header says offline."**
 Both. DeepSeek (`deepseek-flash`) plans and calls the tools through an OpenAI-compatible client; on 2026-10-18 it passed 133 of 134 scripted tasks and all 89 attacks (`evidence/deepseek/`). The deterministic offline engine is the default in the repo and the fallback when the network drops, and it passes 134 of 134. The design point is that the model is untrusted either way: whichever model plans, the policy engine, the token and Dad's PIN decide. Live demo: ask one question on DeepSeek, then pull the network to show the offline fallback finishing the turn. The header chip says which engine answers ("DeepSeek · live" or "Offline engine"), and every reply has a **How I handled this** row: tap it to see what the model understood, the tools it chose in order with their arguments and times, the policy engine's decision on each draft, the safety checks, and the model, prompt version and latency (a fallback turn says "Offline engine · fallback" and why).
@@ -149,7 +155,7 @@ The ranking is deterministic by what arrives, and our margin is a disclosed para
 Today the request waits for him (approval windows are 24 hours), and her card shows the time in Kuala Lumpur. The forecast warns weeks ahead, which is the real fix: the shortfall shows up in October for a January installment. A backup sponsor and deadline-aware reminders are on the roadmap.
 
 **12. "Why trust a classifier with F1 0.854?"**
-We don't let it decide anything. It can only add friction (a flag, risk points, escalation to Dad); it never approves or unblocks. The rules catch exact patterns in three languages, the classifier catches paraphrases, and the hard limits do the blocking. 62 of the 79 attacks are flagged by the guard; the other 17 are stopped by later layers.
+We don't let it decide anything. It can only add friction (a flag, risk points, escalation to Dad); it never approves or unblocks. The rules catch exact patterns in three languages, the classifier catches paraphrases, and the hard limits do the blocking. 62 of the 89 attacks are flagged by the guard; the other 27 are stopped by later layers.
 
 **13. "What did you build versus call? And what if the model is jailbroken?"**
 The model is a replaceable component behind one adapter. Everything that decides what is allowed is ours: the policy engine, tiers, limits, risk score, token scheme, compliance layer, remittance flow, sponsor PIN, sandbox bank, true-cost FX maths, the classifier (trained on our own 902-row multilingual dataset), taint tracking, the tool-output scanner, the offline planner and the audit chain. A jailbroken model can say anything, but it can only call the 27 registered tools, none of which executes, approves, unlocks or changes limits, and the confirmation token is never in its context. `tests/test_attacks.py` replaces the model with an attacker-controlled script to prove it.

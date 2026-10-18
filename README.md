@@ -34,23 +34,22 @@ with a PIN checked on the server.
 
 ## Results
 
-<!-- counts: tests=964, tasks=134, attacks=89 (induced 32, extraction 11, escalation 24, injection 22), guard-flagged=62, tools=27, f1=0.854 on 902 rows, audit=1394 -->
+<!-- counts: tests=1003, tasks=134, attacks=89 (induced 32, extraction 11, escalation 24, injection 22), guard-flagged=62, tools=27, f1=0.854 on 902 rows, audit=1394 -->
 Offline engine, measured 2026-10-18:
 
 | | |
 |---|---|
 | Scripted tasks | 134 / 134 pass (104 English including casual Malaysian English, 18 Simplified Chinese, 12 Malay) |
 | Attack suite | 89 / 89 blocked (induced transfer 32, extraction 11, escalation 24, injection 22) |
-| Held-out set (80 requests in EN / Malaysian English / Malay / 中文, written by an assistant that never saw this code) | DeepSeek 78 / 80, offline engine 72 / 80 correct behaviour; neither drafted anything it shouldn't ([`evidence/heldout/`](evidence/heldout/deepseek.md)) |
+| Held-out set (80 requests in EN / Malaysian English / Malay / 中文, written by a separate LLM session with no access to this repo; not by a person) | DeepSeek 78 / 80, offline engine 72 / 80 correct behaviour; neither drafted anything it shouldn't ([`evidence/heldout/`](evidence/heldout/deepseek.md)) |
 | Live model (DeepSeek `deepseek-flash`, 2026-10-18) | 133 / 134 tasks, 89 / 89 attacks blocked, audit chain valid ([`evidence/deepseek/`](evidence/deepseek/SUMMARY.md)) |
-| Automated tests | 964 passing, no network needed |
+| Automated tests | 1003 passing, no network needed |
 | Our classifier | macro F1 0.854 (grouped 5-fold CV, 902 rows) |
 | Agent tools | 27 registered; none of them can execute, approve, unlock, change limits or turn on an autopilot mandate |
 
-The scripted tasks run on the deterministic offline engine. The 12 Autopilot tasks (T134 to T145) and 7 Autopilot
-attacks (A28 to A30, C22 to C24, D21) were added on 2026-10-18, and the 3 Smart inbox tasks (T146 to T148) and 3
-inbox attacks (A31, A32, D22) after them; the evidence files and the live DeepSeek run above predate them (119 tasks
-and 79 attacks).
+The scripted tasks run on the deterministic offline engine. The evidence files (`evidence/offline/`,
+`evidence/deepseek/`) cover all of them, including the 12 Autopilot tasks (T134 to T145), the 3 Smart inbox tasks
+(T146 to T148) and their 10 attacks (A28 to A32, C22 to C24, D21, D22).
 
 ## Features
 

@@ -1,6 +1,6 @@
 # Held-out evaluation (deepseek)
 
-Run 2026-10-18 05:22 in 216s on 80 requests written by an assistant that never saw this code, its scripted tasks or its attacks. Scored on behaviour (draft / hold back / ask), not wording.
+Run 2026-10-18 05:22 in 216s on 80 requests written by a separate LLM session with no access to this repo (not by a person): it never saw this code, its scripted tasks or its attacks. Scored on behaviour (draft / hold back / ask), not wording.
 
 - **Behaviour correct: 78/80**
 - Drafted when it should not have: 0 (a draft still needs the student's tap, and the sponsor above the limits)
