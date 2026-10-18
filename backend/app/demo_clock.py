@@ -66,5 +66,10 @@ def skip(st: Any, days: int, actor: str) -> Dict[str, Any]:
     shift_routine(st.bank, days)
     st.agent.today = before + timedelta(days=days)
     st.bank.today = st.agent.today
-    st.audit.record("time_skipped", actor, days=days, before=before.isoformat(), after=st.agent.today.isoformat())
+    # A sandbox rate move belongs to the day the operator made it: the new week starts back on the snapshot rate,
+    # so the rate watch doesn't fire again unless the operator moves the rate again.
+    rate_reset = bool(st.fx.overrides)
+    st.fx.overrides.clear()
+    st.audit.record("time_skipped", actor, days=days, before=before.isoformat(), after=st.agent.today.isoformat(),
+                    rate_reset=rate_reset)
     return {"today": st.agent.today.isoformat(), "skipped_days": days, "decisions": st.policy.autopilot.run()}

@@ -182,12 +182,25 @@ def test_tuition_guard_escalates_on_a_compliance_flag(st, monkeypatch):
     assert st.policy.actions[d["action_id"]].status == "awaiting_user"
 
 
-def test_tuition_guard_escalates_when_policy_says_t3(st):
-    active(st, "tuition_guard", days_before=95, amount=10000)
-    st.policy.limits.single_cad = 1000                              # the gap (CAD 1,250) is now over the sponsor cap
+def test_tuition_guard_over_its_cap_keeps_the_students_sponsor_money_cap(st):
+    # Outside the mandate's caps the draft is not the sponsor's standing instruction, so the student's own 24h
+    # sponsor-money cap applies to it: she can't confirm it alone.
+    active(st, "tuition_guard", days_before=95, amount=3000)        # the gap needs MYR 3,887
+    st.policy.limits.single_cad = 1000                              # the gap (CAD 1,250) is over her cap
     [d] = st.policy.autopilot.run(TODAY)
     a = st.policy.actions[d["action_id"]]
     assert d["outcome"] == "escalated" and a.tier == "T3" and "T3" in d["text"]["en"]
+    assert "sponsor_mandate" not in a.params
+
+
+def test_tuition_guard_inside_its_caps_is_bounded_by_the_mandate_not_her_cap(st):
+    m = active(st, "tuition_guard", days_before=95, amount=10000)
+    st.policy.limits.single_cad = 1000                              # the gap (CAD 1,250) is over her cap
+    [d] = st.policy.autopilot.run(TODAY)
+    a = st.policy.actions[d["action_id"]]
+    assert d["outcome"] == "acted" and a.tier == "T2" and a.params["sponsor_mandate"] == m["id"]
+    checks = {c["id"]: c for c in a.compliance["checks"]}
+    assert checks["structuring"]["status"] == "pass" and "standing instruction" in checks["structuring"]["detail"]
 
 
 # ------------------------------------------------------------------ bill autopay
@@ -407,3 +420,88 @@ def test_api_operator_run_needs_demo_mode_and_the_token(st, client):
         assert client.post("/demo/fx_shift", json={"reset": True}, headers={**S, **OP}).status_code == 403
     finally:
         st.settings.demo_mode = True
+
+
+# ------------------------------------------------------------------ the scripted demo order (review A1/A2)
+def _student_converts(st, amount, destination="tuition"):
+    a = st.policy.draft_conversion(STUDENT, "s-demo", "MYR", "CAD", amount, [], destination, "wallet")
+    if a.tier == "T2":
+        st.policy.confirm(a.id, STUDENT, a._token)
+    return a
+
+
+def test_demo_order_tuition_shortfall_then_rate_watch_acts(st):
+    # demo 0:45 "cover the tuition shortfall" (MYR 3,887: CAD 1,250 of her CAD 1,500 cap), then the Autopilot moment
+    first = _student_converts(st, 3887)
+    assert first.tier == "T2" and first.status == "executed"
+    m = active(st, "rate_watch", target_rate=0.3250, amount=2000)
+    st.fx.set_mid("MYR", "CAD", 0.3251)
+    [d] = st.policy.autopilot.run(TODAY)
+    assert d["outcome"] == "acted", d["text"]["en"]
+    a = st.policy.actions[d["action_id"]]
+    assert a.tier == "T2" and a.status == "executed" and a.params["sponsor_mandate"] == m["id"]
+
+
+def test_students_own_conversions_stay_capped_after_a_mandate_conversion(st):
+    active(st, "rate_watch", target_rate=0.3250, amount=2000)
+    st.fx.set_mid("MYR", "CAD", 0.3251)
+    [d] = st.policy.autopilot.run(TODAY)
+    assert d["outcome"] == "acted"                                   # MYR 2,000 = about CAD 650 under the mandate
+    own = st.policy.draft_conversion(STUDENT, "s-own", "MYR", "CAD", 3000, [], "everyday", "wallet")
+    assert own.tier == "T3" and "sponsor money" in " ".join(own.sponsor_reasons)   # 650 + 975 > 1,500
+    assert "sponsor_mandate" not in own.params
+
+
+def test_a_mandate_id_only_lifts_the_cap_for_what_the_mandate_covers(st):
+    m = active(st, "rate_watch", target_rate=0.3250, amount=2000)
+    big = st.policy.draft_conversion(STUDENT, "s", "MYR", "CAD", 5000, [], "everyday", "wallet", mandate_id=m["id"])
+    assert big.tier == "T3" and "sponsor_mandate" not in big.params            # over the mandate's per-action cap
+    wrong = st.policy.draft_conversion(STUDENT, "s", "MYR", "CAD", 1900, [], "tuition", "wallet", mandate_id=m["id"])
+    assert "sponsor_mandate" not in wrong.params                               # not the route a rate watch allows
+    own = active(st, "bill_autopay", payee="secured card")                      # a mandate she granted herself
+    mine = st.policy.draft_conversion(STUDENT, "s", "MYR", "CAD", 1900, [], "everyday", "wallet", mandate_id=own["id"])
+    assert "sponsor_mandate" not in mine.params
+    st.policy.autopilot.revoke(m["id"], "sponsor", SPONSOR)
+    gone = st.policy.draft_conversion(STUDENT, "s", "MYR", "CAD", 1900, [], "everyday", "wallet", mandate_id=m["id"])
+    assert "sponsor_mandate" not in gone.params                                # a revoked mandate covers nothing
+
+
+def test_rate_watch_period_cap_still_holds_under_the_exemption(st):
+    m = active(st, "rate_watch", target_rate=0.3250, amount=2000)
+    st.fx.set_mid("MYR", "CAD", 0.3251)
+    assert st.policy.autopilot.run(TODAY)[0]["outcome"] == "acted"
+    again = st.policy.draft_conversion(STUDENT, "s", "MYR", "CAD", 2000, [], "everyday", "wallet", mandate_id=m["id"])
+    assert "sponsor_mandate" not in again.params                               # this week's MYR 2,000 is used
+    again.origin, again.mandate_id = "autopilot", m["id"]
+    with pytest.raises(PolicyError):
+        st.policy.execute_mandated(again.id, m["id"])
+
+
+def test_sponsor_money_cap_window_follows_the_sandbox_clock(st):
+    from app import demo_clock
+    assert _student_converts(st, 3887).status == "executed"
+    assert st.policy.draft_conversion(STUDENT, "s", "MYR", "CAD", 3887, [], "tuition", "wallet").tier == "T3"
+    demo_clock.shift_routine(st.bank, 2)                              # two sandbox days later
+    later = st.policy.draft_conversion(STUDENT, "s", "MYR", "CAD", 3887, [], "tuition", "wallet")
+    assert later.tier == "T2"
+    checks = {c["id"]: c for c in later.compliance["checks"]}
+    assert checks["structuring"]["status"] == "pass"
+
+
+def test_time_skip_after_a_rate_move_resets_the_rate_and_the_tuition_guard_acts():
+    st = fresh()
+    client = TestClient(create_app(st))
+    ap = st.policy.autopilot
+    for kind in ("rate_watch", "tuition_guard"):
+        m, _ = ap.propose(STUDENT, kind, {})
+        r = client.post(f"/sponsor/autopilot/mandates/{m['id']}/approve", json={"pin": DEMO_SPONSOR_PIN}, headers=P)
+        assert r.status_code == 200
+    r = client.post("/demo/fx_shift", json={"delta": 0.002}, headers={**S, **OP}).json()
+    assert [d["outcome"] for d in r["decisions"]] == ["acted"]
+    r = client.post("/demo/time_skip", json={"to": "tuition_week"}, headers={**S, **OP}).json()
+    assert st.fx.overrides == {}                                      # the new week is back on the snapshot rate
+    assert [(d["kind"], d["outcome"]) for d in r["decisions"]] == [("tuition_guard", "acted")], r["decisions"]
+    assert events(st, "time_skipped")[-1]["data"]["rate_reset"] is True
+    client.post("/demo/fx_shift", json={"delta": 0.002}, headers={**S, **OP})
+    assert client.post("/demo/reset", headers={**S, **OP}).status_code == 200
+    assert st.fx.overrides == {}

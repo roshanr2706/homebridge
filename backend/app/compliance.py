@@ -271,7 +271,7 @@ class Compliance:
 
     def _structuring(self, policy: "PolicyEngine", owner: str, kind: str, params: Dict[str, Any],
                      amount_cad: float, out: Dict[str, Any], exclude_id: Optional[str] = None) -> None:
-        now = time.time()
+        now = self.bank.now().timestamp()   # the sandbox clock, like the policy engine's 24h windows
         if kind == "transfer":
             same = lambda a: a.kind == "transfer" and a.params.get("payee_id") == params["payee_id"]  # noqa: E731
             to = params["payee_name"]
@@ -282,7 +282,7 @@ class Compliance:
             to = (self.bank.account(params["from_account_id"]) or {}).get("label", "this account")
             noun = "conversions from"
         prior = [a for a in policy.actions.values() if a.id != exclude_id and a.owner == owner and same(a)
-                 and a.status in LIVE and now - a.created_at < STRUCTURING_WINDOW]
+                 and a.status in LIVE and now - a.sandbox_time() < STRUCTURING_WINDOW]
         cur_key = "currency" if kind == "transfer" else "from_currency"
         total = amount_cad + sum(self._cad(a.params["amount"], a.params[cur_key]) for a in prior)
         limit = policy.limits.single_cad
@@ -309,9 +309,9 @@ class Compliance:
         out["cross_border"] = True
         out["record"] = record
         out["checks"].append(_check("record_keeping", "Cross-border record", "pass", detail))
-        since = time.time() - 24 * 3600
+        since = self.bank.now().timestamp() - 24 * 3600
         prior = [a for a in policy.actions.values() if a.id != exclude_id and a.owner == owner and
-                 a.status in LIVE and a.created_at >= since and (a.compliance or {}).get("cross_border")]
+                 a.status in LIVE and a.sandbox_time() >= since and (a.compliance or {}).get("cross_border")]
         prior_cad = sum(float((a.compliance or {}).get("amount_cad") or 0) for a in prior)
         if amount_cad >= EFTR_THRESHOLD_CAD:
             out["reports"].append("EFTR")
@@ -385,7 +385,11 @@ class Compliance:
             out["checks"].append(_check("sanctions", "Sanctions screening", "pass",
                                         "Both sides are the account holder's own accounts (screened at onboarding)"))
             self._kyc_check(owner, out, sponsor_too=bool(src and src["sponsor_funded"]))
-            if src and src["sponsor_funded"]:
+            if src and src["sponsor_funded"] and params.get("sponsor_mandate"):
+                out["checks"].append(_check("structuring", "Structuring detection", "pass",
+                                            "The sponsor's standing instruction (a mandate he approved with his "
+                                            "PIN), bounded by its caps"))
+            elif src and src["sponsor_funded"]:
                 self._structuring(policy, owner, kind, params, amount_cad, out)
             if COUNTRY.get(params["from_currency"]) != COUNTRY.get(params["to_currency"]):
                 self._cross_border(policy, owner, amount_cad, {
