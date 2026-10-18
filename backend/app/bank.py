@@ -103,6 +103,12 @@ CREATE TABLE IF NOT EXISTS user_pins (
 );
 """
 SCHEMA += SECURITY_SCHEMA
+# Each person's app preferences and onboarding consents (prefs.py), one JSON row per user. Part of the sandbox, so
+# a demo reset clears it and both phones run onboarding again.
+PREFS_SCHEMA = """
+CREATE TABLE IF NOT EXISTS user_prefs (user_id TEXT PRIMARY KEY, data TEXT, updated_at REAL);
+"""
+SCHEMA += PREFS_SCHEMA
 
 
 class Bank:
@@ -112,7 +118,7 @@ class Bank:
         self.db.row_factory = sqlite3.Row
         self.today: Optional[date] = None  # the sandbox's "today", set by reset(); card payments use it
         with self._lock:  # a file database from an older version gets the newer (empty) tables
-            self.db.executescript(CARD_SCHEMA + SECURITY_SCHEMA)
+            self.db.executescript(CARD_SCHEMA + SECURITY_SCHEMA + PREFS_SCHEMA)
             self.db.commit()
 
     # ------------------------------------------------------------------ setup
@@ -515,6 +521,15 @@ class Bank:
 
     def set_pin_state(self, user_id: str, failures: int, locked_until: float) -> None:
         self._x("UPDATE user_pins SET failures=?, locked_until=? WHERE user_id=?", (failures, locked_until, user_id))
+
+    # Preferences and consents (prefs.py), stored like the freeze state: one JSON document per person.
+    def load_prefs(self, user_id: str) -> Optional[Dict[str, Any]]:
+        rows = self._q("SELECT data FROM user_prefs WHERE user_id=?", (user_id,))
+        return json.loads(rows[0]["data"]) if rows else None
+
+    def save_prefs(self, user_id: str, data: Dict[str, Any]) -> None:
+        self._x("INSERT OR REPLACE INTO user_prefs VALUES (?,?,?)",
+                (user_id, json.dumps(data, ensure_ascii=False), time.time()))
 
     # Remittances (remit.py). Each leg is posted under a reference derived from the action id, at most once:
     # the balance change and its transaction row are written in one commit, and a second post with the same

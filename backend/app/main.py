@@ -23,8 +23,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
+from . import prefs as user_prefs
 from .agent import Agent
 from .audit import AuditLog
 from .authn import PinChecker, PinError
@@ -72,6 +73,31 @@ class LimitsIn(BaseModel):
     single_cad: float = Field(..., gt=0, le=20000)
     daily_cad: float = Field(..., gt=0, le=50000)
     pin: str = Field("", max_length=12)
+
+
+class ConsentsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    sponsor_sharing: bool = False   # student: what the sponsor will see (privacy.SHARING)
+    ai_processing: bool = False     # student: chat processed by the configured model provider
+    offline_only: bool = False      # student: keep chat on the built-in offline engine
+    sponsor_terms: bool = False     # sponsor: the approval PIN and what he can see
+
+
+class OnboardingIn(BaseModel):
+    # No user id: onboarding always applies to the caller's own token.
+    model_config = ConfigDict(extra="forbid")
+    display_name: str = Field("", max_length=80)
+    language: str = Field(..., pattern="^(en|zh)$")
+    skin: str = Field(..., pattern="^(neo|superapp)$")
+    consents: ConsentsIn = Field(default_factory=ConsentsIn)
+
+
+class PrefsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    display_name: Optional[str] = Field(None, max_length=80)
+    language: Optional[str] = Field(None, pattern="^(en|zh)$")
+    skin: Optional[str] = Field(None, pattern="^(neo|superapp)$")
+    offline_only: Optional[bool] = None
 
 
 # Audit events the sponsor never sees (the student's chat and tool use), and ones the student never sees
@@ -227,10 +253,43 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         return {"ok": True, "provider": getattr(st.agent.provider, "name", "?"), "demo_mode": st.settings.demo_mode,
                 "today": st.agent.today.isoformat()}
 
+    def _provider() -> str:
+        return getattr(st.agent.provider, "name", "offline")
+
+    def _me(who: Tuple[str, str]) -> Dict[str, Any]:
+        u = st.bank.user(who[0])
+        out = {"id": who[0], "role": who[1], "name": u["name"] if u else who[0],
+               "prefs": user_prefs.get(st.bank, who[0], who[1]),
+               # Where this person's chat text would go, for the onboarding consent screen.
+               "model_route": user_prefs.route(_provider())}
+        if who[1] == "student":
+            out["sharing"] = SHARING
+            out["chat_engine"] = "offline" if user_prefs.offline_only(st.bank, who[0]) else _provider()
+        return out
+
     @app.get("/me")
     def me(who=Depends(auth)):
-        u = st.bank.user(who[0])
-        return {"id": who[0], "role": who[1], "name": u["name"] if u else who[0]}
+        return _me(who)
+
+    @app.post("/me/onboarding")
+    def me_onboarding(body: OnboardingIn, who=Depends(auth)):
+        """First-run setup for the caller (their own token only): name, language, look and consents."""
+        try:
+            user_prefs.onboard(st.bank, st.audit, who[0], who[1], _provider(), display_name=body.display_name,
+                               language=body.language, skin=body.skin, consents=body.consents.model_dump())
+        except user_prefs.PrefsError as e:
+            raise HTTPException(400, str(e))
+        return _me(who)
+
+    @app.post("/me/prefs")
+    def me_prefs(body: PrefsIn, who=Depends(auth)):
+        """Later changes from Settings: look, language, display name, and (student) offline engine only."""
+        try:
+            user_prefs.update(st.bank, st.audit, who[0], who[1], _provider(), display_name=body.display_name,
+                              language=body.language, skin=body.skin, offline=body.offline_only)
+        except user_prefs.PrefsError as e:
+            raise HTTPException(400, str(e))
+        return _me(who)
 
     @app.post("/chat")
     def chat(body: ChatIn, user_id: str = Depends(student)):
