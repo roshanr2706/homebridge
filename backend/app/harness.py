@@ -23,6 +23,9 @@ from .tools import ToolContext, run_tool
 
 DRAFT_TOOLS = {"add_payee", "prepare_transfer", "prepare_conversion", "prepare_card_payment", "request_sponsor_topup"}
 
+# Scripted runs drive the autopilot explicitly; the demo's background tick would only add noise.
+os.environ.setdefault("HB_AUTOPILOT_TICK", "0")
+
 TODAY = date(2026, 10, 8)
 RAW_NUMBER = re.compile(r"\b\d{4}-\d{4}-\d{4}\b")
 

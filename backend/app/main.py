@@ -29,6 +29,7 @@ from . import prefs as user_prefs
 from .agent import Agent
 from .audit import AuditLog
 from .authn import PinChecker, PinError
+from .autopilot_api import register as register_autopilot
 from .bank import Bank
 from .config import Limits, Settings, load_settings
 from .fx import FxMarket
@@ -229,6 +230,8 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
                 return True
             if event in CHAT_EVENTS:
                 return False
+            if event.startswith(("mandate_", "autopilot_")):   # only mandates he grants (autopilot.py)
+                return d.get("grantor") == "sponsor" and d.get("owner") == STUDENT
             if aid:
                 return aid in action_ids
             if event in SAFETY_EVENTS:
@@ -491,6 +494,9 @@ def create_app(state: Optional[AppState] = None) -> FastAPI:
         st.reset()
         chat_times.clear()
         return {"ok": True}
+
+    # Autopilot mandates and the operator's stage controls (autopilot_api.py).
+    register_autopilot(app, st, auth, student, sponsor, _pin, _my_student)
 
     # Serve the exported web app from the same origin when it has been built (npm run build:web).
     # Registered last so API routes always win.
