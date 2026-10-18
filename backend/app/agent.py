@@ -26,7 +26,7 @@ from .tools import PAYEE_HINTS, REGISTRY, ROLE_TOOLS, ToolContext, run_tool, spe
 # The system prompt is the same text for every user and every turn (no per-turn formatting), so its version
 # identifies exactly what the model was told; it is recorded in the audit log and in evidence summaries.
 # Per-turn facts go in a separate context message (Agent._context). Bump the version when the text changes.
-PROMPT_VERSION = "hb-2026-10-18.3"
+PROMPT_VERSION = "hb-2026-10-18.2"
 PROMPT_MARKER = f"[HomeBridge system prompt {PROMPT_VERSION}]"
 
 SYSTEM_PROMPT = PROMPT_MARKER + """
