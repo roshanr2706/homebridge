@@ -15,7 +15,7 @@ from app.agent import PROMPT_VERSION, SYSTEM_PROMPT
 from app.config import Settings
 from app.harness import fresh
 from app.llm import CircuitBreaker, LLMError, OpenAICompatProvider, parse_json_object
-from app.model_output import explicit_command, guard_reply, real_question, validate_call
+from app.model_output import claims_draft, explicit_command, guard_reply, real_question, validate_call
 from app.seed import STUDENT
 from app.tools import REGISTRY
 
@@ -422,6 +422,40 @@ def test_real_question_vs_permission_ask():
     assert not real_question("Want me to draft it?")
     assert not real_question("Is that the right amount, or did you mean a smaller figure?")
     assert not real_question("Done.")
+
+
+# ------------------------------------------------------------------ false "I've drafted it" claims
+def test_claimed_draft_without_a_tool_call_gets_one_correction():
+    h = Script(text("Rent was CAD 1,150.00, so yes. I've drafted the payment, check the card."),
+               call("prepare_transfer", {"payee": "Maple Court Rentals", "amount": 1150}),
+               text("Drafted CAD 1,150.00 to Maple Court Rentals. Check the card and tap Confirm."))
+    st, _, _ = agent_with(h)
+    r = st.agent.run(STUDENT, "student", "s", "eh rent how much ah, can pay landlord or not")
+    assert [a["kind"] for a in r.actions] == ["transfer"]
+    assert len([e for e in st.audit.entries() if e["event"] == "llm_false_claim"]) == 1
+    assert "no draft tool was called" in h.requests[1]["messages"][-1]["content"]
+
+
+def test_persistent_false_claim_is_flagged_to_the_user():
+    h = Script(text("I've drafted it."), text("I've drafted it, honestly."), text("unused"))
+    st, _, _ = agent_with(h)
+    r = st.agent.run(STUDENT, "student", "s", "hello there")
+    assert len(h.requests) == 2 and not r.actions
+    assert "nothing has been drafted yet" in r.reply
+
+
+def test_true_claim_is_left_alone():
+    h = Script(call("prepare_transfer", {"payee": "BC Hydro", "amount": 45}), text("I've drafted it."))
+    st, _, _ = agent_with(h)
+    r = st.agent.run(STUDENT, "student", "s", "pay hydro 45")
+    assert len(h.requests) == 2 and r.reply == "I've drafted it."
+
+
+@pytest.mark.parametrize("reply,claim", [("I've drafted the payment.", True), ("I have prepared a draft", True),
+                                         ("已为你起草了付款。", True), ("Saya telah sediakan draf.", True),
+                                         ("Want me to draft it?", False), ("Your draft from earlier is waiting.", False)])
+def test_claims_draft(reply, claim):
+    assert claims_draft(reply) is claim
 
 
 # ------------------------------------------------------------------ helpers

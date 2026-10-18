@@ -113,7 +113,8 @@ def main() -> None:
            f"turn budget {params['turn_budget_s']:g}s." if 'timeout_s' in params else "."),
         "",
         f"Robustness counters over the run: {len(replies)} replies; nudged {nudged}; offline fallbacks {fell_back}; "
-        f"model errors {counts['llm_error']}; circuit opened {counts['llm_circuit_open']}; tool calls rejected "
+        f"false draft claims corrected {counts['llm_false_claim']}; model errors {counts['llm_error']}; "
+        f"circuit opened {counts['llm_circuit_open']}; tool calls rejected "
         f"{counts['tool_call_rejected']}; loop guard {counts['llm_loop_guard']}; replies redacted "
         f"{counts['output_redacted']}.",
         "",

@@ -105,7 +105,7 @@ class PrefsIn(BaseModel):
 # Audit events the sponsor never sees (the student's chat and tool use), and ones the student never sees
 # (the sponsor's own PIN attempts, and which watchlist entry a payee matched: no tipping off).
 CHAT_EVENTS = {"user_message", "assistant_reply", "tool_call", "tool_denied", "rate_limited", "llm_error",
-               "tool_call_rejected", "llm_nudge", "llm_loop_guard", "output_redacted"}
+               "tool_call_rejected", "llm_nudge", "llm_false_claim", "llm_loop_guard", "output_redacted"}
 # review_generated: the sponsor's second opinion (verdict and source only) is his, like the PIN events.
 SPONSOR_PRIVATE_EVENTS = {"sponsor_pin_failed", "sponsor_pin_locked", "sanctions_hit", "sanctions_review",
                           "review_generated"}

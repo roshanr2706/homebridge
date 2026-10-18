@@ -196,6 +196,18 @@ _PERMISSION_ASK = re.compile(
     r"draft it anyway|nak saya|mahu saya|patutkah saya|要我|需要我|是否要|确定要|对吗|是吗)", re.I)
 
 
+_DRAFT_CLAIM = re.compile(
+    r"\b(i'?ve|i have|i)\s+(just\s+|now\s+|also\s+)?(drafted|prepared|set up|queued)\b|"
+    r"\b(here'?s|here is) (the|your) draft\b|"
+    r"\b(saya\s+)?(telah|sudah|dah)\s+(draf|sediakan|siapkan|buat draf)|"
+    r"(已|已经)(为你|帮你|给你)?(起草|草拟|准备好|拟好|创建)", re.I)
+
+
+def claims_draft(reply: str) -> bool:
+    """True when the reply says a draft was made in this turn ("I've drafted the payment")."""
+    return bool(_DRAFT_CLAIM.search(reply or ""))
+
+
 def real_question(reply: str) -> bool:
     """True when the reply asks the user something specific (a missing payee, amount or choice)."""
     qs = [q for q in re.split(r"(?<=[?？])", reply or "") if q.strip().endswith(("?", "？"))]

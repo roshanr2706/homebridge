@@ -17,7 +17,8 @@ from .fx import FxMarket
 from .guard import check as guard_check, COMPILED, expand, quoted_segments
 from .i18n import detect as detect_lang
 from .llm import CircuitBreaker, LLMError, Provider, make_provider
-from .model_output import PromptFingerprint, explicit_command, guard_reply, real_question, validate_call
+from .model_output import (PromptFingerprint, claims_draft, explicit_command, guard_reply, real_question,
+                           validate_call)
 from .policy import PolicyEngine
 from .prefs import offline_only as prefers_offline
 from .tools import PAYEE_HINTS, REGISTRY, ROLE_TOOLS, ToolContext, run_tool, specs_for
@@ -25,7 +26,7 @@ from .tools import PAYEE_HINTS, REGISTRY, ROLE_TOOLS, ToolContext, run_tool, spe
 # The system prompt is the same text for every user and every turn (no per-turn formatting), so its version
 # identifies exactly what the model was told; it is recorded in the audit log and in evidence summaries.
 # Per-turn facts go in a separate context message (Agent._context). Bump the version when the text changes.
-PROMPT_VERSION = "hb-2026-10-18.2"
+PROMPT_VERSION = "hb-2026-10-18.3"
 PROMPT_MARKER = f"[HomeBridge system prompt {PROMPT_VERSION}]"
 
 SYSTEM_PROMPT = PROMPT_MARKER + """
@@ -99,7 +100,14 @@ NUDGE = ("Internal check from the server (not from the user, do not mention it):
          "source account, a payee that is not saved), call the draft tool now. Otherwise reply with one short, "
          "specific question. Do not ask whether they want a draft.")
 
+FALSE_CLAIM = ("Internal check from the server (not from the user, do not mention it): your reply says something was "
+               "drafted, but no draft tool was called in this turn, so nothing was drafted. If the user asked for it "
+               "and nothing stops you, call the draft tool now; otherwise rewrite the reply without claiming a draft.")
+
 TEXT = {
+    "no_draft": {"en": "(Note: nothing has been drafted yet. Ask me again if you want me to draft it.)",
+                 "ms": "(Nota: belum ada draf dibuat. Minta lagi jika anda mahu saya draf.)",
+                 "zh": "（注意：目前还没有起草任何操作。如需起草，请再说一次。）"},
     "steps": {"en": "I couldn't finish that in a reasonable number of steps. Could you break it into smaller requests?",
               "ms": "Saya tidak dapat menyiapkannya dalam beberapa langkah. Boleh pecahkan kepada permintaan yang lebih kecil?",
               "zh": "我没能在合理的步骤内完成。可以把请求拆成几个小一点的吗？"},
@@ -298,7 +306,7 @@ class Agent:
         reply = ""
         corrections = repeats = 0
         seen: Dict[str, bool] = {}
-        nudged = False
+        nudged = corrected = False
         for _ in range(self.settings.max_agent_steps):
             msgs = [self._system()] + history + [context] + turn
             try:
@@ -327,6 +335,12 @@ class Agent:
             turn.append(resp)
             if not resp.get("tool_calls"):
                 reply = resp.get("content") or ""
+                if live and not corrected and not ctx.created_actions and claims_draft(reply):
+                    # The reply says something was drafted, but no draft tool ran this turn: nothing exists.
+                    corrected = True
+                    self.audit.record("llm_false_claim", "agent", session=session_id)
+                    turn.append({"role": "system", "_internal": True, "content": FALSE_CLAIM})
+                    continue
                 if (command and not nudged and live and not ctx.created_actions
                         and not any(t["tool"] in DRAFT_TOOLS for t in trace) and not real_question(reply)):
                     nudged = True
@@ -381,6 +395,8 @@ class Agent:
             reply = (_t("drafted", lang, items="; ".join(a.summary for a in ctx.created_actions))
                      if ctx.created_actions else _t("steps", lang))
 
+        if corrected and not ctx.created_actions and claims_draft(reply):
+            reply = (reply + "\n\n" + _t("no_draft", lang)).strip()   # still claims a draft that doesn't exist
         reply, redacted = guard_reply(reply, FINGERPRINT)
         if redacted:
             self.audit.record("output_redacted", "agent", session=session_id, kinds=redacted)
