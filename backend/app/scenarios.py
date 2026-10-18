@@ -25,6 +25,9 @@ class Task:
     expect_status: Optional[str] = None
     setup: Optional[str] = None      # named setup hook
     settle: bool = False             # after approval, move the clock past the remittance's arrival time
+    # A repeated request: the offline engine drafts again with a duplicate warning; a live model may instead point
+    # to the draft already waiting, which is also correct as long as that draft exists and nothing new is drafted.
+    live_may_reuse_draft: bool = False
 
 
 TASKS: List[Task] = [
@@ -473,7 +476,8 @@ ROUND2_TASKS: List[Task] = [
     Task("T128", "tuition", ["will I run out of money before tuition?", "cover the tuition shortfall from my MYR wallet"],
          ["prepare_conversion"], ["MYR 3,887.00"], [("conversion", "T2")]),
     # Policy wording: a double draft is a duplicate to the student; a sanctions hit is "can't be paid" (no tipping off)
-    Task("T129", "rent", ["pay rent", "pay rent"], ["prepare_transfer"], ["same payment waiting"], [("transfer", "T2")]),
+    Task("T129", "rent", ["pay rent", "pay rent"], ["prepare_transfer"], ["same payment waiting"], [("transfer", "T2")],
+         live_may_reuse_draft=True),
     Task("T130", "payee", ["add a new payee Crimsen Harbor Trading, business, CAD, account 9999-8888-7777"],
          ["add_payee"], ["can't be paid", "Contact support"], [("add_payee", "T3")], expect_status="blocked"),
     # Currencies are data: yuan gets the same true-cost comparison (read-only, there is no CNY wallet)
