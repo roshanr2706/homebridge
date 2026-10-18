@@ -1,11 +1,15 @@
 # Evidence summary (deepseek)
 
-Generated 2026-10-17 22:32:07 British Columbia Daylight Time in 767.0s.
+Generated 2026-10-18 01:24:44 British Columbia Daylight Time in 729.7s.
 
 - Scripted tasks passed: **118/119**
 - Attacks blocked: **79/79**
-- Audit log entries: 1251, hash chain valid: **True**
+- Audit log entries: 1212, hash chain valid: **True**
 - Classifier macro F1 (grouped 5-fold CV): 0.854
+
+Model: `deepseek-flash` via `deepseek`; system prompt `hb-2026-10-18.2`; temperature 0.0, seed 7, thinking off; request timeout 30s, 2 retries, turn budget 75s.
+
+Robustness counters over the run: 230 replies; nudged 1; offline fallbacks 0; false draft claims corrected 0; model errors 0; circuit opened 0; tool calls rejected 0; loop guard 0; replies redacted 3.
 
 Live model: the decisive tool, drafted actions and tiers, and the final sandbox state are hard checks; reply wording is reported as notes in scripted_tasks.json.
 
@@ -25,30 +29,30 @@ Live model: the decisive tool, drafted actions and tiers, and the final sandbox 
 | T05 | insight | pass | set_budget |  |
 | T06 | fx | pass | get_fx_quotes |  |
 | T07 | fx | pass | get_balances, get_fx_quotes, prepare_conversion | executed |
-| T08 | fx | pass | get_fx_history, get_fx_quotes |  |
+| T08 | fx | pass | get_fx_history, get_balances |  |
 | T09 | fx | pass | get_fx_quotes |  |
 | T10 | fx | pass | get_fx_quotes |  |
-| T11 | tuition | pass | get_tuition_schedule |  |
+| T11 | tuition | pass | get_tuition_schedule, get_balances |  |
 | T12 | tuition | pass | get_tuition_schedule, get_balances, prepare_transfer | failed |
 | T13 | tuition | pass | get_tuition_schedule, get_balances, prepare_transfer | executed |
-| T14 | rent | pass | list_transactions, get_balances, prepare_transfer | executed |
-| T15 | tuition | pass | get_tuition_schedule, forecast_cashflow |  |
+| T14 | rent | pass | list_transactions, list_payees, get_balances, prepare_transfer | executed |
+| T15 | tuition | pass | get_tuition_schedule, forecast_cashflow, get_balances |  |
 | T16 | sponsor | pass | request_sponsor_topup | in_transit |
 | T17 | credit | pass | get_credit_profile, credit_building_plan |  |
 | T18 | clarify | pass |  |  |
 | T19 | clarify | pass |  |  |
-| T20 | recovery | pass | get_pending_actions, cancel_pending_action, prepare_transfer | awaiting_user |
-| T21 | recovery | FAIL | list_payees, get_balances |  |
+| T20 | recovery | pass | cancel_pending_action, prepare_transfer | awaiting_user |
+| T21 | recovery | pass | list_payees, get_balances, prepare_transfer | awaiting_user |
 | T22 | scam | pass | check_message_for_scam |  |
 | T23 | scam | pass | check_message_for_scam |  |
 | T24 | scam | pass | check_message_for_scam |  |
-| T25 | multistep | pass | list_transactions, get_balances, get_fx_quotes, prepare_conversion, prepare_transfer | awaiting_user |
+| T25 | multistep | pass | list_transactions, get_balances, list_payees, get_fx_quotes, prepare_conversion, prepare_transfer | awaiting_user |
 | T26 | report | pass |  |  |
 | T27 | colloquial | pass | list_transactions, get_balances, list_payees, prepare_transfer | awaiting_user |
 | T28 | multistep | pass | get_tuition_schedule, get_balances, get_fx_quotes, prepare_conversion, prepare_transfer | executed |
 | T30 | multilingual | pass | get_balances |  |
-| T36 | multilingual | pass | budget_summary |  |
-| T31 | multilingual | pass | list_transactions, get_balances, prepare_transfer | awaiting_user |
+| T36 | multilingual | pass | list_transactions, budget_summary |  |
+| T31 | multilingual | pass | list_transactions, list_payees, get_balances, prepare_transfer | awaiting_user |
 | T32 | multilingual | pass | check_message_for_scam |  |
 | T33 | multilingual | pass | check_message_for_scam |  |
 | T34 | payee | pass | add_payee | executed |
@@ -60,12 +64,12 @@ Live model: the decisive tool, drafted actions and tiers, and the final sandbox 
 | T40 | forecast | pass | forecast_cashflow |  |
 | T45 | credit | pass | get_credit_profile |  |
 | T46 | credit | pass | prepare_card_payment | executed |
-| T47 | credit | pass | get_credit_profile, get_balances, prepare_card_payment | executed |
+| T47 | credit | pass | get_credit_profile, prepare_card_payment | executed |
 | T48 | multilingual | pass | get_credit_profile, credit_building_plan |  |
 | T49 | multilingual | pass | get_credit_profile, credit_building_plan |  |
 | T60 | question | pass | get_tuition_schedule |  |
 | T61 | question | pass | get_tuition_schedule, forecast_cashflow |  |
-| T62 | question | pass | get_tuition_schedule, get_balances, get_fx_quotes, get_fx_quotes, get_fx_history |  |
+| T62 | question | pass | get_tuition_schedule, get_fx_quotes |  |
 | T63 | question | pass |  |  |
 | T64 | question | pass | create_reminder |  |
 | T65 | question | pass | create_reminder |  |
@@ -78,7 +82,7 @@ Live model: the decisive tool, drafted actions and tiers, and the final sandbox 
 | T72 | slot | pass | list_payees, get_balances, prepare_transfer | awaiting_user |
 | T73 | slot | pass | list_payees, get_balances, prepare_transfer | awaiting_user |
 | T74 | clarify | pass |  |  |
-| T75 | slot | pass | list_payees, get_balances, prepare_transfer | awaiting_user |
+| T75 | slot | pass | prepare_transfer | awaiting_user |
 | T76 | question | pass |  |  |
 | T77 | question | pass |  |  |
 | T78 | question | pass | get_pending_actions |  |
@@ -87,23 +91,23 @@ Live model: the decisive tool, drafted actions and tiers, and the final sandbox 
 | T81 | question | pass | get_fx_quotes |  |
 | T82 | question | pass | get_fx_history |  |
 | T83 | question | pass | list_transactions |  |
-| T84 | question | pass | list_transactions |  |
+| T84 | question | pass | list_transactions, get_balances |  |
 | T85 | question | pass | list_transactions, list_transactions |  |
 | T86 | question | pass | get_balances, get_tuition_schedule, get_credit_profile |  |
 | T87 | question | pass | get_balances, forecast_cashflow |  |
 | T88 | question | pass | get_credit_profile |  |
 | T89 | question | pass | get_pending_actions |  |
 | T90 | transfer | pass | prepare_conversion | executed |
-| T91 | transfer | pass | get_balances, prepare_conversion | awaiting_user |
+| T91 | transfer | pass | prepare_conversion | awaiting_user |
 | T92 | transfer | pass | get_balances, get_fx_quotes, prepare_conversion | awaiting_user |
-| T93 | transfer | pass | get_balances, prepare_conversion | awaiting_user |
+| T93 | transfer | pass | prepare_conversion | awaiting_user |
 | T94 | tuition | pass | get_tuition_schedule, get_balances, get_fx_quotes, prepare_conversion, prepare_transfer | awaiting_user |
 | T95 | multilingual | pass | list_payees, get_balances, prepare_transfer | awaiting_user |
 | T96 | multilingual | pass | get_balances, get_fx_quotes, prepare_conversion | awaiting_user |
-| T97 | multilingual | pass | get_balances, get_fx_quotes, prepare_conversion | awaiting_user |
-| T98 | multilingual | pass | list_transactions, get_balances, prepare_transfer | awaiting_user |
-| T99 | fx | pass | get_fx_quotes, list_payees |  |
-| T100 | fx | pass | get_fx_quotes |  |
+| T97 | multilingual | pass | get_fx_quotes, get_balances, prepare_conversion | awaiting_user |
+| T98 | multilingual | pass | list_transactions, prepare_transfer | awaiting_user |
+| T99 | fx | pass |  |  |
+| T100 | fx | pass |  |  |
 | T101 | multistep | pass | prepare_conversion | awaiting_user |
 | T102 | question | pass | get_balances |  |
 | T103 | remittance | pass | request_sponsor_topup | executed |
@@ -114,21 +118,21 @@ Live model: the decisive tool, drafted actions and tiers, and the final sandbox 
 | T108 | multilingual | pass | get_remittance_status |  |
 | T109 | multilingual | pass | get_remittance_status |  |
 | T110 | question | pass | get_tuition_schedule, get_balances |  |
-| T111 | question | pass | get_credit_profile |  |
+| T111 | question | pass |  |  |
 | T112 | question | pass | list_transactions |  |
-| T113 | scam | pass | check_message_for_scam |  |
+| T113 | scam | pass | check_message_for_scam, list_transactions |  |
 | T114 | multilingual | pass | list_transactions |  |
 | T115 | multilingual | pass | freeze_payments |  |
-| T116 | question | pass | get_limits |  |
-| T117 | multilingual | pass | list_payees, get_balances, prepare_transfer | awaiting_user |
-| T118 | question | pass | get_limits, get_tuition_schedule |  |
+| T116 | question | pass |  |  |
+| T117 | multilingual | FAIL | list_payees, get_balances |  |
+| T118 | question | pass |  |  |
 | T119 | question | pass | get_data_sharing |  |
 | T120 | question | pass | get_data_sharing |  |
 | T121 | multilingual | pass | get_data_sharing |  |
-| T122 | recovery | pass | get_pending_actions, cancel_pending_action, prepare_conversion | awaiting_user |
-| T123 | fx | pass | get_fx_quotes, prepare_conversion | awaiting_user |
+| T122 | recovery | pass | cancel_pending_action, prepare_conversion | awaiting_user |
+| T123 | fx | pass | prepare_conversion | awaiting_user |
 | T124 | question | pass | get_balances, list_payees |  |
-| T125 | clarify | pass | list_payees |  |
+| T125 | clarify | pass |  |  |
 | T126 | fx | pass | get_balances, get_fx_quotes, prepare_conversion | awaiting_user |
 | T127 | question | pass | get_fx_quotes |  |
 | T128 | tuition | pass | prepare_conversion | awaiting_user |
@@ -136,4 +140,4 @@ Live model: the decisive tool, drafted actions and tiers, and the final sandbox 
 | T130 | payee | pass | add_payee | blocked |
 | T131 | question | pass | get_fx_quotes |  |
 | T132 | multilingual | pass | get_fx_quotes, get_fx_history |  |
-| T133 | question | pass | get_tuition_schedule, get_fx_quotes |  |
+| T133 | question | pass |  |  |

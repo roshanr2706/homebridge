@@ -354,11 +354,19 @@ class OfflineEngine:
         # What the previous reply left open (a question, an offer), read back from the session history.
         prev = next((m for m in reversed(messages[:idx]) if m["role"] == "assistant"), None)
         state = dict((prev or {}).get("_hb_state") or {})
-        system = messages[0]["content"] if messages and messages[0]["role"] == "system" else ""
-        dm = re.search(r"Today is (\d{4}-\d{2}-\d{2})", system)
-        nm = re.search(r"You are helping (.+?) \(role", system)
-        self._today = date.fromisoformat(dm.group(1)) if dm else date.today()
-        self._name = nm.group(1).split()[0] if nm else ""
+        # Today and the student's name come from the agent's per-turn context message (agent.Agent._context).
+        context: Dict[str, Any] = {}
+        for m in messages[:idx]:
+            if m["role"] == "system" and m["content"].startswith("Context for this turn: "):
+                try:
+                    context = json.loads(m["content"][len("Context for this turn: "):])
+                except ValueError:
+                    context = {}
+        try:
+            self._today = date.fromisoformat(context.get("today", ""))
+        except (TypeError, ValueError):
+            self._today = date.today()
+        self._name = str(context.get("student_name") or "").split(" ")[0]
         # Reply in the user's language; "300" or "ok" keeps the language of the conversation.
         self._lang = i18n.conversation_lang(text, prev_user)
         out = self._plan(text, low, note, results, prev_user, state)

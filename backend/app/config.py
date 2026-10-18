@@ -63,7 +63,36 @@ class Settings:
     llm_model: str = field(default_factory=lambda: _env("LLM_MODEL", ""))
     llm_api_key: str = field(default_factory=lambda: _env("LLM_API_KEY", ""))
     llm_thinking: bool = field(default_factory=lambda: _env("LLM_THINKING", "0") == "1")
-    llm_timeout: float = field(default_factory=lambda: float(_env("LLM_TIMEOUT", "45")))
+    # Provider robustness (llm.py). One request may take llm_timeout seconds to answer (connecting: at most
+    # llm_connect_timeout); 429, 5xx, timeouts and connection errors are retried llm_max_retries times with
+    # jittered exponential backoff (llm_backoff_base * 2^n, capped at llm_backoff_max, or the server's
+    # Retry-After when it sends one). A whole chat turn gets llm_turn_budget seconds of model time; when it runs
+    # out, the turn finishes on the offline engine. After llm_breaker_failures failed turns in a row the circuit
+    # opens and chat uses the offline engine for llm_breaker_cooldown seconds (the reply says so).
+    llm_timeout: float = field(default_factory=lambda: float(_env("LLM_TIMEOUT", "30")))
+    llm_connect_timeout: float = field(default_factory=lambda: float(_env("LLM_CONNECT_TIMEOUT", "5")))
+    llm_max_retries: int = field(default_factory=lambda: int(_env("LLM_MAX_RETRIES", "2")))
+    llm_backoff_base: float = field(default_factory=lambda: float(_env("LLM_BACKOFF_BASE", "0.5")))
+    llm_backoff_max: float = field(default_factory=lambda: float(_env("LLM_BACKOFF_MAX", "8")))
+    llm_turn_budget: float = field(default_factory=lambda: float(_env("LLM_TURN_BUDGET", "75")))
+    llm_breaker_failures: int = field(default_factory=lambda: int(_env("LLM_BREAKER_FAILURES", "3")))
+    llm_breaker_cooldown: float = field(default_factory=lambda: float(_env("LLM_BREAKER_COOLDOWN", "60")))
+    # Sampling. The evidence scripts set LLM_TEMPERATURE=0 (and a seed where the provider accepts one) so runs
+    # are as repeatable as the provider allows; SUMMARY.md records what was used.
+    llm_temperature: float = field(default_factory=lambda: float(_env("LLM_TEMPERATURE", "0.2")))
+    llm_seed: Optional[int] = field(default_factory=lambda: int(_env("LLM_SEED", "")) if _env("LLM_SEED", "") else None)
+    # Model-output validation (agent.py): malformed tool calls handed back to the model for correction per turn,
+    # and identical repeated calls refused (not run again), before the turn ends with a plain reply. loop_guard
+    # switches the repeat check off (tests use that to show the draft rate limit holds on its own).
+    max_tool_corrections: int = 3
+    max_repeat_calls: int = 2
+    loop_guard: bool = True
+    # One internal "draft it now or ask one specific question" round when the user gave an explicit payment
+    # command and the model stopped without a draft or a real question (agent.py).
+    llm_nudge: bool = field(default_factory=lambda: _env("LLM_NUDGE", "1") == "1")
+    # Sponsor second opinion (reviewer.py): a separate small model call, JSON only, temperature 0.
+    reviewer_timeout: float = field(default_factory=lambda: float(_env("HB_REVIEWER_TIMEOUT", "6")))
+    reviewer_model: bool = field(default_factory=lambda: _env("HB_REVIEWER_MODEL", "1") == "1")
     max_agent_steps: int = 8
     demo_mode: bool = field(default_factory=lambda: _env("HB_DEMO_MODE", "1") == "1")
     db_path: str = field(default_factory=lambda: _env("HB_DB", ":memory:"))
