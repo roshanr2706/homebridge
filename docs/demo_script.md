@@ -43,11 +43,27 @@ cards, tiers, PIN and approvals are the same. The header shows which engine is a
 | 3:40 | Aisha · Assistant | Type: `冻结我的账户` | **Freeze**: payments locked, reply in Chinese. Dad's phone shows the alert and the lock; every card shows FROZEN. "She can unlock her own money in the Wallet. What Dad funds stays locked until he unlocks it with his PIN. There is no unlock tool for the AI." |
 | 4:00 | Header, then Ledger | Tap **EN**. Open **Ledger** | "Chain verified, N entries." Tap any entry → "EDITED #N · DETECTED AT #N", that row in red. "Every step you just saw is in this hash chain." |
 | 4:20 | Aisha · Assistant | **One unscripted question.** Ask someone who has not seen the engine to type one money question, and keep whatever happens | Usually an answer with a card; otherwise a clarifying question or a short menu. Say: "It never guesses with money: anything it drafts still waits for her tap, and Dad above the limits." |
-| 4:40 | | "79 of 79 attacks blocked, 119 of 119 tasks, 759 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
+| 4:40 | | "86 of 86 attacks blocked, 129 of 129 tasks, 807 tests, on the offline engine. A fully compromised model still can't move money, because the confirmation token never reaches it and Dad's PIN is checked on the server." | |
 
 Timing notes: steps 2:05 to 2:55 rely on the 20-second demo settlement; if it is still in transit at 2:55,
 say "still on its way" and come back to it after the credit card. The lock at 3:40 stays on, so do it last
 of the money steps and reset (↺) before the presentation.
+
+## The Autopilot moment (30 seconds)
+
+The AI stops only responding and acts on its own, inside a limit Dad set, and both phones see it happen. Do it after a
+reset (↺), before the freeze: a lock halts the autopilot.
+
+| Time | Screen | Do / say | What the viewer sees |
+|---|---|---|---|
+| 0:00 | Aisha · Assistant | Type: `convert my ringgit automatically when the rate is good, MYR 2,000 a week` | "I've proposed a Rate watch mandate: convert MYR to CAD Everyday when MYR/CAD reaches 0.3250 or better, up to MYR 2,000 a week. It does nothing until your dad approves it in his app with his PIN." An **Autopilot proposal** card, *waiting for approval*. Dad's phone toasts "New autopilot proposal" |
+| 0:08 | Dad · Rules | Scroll to **Autopilot**. Tap **Approve with PIN**, enter `246810` | "A standing permission, capped at MYR 2,000 a week, over the money he funds. The chat could only propose it." Both phones show the mandate **ON**, "Now 0.3236 · target 0.3250", MYR 0 of 2,000 used |
+| 0:18 | Stage bar | Operator taps **MYR/CAD ↑** (moves the sandbox mid rate to 0.3251) | Within a second, without anyone tapping Confirm: both phones toast **Autopilot acted**: "Rate reached 0.3251 (target 0.3250): converted MYR 2,000.00 → CAD 646.30 via HomeBridge wallet conversion, CAD 3.81 better than this week's average. Mandate: Rate watch, MYR 2,000/week, 2,000 used." (Aisha's in Chinese if her phone is in 中文.) The cap bar is full; the timeline says ACTED |
+| 0:25 | | "It went through the same policy engine as a chat draft: T2, compliance checked, inside the cap, audited as `autopilot_executed`. Anything bigger, or riskier, comes back to a person. Revoke is one tap, no PIN." Optionally tap **Revoke** on Dad's phone | "Revoked: autopilot stops now" |
+
+Without the stage bar: `curl -X POST localhost:8000/demo/fx_shift -H "Authorization: Bearer demo-student" -H "X-Operator: demo-operator" -H "Content-Type: application/json" -d '{"rate": 0.3251}'`. The demo tick
+(`HB_AUTOPILOT_TICK`, 30 s) also picks it up on its own. A rate watch acts once per week of sandbox date, so reset
+before running it again.
 
 ## Extra flows (for Q&A or a longer cut)
 
@@ -68,13 +84,13 @@ of the money steps and reset (↺) before the presentation.
 ## 10-minute presentation outline
 
 1. **Problem (1 min).** Students between two financial systems: hidden FX costs (3 to 7% through banks and money changers), tuition paid from home in large installments, parents with no say and no protection, and students as the prime target of tax, immigration, parcel-to-"police" and "embassy safe account" scams.
-2. **Product (1 min).** One agent for the student, approval rules and a PIN for the parent, two phones. Features in one line each: forecast, true-cost FX, remittance with provider choice, credit builder, scam shield, freeze and alerts, EN / 中文 / Melayu.
+2. **Product (1 min).** One agent for the student, approval rules and a PIN for the parent, two phones. Features in one line each: forecast, true-cost FX, remittance with provider choice, credit builder, scam shield, freeze and alerts, **Autopilot (the AI acts on its own inside mandates the family sets)**, EN / 中文 / Melayu.
 3. **Live demo (3.5 min).** The video flow above, cut down: forecast → shortfall conversion with compliance checks → tuition at T3 → Dad approves with the PIN → money request, Dad picks the cheapest service, in transit → credited → 中文 toggle and the Chinese scam check → freeze → Ledger tamper check → one question from the panel.
-4. **How it is secure (2 min).** One diagram: the model drafts; the policy engine sets the tier; the compliance layer screens; the app confirms with a token the model never sees; the sponsor approves on his own device with a server-checked PIN; the bank re-checks at execution. Tiers T0 to T4. Results: 79 / 79 attacks (27 induced transfer, 11 extraction, 21 escalation, 20 injection), the compromised-model tests, the hash-chained audit log.
+4. **How it is secure (2 min).** One diagram: the model drafts; the policy engine sets the tier; the compliance layer screens; the app confirms with a token the model never sees; the sponsor approves on his own device with a server-checked PIN; the bank re-checks at execution. Tiers T0 to T4. Results: 86 / 86 attacks (30 induced transfer, 11 extraction, 24 escalation, 21 injection), the compromised-model tests, the hash-chained audit log.
 5. **What we built ourselves (1 min).** The policy engine, the compliance layer, the remittance flow, our scam and injection classifier (macro F1 0.854, explainable, multilingual), the offline engine, the true-cost FX maths, taint tracking, tool-sourced cards.
 6. **Honest status and next steps (1.5 min).** Measured on both engines (offline 119 / 119; live DeepSeek 118 / 119, 79 / 79 attacks on each); compliance implemented in the sandbox, production through licensed partners; the student's Confirm has no server-side factor yet (passkeys next); a held-out evaluation set is still to do. Deployment: runs without Google services or CDNs, offline fallback, Hong Kong or Singapore hosting.
 
-## The 13 hardest questions, with answers
+## The 14 hardest questions, with answers
 
 **1. "Your suites pass, but some cases came from outside reviewers' probes. On inputs you've never seen, how often is the agent right?"**
 We don't have a held-out number yet, and we say so. The suites show that every gap a reviewer found stays closed; they don't measure unseen wording. The offline engine is a fallback that asks or refuses when unsure, and nothing it misroutes can move money without her tap, plus Dad above the limits. Next step: a held-out set written by someone who has not seen the engine, run on both the offline engine and DeepSeek.
@@ -113,6 +129,9 @@ Today the request waits for him (approval windows are 24 hours), and her card sh
 We don't let it decide anything. It can only add friction (a flag, risk points, escalation to Dad); it never approves or unblocks. The rules catch exact patterns in three languages, the classifier catches paraphrases, and the hard limits do the blocking. 62 of the 79 attacks are flagged by the guard; the other 17 are stopped by later layers.
 
 **13. "What did you build versus call? And what if the model is jailbroken?"**
-The model is a replaceable component behind one adapter. Everything that decides what is allowed is ours: the policy engine, tiers, limits, risk score, token scheme, compliance layer, remittance flow, sponsor PIN, sandbox bank, true-cost FX maths, the classifier (trained on our own 902-row multilingual dataset), taint tracking, the tool-output scanner, the offline planner and the audit chain. A jailbroken model can say anything, but it can only call the 24 registered tools, none of which executes, approves, unlocks or changes limits, and the confirmation token is never in its context. `tests/test_attacks.py` replaces the model with an attacker-controlled script to prove it.
+The model is a replaceable component behind one adapter. Everything that decides what is allowed is ours: the policy engine, tiers, limits, risk score, token scheme, compliance layer, remittance flow, sponsor PIN, sandbox bank, true-cost FX maths, the classifier (trained on our own 902-row multilingual dataset), taint tracking, the tool-output scanner, the offline planner and the audit chain. A jailbroken model can say anything, but it can only call the 26 registered tools, none of which executes, approves, unlocks or changes limits, and the confirmation token is never in its context. `tests/test_attacks.py` replaces the model with an attacker-controlled script to prove it.
+
+**14. "Your autopilot moves money without a tap. Isn't that exactly what you said the AI must never do?"**
+The *model* still can't: it can only propose a mandate, and there is no tool to turn one on, widen it or revoke it. A person turns it on in the app (Dad with his PIN for his money, Aisha with her tap for hers), and the autopilot is deterministic code, not the model. It drafts through the same policy engine, so only a T2, compliance-clear draft inside the mandate's caps runs on its own; above a limit, too much sponsor money in a day, a risky signal or a compliance flag, it becomes a normal draft for her. The caps are re-checked in policy code at execution, a freeze halts it, it never adds or pays a new payee, it reads no chat or memos, and every decision is audited and shown on both phones. Honest risk: a mis-set mandate does execute within its caps until someone pauses it (R22).
 
 **If asked about WeBank's own users:** currencies, providers, payees, purpose codes and scam rules are data, and the Chinese scam rules (冒充公检法, "safe account") are already in. A CNY → CAD persona with the SAFE annual quota as data has not been built yet.
