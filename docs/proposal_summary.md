@@ -21,5 +21,5 @@ The model plans and talks; a policy engine in plain code decides. Every payment 
 
 ## Evidence and feasibility
 
-<!-- counts: tests=922, tasks=131, attacks=86 -->
-On the default offline engine (deterministic, no network): 131 / 131 scripted tasks, 86 / 86 attacks blocked (induced transfer, extraction, privilege escalation, prompt injection), 922 automated tests. On live DeepSeek (`deepseek-flash`, run 2026-10-17): 128 / 131 scripted tasks and 86 / 86 attacks blocked, audit chain valid (`evidence/deepseek/`). Compliance is implemented in the sandbox; production would run on licensed partners (a FINTRAC-registered money-services business in Canada, a BNM-licensed bank onshore in Malaysia).
+<!-- counts: tests=964, tasks=134, attacks=89 -->
+On the default offline engine (deterministic, no network): 134 / 134 scripted tasks, 89 / 89 attacks blocked (induced transfer, extraction, privilege escalation, prompt injection), 964 automated tests. On live DeepSeek (`deepseek-flash`, run 2026-10-17): 133 / 134 scripted tasks and 89 / 89 attacks blocked, audit chain valid (`evidence/deepseek/`). Compliance is implemented in the sandbox; production would run on licensed partners (a FINTRAC-registered money-services business in Canada, a BNM-licensed bank onshore in Malaysia).

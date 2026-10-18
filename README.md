@@ -28,16 +28,16 @@ with a PIN checked on the server.
 
 ## Results
 
-<!-- counts: tests=922, tasks=131, attacks=86 (induced 30, extraction 11, escalation 24, injection 21), guard-flagged=62, tools=26, f1=0.854 on 902 rows, audit=1337 -->
+<!-- counts: tests=964, tasks=134, attacks=89 (induced 32, extraction 11, escalation 24, injection 22), guard-flagged=62, tools=27, f1=0.854 on 902 rows, audit=1394 -->
 Offline engine, measured 2026-10-18:
 
 | | |
 |---|---|
 | Scripted tasks | 134 / 134 pass (104 English including casual Malaysian English, 18 Simplified Chinese, 12 Malay) |
-| Attack suite | 89 / 89 blocked (induced transfer 32, extraction 11, escalation 24, prompt injection 22) |
-| Held-out set (80 requests in EN / Malaysian English / Malay / 中文, written by an assistant that never saw this code) | DeepSeek 79 / 80, offline engine 72 / 80 correct behaviour; neither drafted anything it shouldn't ([`evidence/heldout/`](evidence/heldout/deepseek.md)) |
-| Live model (DeepSeek `deepseek-flash`, 2026-10-18) | 128 / 131 tasks, 86 / 86 attacks blocked, audit chain valid ([`evidence/deepseek/`](evidence/deepseek/SUMMARY.md)) |
-| Automated tests | 941 passing, no network needed |
+| Attack suite | 89 / 89 blocked (induced transfer 32, extraction 11, escalation 24, injection 22) |
+| Held-out set (80 requests in EN / Malaysian English / Malay / 中文, written by an assistant that never saw this code) | DeepSeek 78 / 80, offline engine 72 / 80 correct behaviour; neither drafted anything it shouldn't ([`evidence/heldout/`](evidence/heldout/deepseek.md)) |
+| Live model (DeepSeek `deepseek-flash`, 2026-10-18) | 133 / 134 tasks, 89 / 89 attacks blocked, audit chain valid ([`evidence/deepseek/`](evidence/deepseek/SUMMARY.md)) |
+| Automated tests | 964 passing, no network needed |
 | Our classifier | macro F1 0.854 (grouped 5-fold CV, 902 rows) |
 | Agent tools | 27 registered; none of them can execute, approve, unlock, change limits or turn on an autopilot mandate |
 
@@ -232,7 +232,7 @@ export LLM_API_KEY=sk-...
 The default is `offline`. DeepSeek (`deepseek-flash`, checked as a valid model ID on api-docs.deepseek.com
 on 2026-10-10) is supported and is our intended live model because it is reachable from mainland China and
 abroad; Qwen (DashScope) is the alternative. **Status: supported and tested against a mocked HTTP
-transport, and run live on 2026-10-18: 128 / 131 tasks and 86 / 86 attacks (`evidence/deepseek/`).** If the API fails mid-conversation, the agent finishes that turn
+transport, and run live on 2026-10-18: 133 / 134 tasks and 89 / 89 attacks (`evidence/deepseek/`).** If the API fails mid-conversation, the agent finishes that turn
 with the offline engine and says so (`"fallback": true`, shown in the app). Setting a cloud provider with no
 `LLM_API_KEY` stops the backend at startup.
 
