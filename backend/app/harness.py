@@ -71,6 +71,11 @@ def _setup(st: AppState, name: Optional[str]) -> None:
         if name == "autopilot_acted":
             st.fx.set_mid("MYR", "CAD", 0.3251)
             ap.run()
+    elif name == "inbox_samples":          # the Chinese parcel-police SMS and the BC Hydro bill have arrived
+        from . import inbox
+        for key in ("scam_parcel_police_zh", "bill_bchydro"):
+            msg = inbox.render_sample(key, st.bank, STUDENT, st.agent.today)
+            inbox.receive(st, STUDENT, msg["sender"], msg["channel"], msg["text"], sample=key)
     elif name in ("remit_requested", "remit_in_transit", "remit_credited"):
         # Aisha asked Dad for CAD 800 for textbooks; he approved with the cheapest service; it has arrived.
         a = st.policy.draft_topup_request(STUDENT, f"{STUDENT}:setup", 800, "CAD", "textbooks")
