@@ -476,7 +476,7 @@ function Stage() {
               <View
                 style={[
                   styles.phone,
-                  { width: phoneW, height: phoneH, borderColor: r === 'student' ? pt.accent : pt.gold, shadowColor: pt.shadow, backgroundColor: pt.bg },
+                  { width: phoneW, height: phoneH, borderColor: pt.accent, shadowColor: pt.shadow, backgroundColor: pt.bg },
                 ]}
               >
                 <Phone person={people[r]}>

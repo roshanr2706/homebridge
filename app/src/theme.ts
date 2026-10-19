@@ -5,7 +5,7 @@ import { Platform, type TextStyle } from 'react-native';
 // * neo: a premium dark neo-bank. Near-black surfaces, one signal-lime accent, Geist and Geist Mono, big tabular
 //   numerals, glassy cards, a pill tab bar (modelled on ui-variants/neobank).
 // * superapp: a dense Chinese super-app (Alipay / WeChat Pay / WeBank). Light grey page, white cards, Alipay blue,
-//   orange for the sponsor and highlights, red badges, the system's CJK font (modelled on ui-variants/superapp).
+//   orange highlights, red badges, the system's CJK font (modelled on ui-variants/superapp).
 // Every component reads colours from useTheme() and fonts from useFontSet(), so both skins share every screen.
 // Token names are the same in both; `gold` keeps its name as the sponsor/highlight role.
 // Fonts are bundled with the app (no font CDN), so the web build needs no third-party requests.
@@ -81,7 +81,7 @@ const superapp: Theme = {
   headerBg: '#1677FF',
   headerText: '#FFFFFF',
   headerMuted: 'rgba(255, 255, 255, 0.85)',
-  sponsorHeaderBg: '#F26A1B',
+  sponsorHeaderBg: '#1677FF',
   tabbarBg: '#FFFFFF',
   badge: '#FF3141',
   heroCard: '#1677FF',
@@ -90,12 +90,8 @@ const superapp: Theme = {
 };
 
 const THEMES: Record<Skin, Theme> = { neo, superapp };
-// The sponsor's phone in the super-app skin runs in orange (as Alipay's family / elder modes do), so the two phones
-// read as two people at a glance. Neo keeps one lime accent for both.
-const SPONSOR_THEMES: Record<Skin, Theme> = {
-  neo,
-  superapp: { ...superapp, accent: '#E8590C', accentSoft: '#FFF2E8', user: '#E8590C', heroCard: '#F26A1B' },
-};
+// Both phones use the same palette in each skin, so the app matches the deck; orange stays as the highlight role.
+const SPONSOR_THEMES: Record<Skin, Theme> = { neo, superapp };
 
 export function themeFor(skin: Skin, sponsor = false): Theme {
   return (sponsor ? SPONSOR_THEMES : THEMES)[skin];
